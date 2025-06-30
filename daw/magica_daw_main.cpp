@@ -63,8 +63,8 @@ public:
         std::cout << "🎵 Magica DAW is ready!" << std::endl;
         std::cout << "" << std::endl;
         std::cout << "Connect agents with:" << std::endl;
-        std::cout << "  python agents/orchestrator.py --daw localhost:50051" << std::endl;
-        std::cout << "  go run agents/utility_agent.go --daw localhost:50051" << std::endl;
+        std::cout << "  python mcp/agents/orchestrator.py --daw localhost:50051" << std::endl;
+        std::cout << "  go run mcp/agents/utility_agent.go --daw localhost:50051" << std::endl;
     }
     
     void shutdown() override {

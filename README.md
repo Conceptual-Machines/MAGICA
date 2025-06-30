@@ -14,11 +14,16 @@
 
 ```
 🤖 AI Agents (Python/Go/JS) 
-       ↓ gRPC
-🔮 Magica DAW (C++)
-   ├── gRPC Server (Port 50051)
-   ├── Tracktion Audio Engine  
-   └── JUCE User Interface
+       ↓ gRPC/MCP
+🔮 Magica System
+   ├── 🎵 DAW Domain (C++)
+   │   ├── Audio Engine (+ aideas-core)
+   │   ├── UI Components  
+   │   └── DAW Core Logic
+   └── 🤖 MCP Domain (C++)
+       ├── gRPC Server (Port 50051)
+       ├── Protocol Buffers
+       └── Agent Management
 ```
 
 ## 🚀 Quick Start
@@ -27,7 +32,7 @@
 ```bash
 # Build and run the DAW
 make build
-./build/magica_daw
+./build/magica_daw_app
 
 # Output:
 # ✓ Audio engine initialized
@@ -40,7 +45,7 @@ make build
 
 **Utility Agent (Go) - High-performance MIDI processing:**
 ```bash
-go run agents/utility_agent.go --daw localhost:50051 --action listen
+go run mcp/agents/utility_agent.go --daw localhost:50051 --action listen
 
 # Output:
 # 🤖 Starting Utility Agent...
@@ -51,7 +56,7 @@ go run agents/utility_agent.go --daw localhost:50051 --action listen
 
 **Orchestrator Agent (Python) - Natural language interface:**
 ```bash
-python agents/orchestrator.py --daw localhost:50051
+python mcp/agents/orchestrator.py --daw localhost:50051
 
 # Output:
 # 🔗 Connecting to Magica DAW at localhost:50051
@@ -160,10 +165,11 @@ High-performance MIDI processing for:
 
 ```bash
 # Direct clip processing
-go run agents/utility_agent.go --daw localhost:50051 --action cleanup --clip clip_123
+cd mcp/agents
+go run utility_agent.go --daw localhost:50051 --action cleanup --clip clip_123
 
 # Event-driven processing
-go run agents/utility_agent.go --daw localhost:50051 --action listen
+go run utility_agent.go --daw localhost:50051 --action listen
 ```
 
 ### **Orchestrator Agent (Python)**
@@ -175,10 +181,11 @@ Natural language interface with LLM integration:
 
 ```bash
 # Interactive mode
-python agents/orchestrator.py --daw localhost:50051 --openai-key sk-...
+cd mcp/agents
+python orchestrator.py --daw localhost:50051 --openai-key sk-...
 
-# Single command
-python agents/orchestrator.py --daw localhost:50051 --request "Add a jazz melody"
+# Single command  
+python orchestrator.py --daw localhost:50051 --request "Add a jazz melody"
 ```
 
 ### **Melody Agent (Python)**
@@ -202,11 +209,11 @@ Rhythm generation:
 User: "I just recorded this piano part but it has duplicates and short notes"
 
 Workflow:
-1. Orchestrator analyzes intent
-2. Routes to Utility Agent
-3. Utility Agent processes 1000+ notes in <20ms
-4. Piano roll updates with clean MIDI
-5. User can immediately continue editing
+1. Orchestrator (mcp/agents/orchestrator.py) analyzes intent
+2. Routes to Utility Agent via MCP server
+3. Utility Agent (mcp/agents/utility_agent.go) processes 1000+ notes in <20ms
+4. DAW engine updates with clean MIDI
+5. User can immediately continue editing in the DAW UI
 ```
 
 ### **Scenario 2: Creative Composition**
@@ -250,14 +257,21 @@ Workflow:
 git clone https://github.com/yourusername/magica.git
 cd magica
 
-# Build with CMake
+# Build entire system
 make build
+
+# Run the DAW application
+./build/magica_daw_app
 
 # Run tests
 make test
 
 # Debug build
 make debug
+
+# Build specific domains
+cd daw && cmake -B build && make -C build    # DAW only
+cd mcp && cmake -B build && make -C build    # MCP only
 ```
 
 ### **Dependencies**
@@ -284,11 +298,18 @@ make debug
 Magica is an experimental project exploring the future of AI-driven music production. Contributions welcome!
 
 ### **Areas for Contribution**
-- **New Agent Types**: Mastering, sound design, music theory analysis
-- **UI Improvements**: Modern, AI-aware interface components
-- **Performance Optimization**: Real-time audio processing enhancements
-- **Language Bindings**: Client libraries for more languages
-- **Documentation**: Tutorials, API reference, architectural guides
+- **DAW Domain (`daw/`)**:
+  - aideas-core integration for advanced audio processing
+  - Modern UI components and JUCE interface improvements
+  - Real-time audio engine enhancements
+- **MCP Domain (`mcp/`)**:
+  - New agent types (mastering, sound design, music theory)
+  - Language bindings for more programming languages  
+  - Agent coordination and workflow improvements
+- **Cross-Domain**:
+  - Documentation and tutorials
+  - Performance optimization
+  - Testing and CI/CD
 
 ## 📄 License
 
@@ -300,34 +321,46 @@ MIT License - see [LICENSE](LICENSE) file for details.
 
 ---
 
-## ✨ Vision
+## 🏗️ Project Structure
 
-Magica serves as the middleware layer between a music production engine and intelligent agents (e.g., LLMs, MIDI generators, mixing assistants). The goal is to create a modular, programmable DAW architecture where agents can:
-- Assist with music composition and arrangement
-- Automate track editing and mixing tasks
-- Control playback and transport
-- Respond to user prompts or other agents
+Magica follows a **product-based** architecture with two main domains:
 
----
+```
+magica/
+├── 🎵 daw/                    # DAW Product Domain
+│   ├── Audio engine + aideas-core integration
+│   ├── User interface components
+│   ├── DAW core logic and interfaces  
+│   └── Main application (magica_daw_app)
+│
+└── 🤖 mcp/                    # Multi-Agent Communication Domain
+    ├── MCP server implementation
+    ├── Protocol buffer definitions
+    ├── Example agents (orchestrator.py, utility_agent.go)
+    └── Agent management
+```
+
+**Key Benefits:**
+- **Clear Boundaries**: Each domain has specific responsibilities
+- **Independent Development**: DAW and MCP can evolve separately  
+- **Easy Integration**: aideas-core scope is clearly defined
+- **Scalable**: Easy to add new domains (plugins, cloud, etc.)
 
 ## 🧠 Key Components
 
-### ✅ MCP Server (Multi-agent Control Protocol)
-A WebSocket-based server that agents connect to. Handles:
-- Registration and capability discovery
-- Routing JSON-based commands
-- Sending asynchronous DAW state events
+### 🎵 DAW Domain (`daw/`)
+The complete digital audio workstation:
+- **Audio Engine**: Real-time audio processing (+ future aideas-core integration)
+- **UI Framework**: Modern interface built with JUCE
+- **Core Interfaces**: Track, clip, mixer, transport operations
+- **Command System**: Unified command pattern for all DAW operations
 
-### ✅ Generic API
-An abstract control layer that defines what agents can do. Example modules:
-- `TransportInterface`: play, stop, locate
-- `TrackInterface`: add, mute, delete tracks
-- `ClipInterface`: insert MIDI clips
-- `MixerInterface`: volume, pan, FX routing
-- `PromptInterface`: bridge to language models
-
-### ✅ Host Integration (coming soon)
-Adapters for real DAW backends (starting with Tracktion Engine) to bind the Magica API to actual audio and MIDI operations.
+### 🤖 MCP Domain (`mcp/`)  
+The multi-agent communication system:
+- **gRPC Server**: High-performance agent communication (Port 50051)
+- **Protocol Buffers**: Strongly-typed API definitions
+- **Agent Management**: Registration, routing, and coordination
+- **Example Agents**: Orchestrator (Python), Utility (Go)
 
 ---
 
