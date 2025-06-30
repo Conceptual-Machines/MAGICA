@@ -9,7 +9,7 @@
  * manipulate music in real time through a unified API and server-based communication model.
  */
 
-#include "magda/core/mcp_server.hpp"
+#include "magda/core/grpc_mcp_server.hpp"
 #include "magda/core/interfaces/transport_interface.hpp"
 #include "magda/core/interfaces/track_interface.hpp"
 #include "magda/core/interfaces/clip_interface.hpp"

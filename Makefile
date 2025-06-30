@@ -64,8 +64,8 @@ configure:
 
 # Help
 help:
-	@echo "Magda Build System"
-	@echo "=================="
+	@echo "Magda Build System (gRPC-based)"
+	@echo "================================"
 	@echo "Available targets:"
 	@echo "  build     - Build in release mode (default)"
 	@echo "  debug     - Build in debug mode"
@@ -77,4 +77,6 @@ help:
 	@echo "  install   - Install the library"
 	@echo "  clean     - Clean build directory"
 	@echo "  configure - Configure CMake only"
-	@echo "  help      - Show this help" 
+	@echo "  help      - Show this help"
+	@echo ""
+	@echo "Note: This version uses gRPC for agent communication (port 50051 by default)" 
