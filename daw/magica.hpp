@@ -1,35 +1,44 @@
 #pragma once
 
 /**
- * @file magda.hpp
- * @brief Main header for the Magda Multi-Agent Generic DAW API
+ * @file magica.hpp
+ * @brief Main header for the Magica Multi-Agent DAW system
  * 
- * Magda is an experimental framework for building AI-driven Digital Audio Workstations.
+ * Magica is a Multi-Agent Generative Interface for Creative Audio.
  * It enables multiple intelligent agents to collaboratively compose, arrange, and 
  * manipulate music in real time through a unified API and server-based communication model.
  */
 
-#include "magda/core/grpc_mcp_server.hpp"
-#include "magda/core/interfaces/transport_interface.hpp"
-#include "magda/core/interfaces/track_interface.hpp"
-#include "magda/core/interfaces/clip_interface.hpp"
-#include "magda/core/interfaces/mixer_interface.hpp"
-#include "magda/core/interfaces/prompt_interface.hpp"
-#include "magda/core/agent.hpp"
-#include "magda/core/command.hpp"
+#include "interfaces/transport_interface.hpp"
+#include "interfaces/track_interface.hpp"
+#include "interfaces/clip_interface.hpp"
+#include "interfaces/mixer_interface.hpp"
+#include "interfaces/prompt_interface.hpp"
+#include "command.hpp"
+
+// Forward declaration
+namespace magica {
+    class TracktionEngineWrapper;
+}
 
 /**
- * @brief Current version of Magda
+ * @brief Current version of Magica
  */
-constexpr const char* MAGDA_VERSION = "0.1.0";
+constexpr const char* MAGICA_VERSION = "0.1.0";
 
 /**
- * @brief Initialize the Magda system
+ * @brief Initialize the Magica system
  * @return true if initialization was successful
  */
-bool magda_initialize();
+bool magica_initialize();
 
 /**
- * @brief Shutdown the Magda system
+ * @brief Shutdown the Magica system
  */
-void magda_shutdown(); 
+void magica_shutdown();
+
+/**
+ * @brief Get access to the global Tracktion Engine instance
+ * @return Pointer to the engine wrapper, or nullptr if not initialized
+ */
+magica::TracktionEngineWrapper* magica_get_engine(); 

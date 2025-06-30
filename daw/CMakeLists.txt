@@ -1,10 +1,14 @@
 # DAW Domain - Digital Audio Workstation Core + UI
 # This includes the audio engine, interfaces, UI, and main application
 
+# Add Tracktion Engine modules
+juce_add_modules(${tracktion_engine_SOURCE_DIR}/modules/tracktion_engine)
+
 # DAW Core sources
 set(DAW_CORE_SOURCES
     command.cpp
     magica.cpp
+    engine/tracktion_engine_wrapper.cpp
 )
 
 # DAW UI sources
@@ -16,6 +20,7 @@ set(DAW_UI_SOURCES
 set(DAW_HEADERS
     command.hpp
     magica.hpp
+    engine/tracktion_engine_wrapper.hpp
     interfaces/clip_interface.hpp
     interfaces/mixer_interface.hpp
     interfaces/prompt_interface.hpp
@@ -26,19 +31,36 @@ set(DAW_HEADERS
 # Create DAW library (core functionality)
 add_library(magica_daw STATIC ${DAW_CORE_SOURCES})
 
-# Create DAW executable (main application with UI)
-add_executable(magica_daw_app ${DAW_UI_SOURCES})
+# Create DAW executable as JUCE application
+juce_add_gui_app(magica_daw_app 
+    VERSION "0.1.0"
+    COMPANY_NAME "Magica"
+    PRODUCT_NAME "Magica DAW"
+)
+
+# Add UI sources to the JUCE app target
+target_sources(magica_daw_app PRIVATE ${DAW_UI_SOURCES})
 
 # Link required libraries for DAW core
 target_link_libraries(magica_daw
     PUBLIC
     nlohmann_json::nlohmann_json
+    juce::juce_core
+    juce::juce_data_structures
+    juce::juce_audio_basics
+    tracktion_engine
 )
 
 # Link required libraries for DAW application
 target_link_libraries(magica_daw_app
     PRIVATE
     magica_daw
+    juce::juce_gui_basics
+    juce::juce_audio_devices
+    juce::juce_audio_formats
+    juce::juce_audio_processors
+    juce::juce_audio_utils
+    tracktion_engine
     # NOTE: When aideas-core is integrated, add it here:
     # aideas_core::audio
     # aideas_core::midi  

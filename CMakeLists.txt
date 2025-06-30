@@ -2,10 +2,14 @@ cmake_minimum_required(VERSION 3.24)
 
 project(Magica VERSION 0.1.0 LANGUAGES CXX)
 
-# Set C++ standard
+# Set C++ standard (required for Tracktion Engine)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
+
+# JUCE options
+option(JUCE_BUILD_EXTRAS "Build JUCE Examples" OFF)
+option(JUCE_BUILD_EXAMPLES "Build JUCE Extras" OFF)
 
 # Build type
 if(NOT CMAKE_BUILD_TYPE)
@@ -27,10 +31,19 @@ find_package(Threads REQUIRED)
 # Include FetchContent for dependency management
 include(FetchContent)
 
-# Set policy for FetchContent
+# Set policies for compatibility
 if (POLICY CMP0135)
     cmake_policy(SET CMP0135 NEW)
 endif()
+
+# Set policy for minimum version compatibility
+if (POLICY CMP0091)
+    cmake_policy(SET CMP0091 NEW)
+endif()
+
+# Allow lower cmake version for dependencies
+set(CMAKE_POLICY_DEFAULT_CMP0077 NEW)
+set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
 
 # nlohmann/json for JSON handling
 FetchContent_Declare(
@@ -39,11 +52,18 @@ FetchContent_Declare(
     GIT_TAG v3.11.3
 )
 
-# gRPC for server communication
+# gRPC for server communication (using stable version)
 FetchContent_Declare(
     gRPC
     GIT_REPOSITORY https://github.com/grpc/grpc
-    GIT_TAG v1.60.0
+    GIT_TAG v1.54.0
+)
+
+# Tracktion Engine for DAW functionality (includes JUCE)
+FetchContent_Declare(
+    tracktion_engine
+    GIT_REPOSITORY https://github.com/Tracktion/tracktion_engine.git
+    GIT_TAG develop
 )
 
 # Catch2 for testing
@@ -56,7 +76,7 @@ if(MAGICA_BUILD_TESTS)
 endif()
 
 # Make dependencies available
-FetchContent_MakeAvailable(nlohmann_json gRPC)
+FetchContent_MakeAvailable(nlohmann_json gRPC tracktion_engine)
 
 if(MAGICA_BUILD_TESTS)
     FetchContent_MakeAvailable(Catch2)
