@@ -1,6 +1,23 @@
 # DAW Domain - Digital Audio Workstation Core + UI
 # Simple version focusing on Tracktion Engine integration
 
+# Create binary data for fonts and icons
+juce_add_binary_data(MagicaAssets
+    SOURCES
+    ../assets/fonts/Inter-Regular.ttf
+    ../assets/fonts/Inter-Medium.ttf
+    ../assets/fonts/Inter-SemiBold.ttf
+    ../assets/fonts/Inter-Bold.ttf
+    ../assets/icons/play.svg
+    ../assets/icons/pause.svg
+    ../assets/icons/stop.svg
+    ../assets/icons/record.svg
+    ../assets/icons/loop.svg
+    ../assets/icons/repeat.svg
+    ../assets/icons/repeat_one.svg
+    ../assets/icons/volume_up.svg
+)
+
 # DAW Core sources
 set(DAW_CORE_SOURCES
     command.cpp
@@ -11,6 +28,18 @@ set(DAW_CORE_SOURCES
 # DAW UI sources
 set(DAW_UI_SOURCES
     magica_daw_main.cpp
+    ui/themes/DarkTheme.cpp
+    ui/themes/FontManager.cpp
+    ui/windows/MainWindow.cpp
+    ui/windows/MenuManager.cpp
+    ui/panels/TransportPanel.cpp
+    ui/panels/LeftPanel.cpp
+    ui/panels/RightPanel.cpp
+    ui/panels/BottomPanel.cpp
+    ui/views/MainView.cpp
+    ui/components/TimelineComponent.cpp
+    ui/components/TrackComponent.cpp
+    ui/components/SvgButton.cpp
 )
 
 # All DAW headers
@@ -23,6 +52,18 @@ set(DAW_HEADERS
     interfaces/prompt_interface.hpp
     interfaces/track_interface.hpp
     interfaces/transport_interface.hpp
+    ui/themes/DarkTheme.hpp
+    ui/themes/FontManager.hpp
+    ui/windows/MainWindow.hpp
+    ui/windows/MenuManager.hpp
+    ui/panels/TransportPanel.hpp
+    ui/panels/LeftPanel.hpp
+    ui/panels/RightPanel.hpp
+    ui/panels/BottomPanel.hpp
+    ui/views/MainView.hpp
+    ui/components/TimelineComponent.hpp
+    ui/components/TrackComponent.hpp
+    ui/components/SvgButton.hpp
 )
 
 # Create DAW library (core functionality)
@@ -51,6 +92,7 @@ target_link_libraries(magica_daw
 target_link_libraries(magica_daw_app
     PRIVATE
     magica_daw
+    MagicaAssets
     juce::juce_gui_basics
     juce::juce_audio_devices
     juce::juce_audio_formats
@@ -72,6 +114,12 @@ target_include_directories(magica_daw
 target_include_directories(magica_daw_app
     PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/ui
+    ${CMAKE_CURRENT_SOURCE_DIR}/ui/themes
+    ${CMAKE_CURRENT_SOURCE_DIR}/ui/windows
+    ${CMAKE_CURRENT_SOURCE_DIR}/ui/panels
+    ${CMAKE_CURRENT_SOURCE_DIR}/ui/views
+    ${CMAKE_CURRENT_SOURCE_DIR}/ui/components
     ${CMAKE_SOURCE_DIR}
 )
 
