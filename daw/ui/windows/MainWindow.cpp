@@ -1,6 +1,7 @@
 #include "MainWindow.hpp"
 #include "../themes/DarkTheme.hpp"
 #include "../panels/TransportPanel.hpp"
+
 #include "../panels/LeftPanel.hpp"
 #include "../panels/RightPanel.hpp"
 #include "../panels/BottomPanel.hpp"
@@ -81,6 +82,8 @@ MainWindow::MainComponent::MainComponent() {
     transportPanel = std::make_unique<TransportPanel>();
     addAndMakeVisible(*transportPanel);
     
+    
+    
     // Create all panels
     leftPanel = std::make_unique<LeftPanel>();
     addAndMakeVisible(*leftPanel);
@@ -130,6 +133,8 @@ void MainWindow::MainComponent::resized() {
     auto transportArea = bounds.removeFromTop(TRANSPORT_HEIGHT);
     transportPanel->setBounds(transportArea);
     
+    // Remove timeline header panel - we'll use fillers instead
+    
     // Calculate available space for main content
     auto contentArea = bounds;
     
@@ -177,6 +182,17 @@ void MainWindow::MainComponent::resized() {
     
     // Main view gets the remaining space
     mainView->setBounds(contentArea);
+    
+    // Position timeline fillers in side panels to cover both arrangement and main timeline
+    int timelineY = TRANSPORT_HEIGHT; // Timeline starts right after transport
+    int totalTimelineHeight = ARRANGEMENT_HEIGHT + TIMELINE_HEIGHT;
+    if (leftPanelVisible) {
+        // Left filler should cover the track header area
+        leftPanel->setTimelineFillerPosition(timelineY, totalTimelineHeight);
+    }
+    if (rightPanelVisible) {
+        rightPanel->setTimelineFillerPosition(timelineY, totalTimelineHeight);
+    }
     
     // Update panel visibility
     leftPanel->setVisible(leftPanelVisible);

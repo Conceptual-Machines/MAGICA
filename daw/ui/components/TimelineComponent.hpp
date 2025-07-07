@@ -20,6 +20,9 @@ public:
     // Mouse interaction
     void mouseDown(const juce::MouseEvent& event) override;
     void mouseDrag(const juce::MouseEvent& event) override;
+    
+    // Callback for playhead position changes
+    std::function<void(double)> onPlayheadPositionChanged;
 
 private:
     double timelineLength = 300.0;

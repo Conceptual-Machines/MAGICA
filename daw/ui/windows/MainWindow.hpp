@@ -7,6 +7,7 @@
 namespace magica {
 
 class TransportPanel;
+
 class LeftPanel;
 class RightPanel;
 class MainView;
@@ -45,7 +46,7 @@ public:
     bool rightPanelVisible = true;
     bool bottomPanelVisible = true;
     
-    std::unique_ptr<TransportPanel> transportPanel;
+            std::unique_ptr<TransportPanel> transportPanel;
     std::unique_ptr<MainView> mainView;
 
 private:
@@ -56,6 +57,8 @@ private:
 
     // Layout constants
     static constexpr int TRANSPORT_HEIGHT = 60;
+    static constexpr int ARRANGEMENT_HEIGHT = 30;
+    static constexpr int TIMELINE_HEIGHT = 80;
     static constexpr int MIN_PANEL_WIDTH = 200;
     static constexpr int DEFAULT_LEFT_WIDTH = 250;
     static constexpr int DEFAULT_RIGHT_WIDTH = 300;

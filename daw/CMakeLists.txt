@@ -33,13 +33,16 @@ set(DAW_UI_SOURCES
     ui/windows/MainWindow.cpp
     ui/windows/MenuManager.cpp
     ui/panels/TransportPanel.cpp
+    ui/panels/TimelineHeaderPanel.cpp
     ui/panels/LeftPanel.cpp
     ui/panels/RightPanel.cpp
     ui/panels/BottomPanel.cpp
     ui/views/MainView.cpp
     ui/components/TimelineComponent.cpp
+    ui/components/ArrangementTimelineComponent.cpp
     ui/components/TrackComponent.cpp
     ui/components/SvgButton.cpp
+    ui/components/TimelineFiller.cpp
 )
 
 # All DAW headers
@@ -57,6 +60,7 @@ set(DAW_HEADERS
     ui/windows/MainWindow.hpp
     ui/windows/MenuManager.hpp
     ui/panels/TransportPanel.hpp
+    ui/panels/TimelineHeaderPanel.hpp
     ui/panels/LeftPanel.hpp
     ui/panels/RightPanel.hpp
     ui/panels/BottomPanel.hpp

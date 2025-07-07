@@ -1,11 +1,16 @@
 #include "RightPanel.hpp"
 #include "../themes/DarkTheme.hpp"
 #include "../themes/FontManager.hpp"
+#include "../components/TimelineFiller.hpp"
 
 namespace magica {
 
 RightPanel::RightPanel() {
     setName("Right Panel");
+    
+    // Create timeline filler
+    timelineFiller = std::make_unique<TimelineFiller>();
+    addAndMakeVisible(*timelineFiller);
 }
 
 RightPanel::~RightPanel() = default;
@@ -24,7 +29,11 @@ void RightPanel::paint(juce::Graphics& g) {
 }
 
 void RightPanel::resized() {
-    // Layout will be implemented later
+    // Timeline filler will be positioned by MainWindow
+}
+
+void RightPanel::setTimelineFillerPosition(int y, int height) {
+    timelineFiller->setBounds(0, y, getWidth(), height);
 }
 
 } // namespace magica 

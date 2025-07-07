@@ -1,11 +1,16 @@
 #include "LeftPanel.hpp"
 #include "../themes/DarkTheme.hpp"
 #include "../themes/FontManager.hpp"
+#include "../components/TimelineFiller.hpp"
 
 namespace magica {
 
 LeftPanel::LeftPanel() {
     setName("Left Panel");
+    
+    // Create timeline filler
+    timelineFiller = std::make_unique<TimelineFiller>();
+    addAndMakeVisible(*timelineFiller);
 }
 
 LeftPanel::~LeftPanel() = default;
@@ -24,7 +29,11 @@ void LeftPanel::paint(juce::Graphics& g) {
 }
 
 void LeftPanel::resized() {
-    // Layout will be implemented later
+    // Timeline filler will be positioned by MainWindow
+}
+
+void LeftPanel::setTimelineFillerPosition(int y, int height) {
+    timelineFiller->setBounds(0, y, getWidth(), height);
 }
 
 } // namespace magica 
