@@ -1,0 +1,78 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, develop, fix-build ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  build-and-test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        build_type: [Debug, Release]
+        
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: recursive
+    
+    - name: Install dependencies (Ubuntu)
+      if: matrix.os == 'ubuntu-latest'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          build-essential \
+          cmake \
+          pkg-config \
+          libasound2-dev \
+          libjack-jackd2-dev \
+          ladspa-sdk \
+          libcurl4-openssl-dev \
+          libfreetype6-dev \
+          libx11-dev \
+          libxcomposite-dev \
+          libxcursor-dev \
+          libxext-dev \
+          libxinerama-dev \
+          libxrandr-dev \
+          libxrender-dev \
+          libwebkit2gtk-4.0-dev \
+          libglu1-mesa-dev \
+          mesa-common-dev
+    
+    - name: Install dependencies (macOS)
+      if: matrix.os == 'macos-latest'
+      run: |
+        # macOS has most dependencies built-in
+        # Just ensure we have the latest CMake
+        brew install cmake
+    
+    - name: Configure CMake
+      run: |
+        cmake -B build -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+    
+    - name: Build
+      run: |
+        cmake --build build --config ${{ matrix.build_type }} -j4
+    
+    - name: Test
+      run: |
+        cd build
+        ctest --output-on-failure -C ${{ matrix.build_type }}
+    
+    - name: Run unit tests directly
+      run: |
+        cd build
+        ./tests/magica_tests
+    
+    - name: Upload build artifacts (macOS)
+      if: matrix.os == 'macos-latest' && matrix.build_type == 'Release'
+      uses: actions/upload-artifact@v4
+      with:
+        name: magica-daw-macos
+        path: |
+          build/daw/magica_daw_app_artefacts/Release/magica_daw_app.app
+        retention-days: 7 
