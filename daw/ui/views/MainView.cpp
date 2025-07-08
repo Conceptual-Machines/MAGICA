@@ -21,11 +21,8 @@ MainView::MainView() {
     };
     
     timeline->onZoomChanged = [this](double newZoom) {
-        horizontalZoom = newZoom;
-        // Timeline already updated its zoom value, just sync track content
-        trackContentPanel->setZoom(newZoom);
-        updateContentSizes();
-        repaint(); // Ensure playhead is redrawn
+        // Call setHorizontalZoom to get proper playhead centering
+        setHorizontalZoom(newZoom);
     };
     
     // Create track headers panel
@@ -66,6 +63,9 @@ MainView::~MainView() = default;
 
 void MainView::paint(juce::Graphics& g) {
     g.fillAll(DarkTheme::getColour(DarkTheme::BACKGROUND));
+    
+    // Draw resize handle
+    paintResizeHandle(g);
 }
 
 void MainView::resized() {
@@ -75,15 +75,15 @@ void MainView::resized() {
     auto timelineArea = bounds.removeFromTop(TIMELINE_HEIGHT);
     
     // Position lock button in the top-left corner above track headers
-    auto lockButtonArea = timelineArea.removeFromLeft(TRACK_HEADER_WIDTH);
+    auto lockButtonArea = timelineArea.removeFromLeft(trackHeaderWidth);
     lockButtonArea = lockButtonArea.removeFromTop(30).reduced(5); // 30px height, 5px margin
     arrangementLockButton->setBounds(lockButtonArea);
     
     // Timeline takes the remaining width
     timelineViewport->setBounds(timelineArea);
     
-    // Track headers panel on the left (fixed width)
-    auto trackHeadersArea = bounds.removeFromLeft(TRACK_HEADER_WIDTH);
+    // Track headers panel on the left (variable width)
+    auto trackHeadersArea = bounds.removeFromLeft(trackHeaderWidth);
     trackHeadersPanel->setBounds(trackHeadersArea);
     
     // Track content viewport gets the remaining space
@@ -240,7 +240,7 @@ void MainView::updateContentSizes() {
     trackContentPanel->setSize(contentWidth, trackContentHeight);
     
     // Update track headers panel height to match content
-    trackHeadersPanel->setSize(TRACK_HEADER_WIDTH, juce::jmax(trackContentHeight, trackContentViewport->getHeight()));
+    trackHeadersPanel->setSize(trackHeaderWidth, juce::jmax(trackContentHeight, trackContentViewport->getHeight()));
     
     // Repaint playhead after content size changes
     playheadComponent->repaint();
@@ -341,6 +341,15 @@ void MainView::PlayheadComponent::setPlayheadPosition(double position) {
 }
 
 void MainView::PlayheadComponent::mouseDown(const juce::MouseEvent& event) {
+    // Convert event position to MainView coordinates
+    auto mainViewEvent = event.getEventRelativeTo(&owner);
+    
+    // Check if mouse is over resize handle - if so, forward to MainView
+    if (owner.getResizeHandleArea().contains(mainViewEvent.getPosition())) {
+        owner.mouseDown(mainViewEvent);
+        return;
+    }
+    
     // Check if clicking near the playhead line
     int playheadX = static_cast<int>(playheadPosition * owner.horizontalZoom);
     int scrollOffset = owner.trackContentViewport->getViewPositionX();
@@ -354,6 +363,13 @@ void MainView::PlayheadComponent::mouseDown(const juce::MouseEvent& event) {
 }
 
 void MainView::PlayheadComponent::mouseDrag(const juce::MouseEvent& event) {
+    // If owner is resizing headers, pass through to parent
+    if (owner.isResizingHeaders) {
+        auto mainViewEvent = event.getEventRelativeTo(&owner);
+        owner.mouseDrag(mainViewEvent);
+        return;
+    }
+    
     if (isDragging) {
         // Calculate new playhead position based on mouse X position
         int scrollOffset = owner.trackContentViewport->getViewPositionX();
@@ -369,21 +385,121 @@ void MainView::PlayheadComponent::mouseDrag(const juce::MouseEvent& event) {
 }
 
 void MainView::PlayheadComponent::mouseUp(const juce::MouseEvent& event) {
+    // If owner is resizing headers, pass through to parent
+    if (owner.isResizingHeaders) {
+        auto mainViewEvent = event.getEventRelativeTo(&owner);
+        owner.mouseUp(mainViewEvent);
+        return;
+    }
+    
     isDragging = false;
     setMouseCursor(juce::MouseCursor::NormalCursor);
 }
 
+void MainView::PlayheadComponent::mouseMove(const juce::MouseEvent& event) {
+    // Convert event position to MainView coordinates
+    auto mainViewEvent = event.getEventRelativeTo(&owner);
+    
+    // Check if over resize handle - pass through to parent for cursor handling
+    if (owner.getResizeHandleArea().contains(mainViewEvent.getPosition())) {
+        owner.mouseMove(mainViewEvent);
+        return;
+    }
+    
+    // Default cursor
+    setMouseCursor(juce::MouseCursor::NormalCursor);
+}
+
 void MainView::mouseDown(const juce::MouseEvent& event) {
+    if (getResizeHandleArea().contains(event.getPosition())) {
+        isResizingHeaders = true;
+        lastMouseX = event.x;
+        setMouseCursor(juce::MouseCursor::LeftRightResizeCursor);
+        return;
+    }
+    
     // Removed timeline zoom handling - let timeline component handle its own zoom
     // The timeline component now handles zoom gestures in its lower half
 }
 
 void MainView::mouseDrag(const juce::MouseEvent& event) {
-    // Removed zoom handling - timeline component handles its own zoom
+    if (isResizingHeaders) {
+        int deltaX = event.x - lastMouseX;
+        int newWidth = juce::jlimit(MIN_TRACK_HEADER_WIDTH, MAX_TRACK_HEADER_WIDTH, trackHeaderWidth + deltaX);
+        
+        if (newWidth != trackHeaderWidth) {
+            trackHeaderWidth = newWidth;
+            resized(); // Trigger layout update
+        }
+        
+        lastMouseX = event.x; // Update for next drag event
+    }
 }
 
 void MainView::mouseUp(const juce::MouseEvent& event) {
+    if (isResizingHeaders) {
+        isResizingHeaders = false;
+        setMouseCursor(juce::MouseCursor::NormalCursor);
+        return;
+    }
+    
     // Removed zoom handling - timeline component handles its own zoom
+}
+
+void MainView::mouseMove(const juce::MouseEvent& event) {
+    auto handleArea = getResizeHandleArea();
+    
+    if (handleArea.contains(event.getPosition())) {
+        setMouseCursor(juce::MouseCursor::LeftRightResizeCursor);
+        repaint(handleArea); // Repaint to show hover effect
+    } else {
+        setMouseCursor(juce::MouseCursor::NormalCursor);
+        repaint(handleArea); // Repaint to remove hover effect
+    }
+}
+
+void MainView::mouseExit(const juce::MouseEvent& event) {
+    setMouseCursor(juce::MouseCursor::NormalCursor);
+    repaint(getResizeHandleArea()); // Remove hover effect
+}
+
+// Resize handle helper methods
+juce::Rectangle<int> MainView::getResizeHandleArea() const {
+    // Make the resize handle area wider for easier grabbing
+    int handleWidth = 8; // Increased from 4 to 8 pixels
+    return juce::Rectangle<int>(trackHeaderWidth - handleWidth / 2, 
+                               TIMELINE_HEIGHT, 
+                               handleWidth, 
+                               getHeight() - TIMELINE_HEIGHT);
+}
+
+void MainView::paintResizeHandle(juce::Graphics& g) {
+    auto handleArea = getResizeHandleArea();
+    
+    // Check if mouse is over the handle for hover effect
+    auto mousePos = getMouseXYRelative();
+    bool isHovered = handleArea.contains(mousePos);
+    
+    // Draw subtle resize handle with hover effect
+    if (isHovered || isResizingHeaders) {
+        g.setColour(DarkTheme::getColour(DarkTheme::BORDER).brighter(0.3f));
+    } else {
+        g.setColour(DarkTheme::getColour(DarkTheme::BORDER));
+    }
+    
+    // Draw a thinner visual line in the center
+    int centerX = handleArea.getCentreX();
+    g.fillRect(centerX - 1, handleArea.getY(), 2, handleArea.getHeight());
+    
+    // Draw resize indicator dots when hovered or resizing
+    if (isHovered || isResizingHeaders) {
+        g.setColour(DarkTheme::getColour(DarkTheme::TEXT_SECONDARY).brighter(0.2f));
+        int centerY = handleArea.getCentreY();
+        
+        for (int i = -1; i <= 1; ++i) {
+            g.fillEllipse(centerX - 1, centerY + i * 4 - 1, 2, 2);
+        }
+    }
 }
 
 } // namespace magica 

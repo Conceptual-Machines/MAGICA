@@ -9,7 +9,7 @@ namespace magica {
 class TrackContentPanel : public juce::Component {
 public:
     static constexpr int DEFAULT_TRACK_HEIGHT = 80;
-    static constexpr int MIN_TRACK_HEIGHT = 40;
+    static constexpr int MIN_TRACK_HEIGHT = 75;
     static constexpr int MAX_TRACK_HEIGHT = 200;
 
     TrackContentPanel();

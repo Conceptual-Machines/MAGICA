@@ -49,6 +49,8 @@ public:
     void mouseDown(const juce::MouseEvent& event) override;
     void mouseDrag(const juce::MouseEvent& event) override;
     void mouseUp(const juce::MouseEvent& event) override;
+    void mouseMove(const juce::MouseEvent& event) override;
+    void mouseExit(const juce::MouseEvent& event) override;
 
 private:
     // Timeline viewport (horizontal scroll only)
@@ -79,15 +81,29 @@ private:
     bool isUpdatingTrackSelection = false;
     bool isUpdatingFromZoom = false;  // Prevent zoom from interfering with manual scroll
 
-    // Layout constants
+    // Layout constants and variables
     static constexpr int TIMELINE_HEIGHT = 80;
-    static constexpr int TRACK_HEADER_WIDTH = 200;
+    static constexpr int DEFAULT_TRACK_HEADER_WIDTH = 200;
+    static constexpr int MIN_TRACK_HEADER_WIDTH = 150;
+    static constexpr int MAX_TRACK_HEADER_WIDTH = 350;
+    int trackHeaderWidth = DEFAULT_TRACK_HEADER_WIDTH;
+    
+    // Resize handle state
+    bool isResizingHeaders = false;
+    int resizeStartX = 0;
+    int resizeStartWidth = 0;
+    static constexpr int RESIZE_HANDLE_WIDTH = 4;
+    int lastMouseX = 0;
 
     // Helper methods
     void updateContentSizes();
     void syncHorizontalScrolling();
     void syncTrackHeights();
     void setupTrackSynchronization();
+    
+    // Resize handle helper methods
+    juce::Rectangle<int> getResizeHandleArea() const;
+    void paintResizeHandle(juce::Graphics& g);
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(MainView)
 };
@@ -105,6 +121,7 @@ public:
     void mouseDown(const juce::MouseEvent& event) override;
     void mouseDrag(const juce::MouseEvent& event) override;
     void mouseUp(const juce::MouseEvent& event) override;
+    void mouseMove(const juce::MouseEvent& event) override;
 
 private:
     MainView& owner;

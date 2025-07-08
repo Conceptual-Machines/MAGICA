@@ -283,12 +283,11 @@ void TrackHeadersPanel::updateTrackHeaderLayout() {
             // Layout UI components within the header area
             auto contentArea = headerArea.reduced(5);
             
-            // Name label at top
+            // Name label at top (always visible)
             header.nameLabel->setBounds(contentArea.removeFromTop(20));
-            
             contentArea.removeFromTop(5); // Spacing
             
-            // Mute and Solo buttons
+            // Mute and Solo buttons (always visible)
             auto buttonArea = contentArea.removeFromTop(20);
             header.muteButton->setBounds(buttonArea.removeFromLeft(30));
             buttonArea.removeFromLeft(5); // Spacing
@@ -296,15 +295,21 @@ void TrackHeadersPanel::updateTrackHeaderLayout() {
             
             contentArea.removeFromTop(5); // Spacing
             
-            // Volume slider
-            if (contentArea.getHeight() > 20) {
+            // Volume slider - only show if enough space
+            if (contentArea.getHeight() >= 20) {
                 header.volumeSlider->setBounds(contentArea.removeFromTop(15));
+                header.volumeSlider->setVisible(true);
                 contentArea.removeFromTop(5); // Spacing
+            } else {
+                header.volumeSlider->setVisible(false);
             }
             
-            // Pan slider
-            if (contentArea.getHeight() > 15) {
+            // Pan slider - only show if enough space
+            if (contentArea.getHeight() >= 15) {
                 header.panSlider->setBounds(contentArea.removeFromTop(15));
+                header.panSlider->setVisible(true);
+            } else {
+                header.panSlider->setVisible(false);
             }
         }
     }
