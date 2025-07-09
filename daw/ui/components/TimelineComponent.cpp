@@ -18,13 +18,13 @@ TimelineComponent::TimelineComponent() {
     setWantsKeyboardFocus(false);
     setSize(800, 40);
     
-    // Create some sample arrangement sections
-    addSection("Intro", 0, 8, juce::Colours::green);
-    addSection("Verse 1", 8, 24, juce::Colours::blue);
-    addSection("Chorus", 24, 40, juce::Colours::orange);
-    addSection("Verse 2", 40, 56, juce::Colours::blue);
-    addSection("Bridge", 56, 72, juce::Colours::purple);
-    addSection("Outro", 72, 88, juce::Colours::red);
+    // Create some sample arrangement sections with eye-catching colors
+    addSection("Intro", 0, 8, juce::Colour(0xff00ff80));      // Bright lime green
+    addSection("Verse 1", 8, 24, juce::Colour(0xff4080ff));    // Electric blue
+    addSection("Chorus", 24, 40, juce::Colour(0xffff6600));    // Vivid orange
+    addSection("Verse 2", 40, 56, juce::Colour(0xff8040ff));   // Bright purple
+    addSection("Bridge", 56, 72, juce::Colour(0xffff0080));    // Hot pink
+    addSection("Outro", 72, 88, juce::Colour(0xffff4040));     // Bright red
     
     // Lock arrangement sections by default to prevent accidental movement
     arrangementLocked = true;
@@ -49,6 +49,19 @@ void TimelineComponent::paint(juce::Graphics& g) {
     // Draw arrangement sections first (behind time markers)
     drawArrangementSections(g);
     drawTimeMarkers(g);
+    
+    // Draw light borders around the zoom area
+    int sectionsHeight = static_cast<int>(getHeight() * 0.25);  // Top 25% - sections area
+    int playheadZoneStart = getHeight() - 10;  // Bottom 10 pixels for playhead zone
+    
+    // Draw only top and bottom borders for the zoom area, covering full width including padding
+    g.setColour(DarkTheme::getColour(DarkTheme::BORDER).brighter(0.3f));
+    
+    // Top border (separating sections from zoom area)
+    g.drawLine(0, sectionsHeight, getWidth(), sectionsHeight, 1.0f);
+    
+    // Bottom border (separating zoom area from playhead zone)
+    g.drawLine(0, playheadZoneStart, getWidth(), playheadZoneStart, 1.0f);
     
     // Note: Playhead is now drawn by MainView's unified playhead component
 }
@@ -95,8 +108,8 @@ void TimelineComponent::mouseDown(const juce::MouseEvent& event) {
     }
     
     // Define zones based on actual drawing layout with expanded zoom zone
-    int sectionsHeight = static_cast<int>(getHeight() * 0.4);  // Top 40% - sections area
-    int playheadZoneStart = getHeight() - 25;  // Bottom 25 pixels for numbers + ticks (reduced from 40)
+    int sectionsHeight = static_cast<int>(getHeight() * 0.25);  // Top 25% - sections area (smaller)
+    int playheadZoneStart = getHeight() - 10;  // Bottom 10 pixels for numbers + ticks (even larger zoom area)
     
     bool inPlayheadZone = event.y >= playheadZoneStart;
     bool inSectionsArea = event.y <= sectionsHeight;
@@ -119,7 +132,7 @@ void TimelineComponent::mouseDown(const juce::MouseEvent& event) {
     std::cout << "Timeline Height: " << getHeight() << std::endl;
     std::cout << "Sections (0-" << sectionsHeight << "), Zoom (" << sectionsHeight << "-" << playheadZoneStart << "), Playhead (" << playheadZoneStart << "-" << getHeight() << ")" << std::endl;
     std::cout << "In Sections: " << (inSectionsArea ? "YES" : "NO") << ", In Zoom: " << (inZoomZone ? "YES" : "NO") << ", In Playhead: " << (inPlayheadZone ? "YES" : "NO") << std::endl;
-    std::cout << "Numbers area: " << (getHeight() - 35) << "-" << (getHeight() - 15) << ", Ticks area: " << (getHeight() - 15) << "-" << (getHeight() - 2) << std::endl;
+    std::cout << "Numbers area: " << (getHeight() - 35) << "-" << (getHeight() - 10) << ", Ticks area: " << (getHeight() - 10) << "-" << (getHeight() - 2) << std::endl;
     
     // Zone 1: Playhead zone (bottom area with ticks and numbers)
     if (inPlayheadZone) {
@@ -237,8 +250,8 @@ void TimelineComponent::mouseDrag(const juce::MouseEvent& event) {
         return;
     }
     
-    // Allow zoom from anywhere except playhead zone
-    int playheadZoneStart = getHeight() - 25;
+    // Allow zoom from anywhere except playhead zone (smaller zone = even larger zoom area)
+    int playheadZoneStart = getHeight() - 10;
     bool startedInPlayheadZone = zoomStartY >= playheadZoneStart;
     
     if (!startedInPlayheadZone) {
@@ -491,8 +504,8 @@ void TimelineComponent::drawTimeMarkers(juce::Graphics& g) {
     for (double time = startTime; time <= timelineLength; time += markerInterval) {
         int x = timeToPixel(time) + LEFT_PADDING;
         if (x >= 0 && x < getWidth()) {
-            // Draw short tick mark at bottom (back to original style)
-            g.drawLine(x, getHeight() - 15, x, getHeight() - 2);
+            // Draw short tick mark at bottom (adjusted for smaller playhead zone)
+            g.drawLine(x, getHeight() - 10, x, getHeight() - 2);
             
             // Format time label based on interval precision
             juce::String timeStr;
@@ -554,8 +567,8 @@ void TimelineComponent::drawSection(juce::Graphics& g, const ArrangementSection&
     endX = juce::jmin(getWidth(), endX);
     width = endX - startX;
     
-    // Draw section background - smaller size (40% of timeline height)
-    auto sectionArea = juce::Rectangle<int>(startX, 0, width, static_cast<int>(getHeight() * 0.4));
+    // Draw section background - smaller size (25% of timeline height)
+    auto sectionArea = juce::Rectangle<int>(startX, 0, width, static_cast<int>(getHeight() * 0.25));
     
     // Section background - dimmed if locked
     float alpha = arrangementLocked ? 0.2f : 0.3f;
@@ -593,8 +606,8 @@ void TimelineComponent::drawSection(juce::Graphics& g, const ArrangementSection&
 }
 
 int TimelineComponent::findSectionAtPosition(int x, int y) const {
-    // Check the arrangement section area (now 40% of timeline height)
-    if (y > static_cast<int>(getHeight() * 0.4)) {
+    // Check the arrangement section area (now 25% of timeline height)
+    if (y > static_cast<int>(getHeight() * 0.25)) {
         return -1;
     }
     

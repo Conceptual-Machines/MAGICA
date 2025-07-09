@@ -89,7 +89,7 @@ private:
     bool initialZoomSet = false;
 
     // Layout constants and variables
-    static constexpr int TIMELINE_HEIGHT = 80;
+    static constexpr int TIMELINE_HEIGHT = 120;
     static constexpr int DEFAULT_TRACK_HEADER_WIDTH = 200;
     static constexpr int MIN_TRACK_HEADER_WIDTH = 150;
     static constexpr int MAX_TRACK_HEADER_WIDTH = 350;
