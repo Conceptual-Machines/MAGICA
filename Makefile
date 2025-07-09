@@ -80,7 +80,57 @@ clean:
 .PHONY: rebuild
 rebuild: clean debug
 
+# Code Quality Targets
 
+# Format code using clang-format
+.PHONY: format
+format:
+	@echo "Formatting C++ code with clang-format..."
+	@find daw agents tests -name "*.cpp" -o -name "*.hpp" -o -name "*.h" | \
+		xargs clang-format -i -style=file
+	@echo "Code formatting complete."
+
+# Check formatting without making changes
+.PHONY: check-format
+check-format:
+	@echo "Checking code formatting..."
+	@find daw agents tests -name "*.cpp" -o -name "*.hpp" -o -name "*.h" | \
+		xargs clang-format -style=file --dry-run --Werror
+	@echo "Format check complete."
+
+# Run static analysis with clang-tidy
+.PHONY: lint
+lint: debug
+	@echo "Running static analysis with clang-tidy..."
+	@echo "Analyzing daw/ directory..."
+	@find daw -name "*.cpp" | head -10 | \
+		xargs -I {} clang-tidy {} -p=$(BUILD_DIR) --config-file=.clang-tidy || true
+	@echo "Analyzing agents/ directory..."
+	@find agents -name "*.cpp" | head -5 | \
+		xargs -I {} clang-tidy {} -p=$(BUILD_DIR) --config-file=.clang-tidy || true
+	@echo "Static analysis complete."
+
+# Run full lint on all files (may take longer)
+.PHONY: lint-all
+lint-all: debug
+	@echo "Running comprehensive static analysis..."
+	@find daw agents tests -name "*.cpp" | \
+		xargs -I {} clang-tidy {} -p=$(BUILD_DIR) --config-file=.clang-tidy || true
+	@echo "Comprehensive static analysis complete."
+
+# Run all code quality checks
+.PHONY: quality
+quality: check-format lint
+	@echo "All code quality checks complete."
+
+# Fix common issues and format code
+.PHONY: fix
+fix:
+	@echo "Fixing common issues and formatting code..."
+	@find daw agents tests -name "*.cpp" -o -name "*.hpp" -o -name "*.h" | \
+		head -20 | xargs -I {} clang-tidy {} -p=$(BUILD_DIR) --fix --config-file=.clang-tidy || true
+	$(MAKE) format
+	@echo "Code fixes and formatting complete."
 
 # Show help
 .PHONY: help
@@ -97,6 +147,14 @@ help:
 	@echo "  test-juce      - Build and run JUCE tests only"
 	@echo "  clean          - Remove build artifacts"
 	@echo "  rebuild        - Clean and rebuild"
+	@echo ""
+	@echo "Code Quality:"
+	@echo "  format         - Format code with clang-format"
+	@echo "  check-format   - Check code formatting (dry run)"
+	@echo "  lint           - Run static analysis with clang-tidy (sample)"
+	@echo "  lint-all       - Run comprehensive static analysis"
+	@echo "  quality        - Run all code quality checks"
+	@echo "  fix            - Fix common issues and format code"
 	@echo "  help           - Show this help message"
 	@echo ""
 	@echo "Build directories:"
