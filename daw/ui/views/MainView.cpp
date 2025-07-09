@@ -4,24 +4,35 @@
 
 namespace magica {
 
-MainView::MainView() {
-    // Enable keyboard focus for shortcut handling
+MainView::MainView() : timelineLength(120.0), playheadPosition(0.0), horizontalZoom(20.0) {
+    // Make this component focusable to receive keyboard events
     setWantsKeyboardFocus(true);
     
+    // Set up zoom manager
+    setupZoomManager();
+    
+    // Set up UI components
+    setupComponents();
+    
+    // Set up callbacks
+    setupCallbacks();
+    
+    // Connect zoom manager callbacks
+    setupZoomManagerCallbacks();
+}
+
+void MainView::setupZoomManager() {
+    // Create zoom manager
+    zoomManager = std::make_unique<ZoomManager>();
+}
+
+void MainView::setupComponents() {
     // Create timeline viewport
     timelineViewport = std::make_unique<juce::Viewport>();
     timeline = std::make_unique<TimelineComponent>();
     timelineViewport->setViewedComponent(timeline.get(), false);
     timelineViewport->setScrollBarsShown(false, false);
     addAndMakeVisible(*timelineViewport);
-    
-    // Set up timeline callbacks
-    timeline->onPlayheadPositionChanged = [this](double position) {
-        setPlayheadPosition(position);
-    };
-    
-    // Create zoom manager
-    zoomManager = std::make_unique<ZoomManager>();
     
     // Create track headers panel
     trackHeadersPanel = std::make_unique<TrackHeadersPanel>();
@@ -53,11 +64,15 @@ MainView::MainView() {
     // Set up track synchronization between headers and content
     setupTrackSynchronization();
     
-    // Configure zoom manager callbacks
-    setupZoomManagerCallbacks();
-    
     // Set initial timeline length and zoom
     setTimelineLength(120.0);
+}
+
+void MainView::setupCallbacks() {
+    // Set up timeline callbacks
+    timeline->onPlayheadPositionChanged = [this](double position) {
+        setPlayheadPosition(position);
+    };
 }
 
 MainView::~MainView() = default;
@@ -197,9 +212,16 @@ bool MainView::isArrangementLocked() const {
     return timeline->isArrangementLocked();
 }
 
+// Add keyboard event handler for zoom reset shortcut
 bool MainView::keyPressed(const juce::KeyPress& key) {
-    // Toggle arrangement lock with F4
-    if (key.isKeyCode(juce::KeyPress::F4Key)) {
+    // Check for Ctrl+0 (or Cmd+0 on Mac) to reset zoom to fit timeline
+    if (key == juce::KeyPress('0', juce::ModifierKeys::commandModifier, 0)) {
+        resetZoomToFitTimeline();
+        return true;
+    }
+    
+    // Check for F4 to toggle arrangement lock
+    if (key == juce::KeyPress::F4Key) {
         toggleArrangementLock();
         return true;
     }
@@ -284,8 +306,8 @@ void MainView::setupTrackSynchronization() {
 void MainView::setupZoomManagerCallbacks() {
     // Set up callback to handle zoom changes
     zoomManager->onZoomChanged = [this](double newZoom) {
-        // Hide mouse cursor during zoom operations to prevent jarring jumps
-        setMouseCursor(juce::MouseCursor::NoCursor);
+        // Use simple crosshair cursor for zoom operations
+        setMouseCursor(juce::MouseCursor::CrosshairCursor);
         
         // Temporarily remove scroll bar listener to prevent race condition
         trackContentViewport->getHorizontalScrollBar().removeListener(this);
@@ -299,43 +321,35 @@ void MainView::setupZoomManagerCallbacks() {
         
         // Re-add scroll bar listener after zoom operations are complete
         trackContentViewport->getHorizontalScrollBar().addListener(this);
-        
-        // Restore mouse cursor after a short delay
-        juce::Timer::callAfterDelay(100, [this]() {
-            setMouseCursor(juce::MouseCursor::NormalCursor);
-        });
+    };
+    
+    // Set up callback to handle zoom end
+    zoomManager->onZoomEnd = [this]() {
+        // Reset cursor to normal when zoom ends
+        setMouseCursor(juce::MouseCursor::NormalCursor);
     };
     
     // Set up callback to handle scroll changes
     zoomManager->onScrollChanged = [this](int scrollX) {
-        // Temporarily remove scroll bar listener to prevent race condition
+        // Temporarily remove scroll bar listener to prevent feedback loops
         trackContentViewport->getHorizontalScrollBar().removeListener(this);
         
-        // Debug: Check current scroll bar state
-        auto& scrollBar = trackContentViewport->getHorizontalScrollBar();
-        std::cout << "🔄 SCROLL: targetScrollX=" << scrollX 
-                  << ", currentScrollStart=" << scrollBar.getCurrentRangeStart()
-                  << ", currentScrollSize=" << scrollBar.getCurrentRangeSize()
-                  << ", isVisible=" << scrollBar.isVisible()
-                  << ", contentWidth=" << trackContentPanel->getWidth()
-                  << ", viewportWidth=" << trackContentViewport->getWidth() << std::endl;
-        
-        // Set timeline viewport position (no scroll bar)
+        // Set both viewports to the same position and let JUCE handle scroll bars
         timelineViewport->setViewPosition(scrollX, 0);
-        
-        // Set track content viewport position first
         trackContentViewport->setViewPosition(scrollX, trackContentViewport->getViewPositionY());
         
-        // Force scroll bar to update its thumb position
-        // Just set the current position and let JUCE handle the range automatically
-        scrollBar.setCurrentRangeStart(scrollX, juce::dontSendNotification);
+        // Force viewport to update its scrollbars
+        trackContentViewport->resized();
         
-        std::cout << "🔄 AFTER: newScrollStart=" << scrollBar.getCurrentRangeStart() 
-                  << ", currentRangeSize=" << scrollBar.getCurrentRangeSize() << std::endl;
+        // Debug output
+        std::cout << "🔄 SCROLL: targetScrollX=" << scrollX 
+                  << ", actualScrollX=" << trackContentViewport->getViewPositionX() 
+                  << ", scrollBarStart=" << trackContentViewport->getHorizontalScrollBar().getCurrentRangeStart()
+                  << ", contentWidth=" << trackContentPanel->getWidth()
+                  << ", viewportWidth=" << trackContentViewport->getWidth()
+                  << std::endl;
         
-        playheadComponent->repaint();
-        
-        // Re-add scroll bar listener after positions are set
+        // Re-add scroll bar listener
         trackContentViewport->getHorizontalScrollBar().addListener(this);
     };
     
@@ -349,6 +363,14 @@ void MainView::setupZoomManagerCallbacks() {
         // Since playhead gets set on mouseDown, it's already at the desired position
         // Center zoom around the playhead position for consistent behavior
         zoomManager->setZoomCentered(newZoom, playheadPosition);
+    };
+    
+    // Set up timeline zoom end callback
+    timeline->onZoomEnd = [this]() {
+        // Call the ZoomManager's onZoomEnd callback
+        if (zoomManager->onZoomEnd) {
+            zoomManager->onZoomEnd();
+        }
     };
 }
 
@@ -565,6 +587,26 @@ void MainView::paintResizeHandle(juce::Graphics& g) {
         for (int i = -1; i <= 1; ++i) {
             g.fillEllipse(centerX - 1, centerY + i * 4 - 1, 2, 2);
         }
+    }
+}
+
+void MainView::resetZoomToFitTimeline() {
+    // Calculate zoom level that fits the entire timeline in the viewport
+    int viewportWidth = trackContentViewport->getWidth();
+    int availableWidth = viewportWidth - 18; // Account for LEFT_PADDING
+    
+    if (availableWidth > 0 && timelineLength > 0) {
+        double fitZoom = static_cast<double>(availableWidth) / timelineLength;
+        
+        // Ensure minimum zoom level for usability
+        fitZoom = juce::jmax(fitZoom, 0.5);
+        
+        // Set zoom centered at the beginning of timeline
+        zoomManager->setZoomCentered(fitZoom, 0.0);
+        
+        std::cout << "🎯 ZOOM RESET: timelineLength=" << timelineLength 
+                  << ", availableWidth=" << availableWidth 
+                  << ", fitZoom=" << fitZoom << std::endl;
     }
 }
 

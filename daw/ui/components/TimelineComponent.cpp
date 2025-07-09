@@ -3,6 +3,8 @@
 #include "../themes/FontManager.hpp"
 #include <iostream>
 #include <cmath>
+#include <algorithm>
+#include <BinaryData.h>
 
 namespace magica {
 
@@ -249,14 +251,36 @@ void TimelineComponent::mouseDrag(const juce::MouseEvent& event) {
                 // Start zoom mode
                 std::cout << "🎯 STARTING ZOOM MODE" << std::endl;
                 isZooming = true;
-                setMouseCursor(juce::MouseCursor::UpDownResizeCursor);
+                // Remove cursor manipulation - let MainView handle cursor
                 repaint();
             }
             
             // Zoom calculation - drag up = zoom in, drag down = zoom out
             int actualDeltaY = zoomStartY - event.y;
-            double sensitivity = 120.0; // 120 pixels = 2x zoom (more controlled)
+            
+            // Improved zoom sensitivity with better curve
+            double sensitivity;
+            if (actualDeltaY > 0) {
+                // Zooming in - more gradual
+                sensitivity = 250.0; // Even slower for zoom in
+            } else {
+                // Zooming out - much more gradual to prevent accidental full zoom out
+                sensitivity = 400.0; // Much slower for zoom out
+            }
+            
             double zoomFactor = 1.0 + (actualDeltaY / sensitivity);
+            
+            // Apply much more aggressive logarithmic scaling for smoother feel
+            if (zoomFactor > 1.0) {
+                // Zoom in: heavily dampen as we zoom more
+                double logScale = std::log(zoomFactor) / std::log(2.0); // Convert to log base 2
+                zoomFactor = std::pow(2.0, logScale * 0.4); // Reduce by 60% (was 30%)
+            } else {
+                // Zoom out: extremely gradual to prevent accidental over-zoom
+                double logScale = std::log(1.0 / zoomFactor) / std::log(2.0);
+                zoomFactor = 1.0 / std::pow(2.0, logScale * 0.3); // Reduce by 70% (was 50%)
+            }
+            
             double newZoom = juce::jlimit(0.1, 100000.0, zoomStartValue * zoomFactor);
             
             std::cout << "🎯 ZOOM: factor=" << zoomFactor << ", newZoom=" << newZoom << std::endl;
@@ -295,10 +319,15 @@ void TimelineComponent::mouseUp(const juce::MouseEvent& /*event*/) {
     isDraggingSection = false;
     isDraggingEdge = false;
     isDraggingStart = false;
+    
+    // Notify when zoom operation ends
+    if (isZooming && onZoomEnd) {
+        onZoomEnd();
+    }
+    
     isZooming = false;
     
-    // Reset cursor
-    setMouseCursor(juce::MouseCursor::NormalCursor);
+    // Don't reset cursor here - let MainView handle cursor management
     
     repaint();
 }

@@ -38,6 +38,7 @@ public:
     
     // Callbacks - MainView registers these to update UI components
     std::function<void(double newZoom)> onZoomChanged;
+    std::function<void()> onZoomEnd;
     std::function<void(int scrollX)> onScrollChanged;
     std::function<void(int contentWidth)> onContentSizeChanged;
 

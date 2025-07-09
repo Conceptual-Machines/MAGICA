@@ -50,6 +50,7 @@ public:
     std::function<void(int, const ArrangementSection&)> onSectionChanged;
     std::function<void(const juce::String&, double, double)> onSectionAdded;
     std::function<void(double, int)> onZoomChanged; // Callback for zoom changes (newZoom, mouseX)
+    std::function<void()> onZoomEnd; // Callback when zoom operation ends
 
 private:
     // Layout constants

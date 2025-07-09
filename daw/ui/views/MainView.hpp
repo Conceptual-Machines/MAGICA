@@ -106,6 +106,10 @@ private:
     void syncTrackHeights();
     void setupTrackSynchronization();
     void setupZoomManagerCallbacks();
+    void setupZoomManager();
+    void setupComponents();
+    void setupCallbacks();
+    void resetZoomToFitTimeline();
     
     // Resize handle helper methods
     juce::Rectangle<int> getResizeHandleArea() const;
