@@ -53,13 +53,13 @@ repos:
         args: 
           - -c
           - |
-            if command -v clang-tidy >/dev/null 2>&1; then
+            if command -v /opt/homebrew/opt/llvm/bin/clang-tidy >/dev/null 2>&1; then
               echo "Running clang-tidy on changed files..."
               # Only run on .cpp files that were changed
               for file in "$@"; do
                 if [[ "$file" == *.cpp ]]; then
                   echo "Checking $file..."
-                  clang-tidy "$file" -p=cmake-build-debug --config-file=.clang-tidy --format-style=file || true
+                  /opt/homebrew/opt/llvm/bin/clang-tidy "$file" -p=cmake-build-debug --config-file=.clang-tidy --format-style=file || true
                 fi
               done
             else

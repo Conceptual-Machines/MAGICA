@@ -45,7 +45,7 @@ WarningsAsErrors: ''
 HeaderFilterRegex: '(daw|agents|tests)/.*\.(h|hpp)$'
 
 # Analysis options
-AnalyzeTemporaryDtors: false
+# AnalyzeTemporaryDtors: false  # Not supported in this version
 
 # Check options for fine-tuning specific rules
 CheckOptions:

@@ -181,6 +181,32 @@ All pull requests automatically run:
 - Build verification
 - Test execution
 
+## clang-tidy Compatibility
+
+### Known Issues
+
+Some versions of clang-tidy may have compatibility issues on certain systems. If you encounter:
+
+- "illegal instruction" errors
+- Signal 4 (SIGILL) crashes
+- clang-tidy termination issues
+
+The build system will gracefully fall back to formatting-only mode. The following approaches can help:
+
+1. Try using a different version of LLVM: `brew install llvm@<version>`
+2. Use system clang-tidy if available
+3. The code quality system will continue to work with formatting and other checks
+
+### Alternative Installation
+
+If Homebrew LLVM doesn't work, try:
+```bash
+# Alternative approaches
+brew install llvm@15  # Try older version
+# or build from source
+# or use package manager alternatives
+```
+
 ## Common Issues and Solutions
 
 ### Long Lines

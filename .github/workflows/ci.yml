@@ -36,9 +36,9 @@ jobs:
         echo "Running clang-tidy static analysis..."
         # Run on a sample of files to avoid CI timeout
         find daw -name "*.cpp" | head -5 | \
-          xargs -I {} clang-tidy {} -p=build --config-file=.clang-tidy --format-style=file || true
+          xargs -I {} /opt/homebrew/opt/llvm/bin/clang-tidy {} -p=build --config-file=.clang-tidy --format-style=file || true
         find agents -name "*.cpp" | head -3 | \
-          xargs -I {} clang-tidy {} -p=build --config-file=.clang-tidy --format-style=file || true
+          xargs -I {} /opt/homebrew/opt/llvm/bin/clang-tidy {} -p=build --config-file=.clang-tidy --format-style=file || true
         echo "Static analysis complete!"
 
   build-and-test:

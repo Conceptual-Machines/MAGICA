@@ -14,7 +14,7 @@ all: debug
 debug:
 	@echo "Building Magica DAW (Debug)..."
 	@mkdir -p $(BUILD_DIR)
-	cd $(BUILD_DIR) && cmake -DCMAKE_BUILD_TYPE=Debug ..
+	cd $(BUILD_DIR) && cmake -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON ..
 	cd $(BUILD_DIR) && make -j$(shell nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
 
 # Release build
@@ -102,20 +102,29 @@ check-format:
 .PHONY: lint
 lint: debug
 	@echo "Running static analysis with clang-tidy..."
-	@echo "Analyzing daw/ directory..."
-	@find daw -name "*.cpp" | head -10 | \
-		xargs -I {} clang-tidy {} -p=$(BUILD_DIR) --config-file=.clang-tidy || true
-	@echo "Analyzing agents/ directory..."
-	@find agents -name "*.cpp" | head -5 | \
-		xargs -I {} clang-tidy {} -p=$(BUILD_DIR) --config-file=.clang-tidy || true
+	@if command -v /opt/homebrew/opt/llvm/bin/clang-tidy >/dev/null 2>&1; then \
+		echo "Analyzing daw/ directory..."; \
+		find daw -name "*.cpp" | head -10 | \
+			xargs -I {} /opt/homebrew/opt/llvm/bin/clang-tidy {} -p=$(BUILD_DIR) --config-file=.clang-tidy || echo "Warning: clang-tidy failed on some files"; \
+		echo "Analyzing agents/ directory..."; \
+		find agents -name "*.cpp" | head -5 | \
+			xargs -I {} /opt/homebrew/opt/llvm/bin/clang-tidy {} -p=$(BUILD_DIR) --config-file=.clang-tidy || echo "Warning: clang-tidy failed on some files"; \
+	else \
+		echo "clang-tidy not found or not working. Skipping static analysis."; \
+		echo "Install a compatible version of clang-tidy to enable linting."; \
+	fi
 	@echo "Static analysis complete."
 
 # Run full lint on all files (may take longer)
 .PHONY: lint-all
 lint-all: debug
 	@echo "Running comprehensive static analysis..."
-	@find daw agents tests -name "*.cpp" | \
-		xargs -I {} clang-tidy {} -p=$(BUILD_DIR) --config-file=.clang-tidy || true
+	@if command -v /opt/homebrew/opt/llvm/bin/clang-tidy >/dev/null 2>&1; then \
+		find daw agents tests -name "*.cpp" | \
+			xargs -I {} /opt/homebrew/opt/llvm/bin/clang-tidy {} -p=$(BUILD_DIR) --config-file=.clang-tidy || echo "Warning: clang-tidy failed on some files"; \
+	else \
+		echo "clang-tidy not found or not working. Skipping static analysis."; \
+	fi
 	@echo "Comprehensive static analysis complete."
 
 # Run all code quality checks
@@ -127,8 +136,12 @@ quality: check-format lint
 .PHONY: fix
 fix:
 	@echo "Fixing common issues and formatting code..."
-	@find daw agents tests -name "*.cpp" -o -name "*.hpp" -o -name "*.h" | \
-		head -20 | xargs -I {} clang-tidy {} -p=$(BUILD_DIR) --fix --config-file=.clang-tidy || true
+	@if command -v /opt/homebrew/opt/llvm/bin/clang-tidy >/dev/null 2>&1; then \
+		find daw agents tests -name "*.cpp" -o -name "*.hpp" -o -name "*.h" | \
+			head -20 | xargs -I {} /opt/homebrew/opt/llvm/bin/clang-tidy {} -p=$(BUILD_DIR) --fix --config-file=.clang-tidy || echo "Warning: clang-tidy failed on some files"; \
+	else \
+		echo "clang-tidy not found or not working. Skipping automatic fixes."; \
+	fi
 	$(MAKE) format
 	@echo "Code fixes and formatting complete."
 
