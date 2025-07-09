@@ -28,6 +28,8 @@ public:
     void setTimelineLength(double lengthInSeconds);
     void setPlayheadPosition(double position);
     void setZoom(double pixelsPerSecond);
+    
+    // Note: Uses callbacks to communicate with ZoomManager via MainView
 
     // Mouse interaction
     void mouseDown(const juce::MouseEvent& event) override;

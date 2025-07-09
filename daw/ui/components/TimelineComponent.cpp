@@ -251,45 +251,65 @@ void TimelineComponent::mouseDrag(const juce::MouseEvent& event) {
                 // Start zoom mode
                 std::cout << "🎯 STARTING ZOOM MODE" << std::endl;
                 isZooming = true;
-                // Remove cursor manipulation - let MainView handle cursor
                 repaint();
             }
             
             // Zoom calculation - drag up = zoom in, drag down = zoom out
             int actualDeltaY = zoomStartY - event.y;
             
-            // Improved zoom sensitivity with better curve
+            // Safe zoom sensitivity with limits to prevent hanging
             double sensitivity;
+            std::cout << "🎯 ADAPTIVE CHECK: actualDeltaY=" << actualDeltaY << ", zoomStartValue=" << zoomStartValue << std::endl;
+            
             if (actualDeltaY > 0) {
-                // Zooming in - more gradual
-                sensitivity = 250.0; // Even slower for zoom in
+                // Zooming in - but with safety limits to prevent hanging
+                sensitivity = 150.0; // Fixed faster speed, no adaptive for now
+                std::cout << "🎯 ZOOM IN: sensitivity=" << sensitivity << " (SAFE MODE)" << std::endl;
             } else {
-                // Zooming out - much more gradual to prevent accidental full zoom out
-                sensitivity = 400.0; // Much slower for zoom out
+                // Zooming out - controlled and safe
+                sensitivity = 800.0; // Balanced speed
+                std::cout << "🎯 ZOOM OUT: sensitivity=" << sensitivity << " (SAFE MODE)" << std::endl;
             }
             
-            double zoomFactor = 1.0 + (actualDeltaY / sensitivity);
+            double linearZoomFactor = 1.0 + (actualDeltaY / sensitivity);
             
-            // Apply much more aggressive logarithmic scaling for smoother feel
-            if (zoomFactor > 1.0) {
-                // Zoom in: heavily dampen as we zoom more
-                double logScale = std::log(zoomFactor) / std::log(2.0); // Convert to log base 2
-                zoomFactor = std::pow(2.0, logScale * 0.4); // Reduce by 60% (was 30%)
-            } else {
-                // Zoom out: extremely gradual to prevent accidental over-zoom
-                double logScale = std::log(1.0 / zoomFactor) / std::log(2.0);
-                zoomFactor = 1.0 / std::pow(2.0, logScale * 0.3); // Reduce by 70% (was 50%)
+            // Safety check for extreme values
+            if (linearZoomFactor <= 0.0001 || linearZoomFactor >= 1000.0) {
+                std::cout << "🎯 ZOOM FACTOR TOO EXTREME: " << linearZoomFactor << " - clamping" << std::endl;
+                linearZoomFactor = (actualDeltaY > 0) ? 2.0 : 0.5; // Safe fallback
             }
             
-            double newZoom = juce::jlimit(0.1, 100000.0, zoomStartValue * zoomFactor);
+            // Simple scaling without extreme logarithms
+            double scaledZoomFactor;
+            if (actualDeltaY > 0) {
+                // Zooming in - moderate scaling
+                scaledZoomFactor = linearZoomFactor;
+            } else {
+                // Zooming out - gentle scaling
+                double logScale = std::log(linearZoomFactor);
+                scaledZoomFactor = std::exp(logScale * 0.5);
+            }
             
-            std::cout << "🎯 ZOOM: factor=" << zoomFactor << ", newZoom=" << newZoom << std::endl;
+            double newZoom = zoomStartValue * scaledZoomFactor;
             
-            setZoom(newZoom);
+            // Strict safety limits to prevent hanging
+            const double minZoom = 1.0;  
+            const double maxZoom = 1000.0; // Much lower max to prevent hanging
+            
+            // Apply limits and prevent NaN/extreme values
+            if (std::isnan(newZoom) || newZoom < minZoom) {
+                newZoom = minZoom;
+                std::cout << "🎯 ZOOM CLAMPED TO MIN: " << newZoom << std::endl;
+            } else if (newZoom > maxZoom) {
+                newZoom = maxZoom;
+                std::cout << "🎯 ZOOM CLAMPED TO MAX: " << newZoom << std::endl;
+            }
+            
+            std::cout << "🎯 ZOOM: factor=" << scaledZoomFactor << ", newZoom=" << newZoom << std::endl;
+            
+            // Call the callback with zoom value and mouse position
             if (onZoomChanged) {
-                // Use the original mouseDown X position for zoom centering
-                // This ensures zoom centers around where the playhead was set
-                onZoomChanged(newZoom, zoomStartX);
+                onZoomChanged(newZoom, event.x);
             }
         }
     } else {
@@ -320,14 +340,12 @@ void TimelineComponent::mouseUp(const juce::MouseEvent& /*event*/) {
     isDraggingEdge = false;
     isDraggingStart = false;
     
-    // Notify when zoom operation ends
+    // End zoom operation
     if (isZooming && onZoomEnd) {
         onZoomEnd();
     }
     
     isZooming = false;
-    
-    // Don't reset cursor here - let MainView handle cursor management
     
     repaint();
 }

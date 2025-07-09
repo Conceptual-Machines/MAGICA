@@ -41,6 +41,7 @@ public:
     std::function<void()> onZoomEnd;
     std::function<void(int scrollX)> onScrollChanged;
     std::function<void(int contentWidth)> onContentSizeChanged;
+    std::function<void(juce::MouseCursor::StandardCursorType)> onCursorChanged;
 
 private:
     // Zoom and scroll state
@@ -55,6 +56,7 @@ private:
     void notifyZoomChanged();
     void notifyScrollChanged(int newScrollX);
     void notifyContentSizeChanged();
+    void notifyCursorChanged(juce::MouseCursor::StandardCursorType cursor);
     int calculateContentWidth() const;
     double pixelToTime(int pixel) const;
     int timeToPixel(double time) const;

@@ -1,5 +1,6 @@
 #include "ZoomManager.hpp"
 #include <iostream>
+#include <cmath>
 
 namespace magica {
 
@@ -137,6 +138,12 @@ double ZoomManager::pixelToTime(int pixel) const {
 int ZoomManager::timeToPixel(double time) const {
     // TimelineComponent adds LEFT_PADDING when drawing, not in conversion
     return static_cast<int>(time * currentZoom);
+}
+
+void ZoomManager::notifyCursorChanged(juce::MouseCursor::StandardCursorType cursor) {
+    if (onCursorChanged) {
+        onCursorChanged(cursor);
+    }
 }
 
 } // namespace magica 

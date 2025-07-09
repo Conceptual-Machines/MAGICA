@@ -120,20 +120,10 @@ void MainView::resized() {
     playheadArea = playheadArea.withTrimmedRight(scrollBarThickness).withTrimmedBottom(scrollBarThickness);
     playheadComponent->setBounds(playheadArea);
     
-    // Always recalculate zoom to ensure proper timeline distribution
+    // Update zoom manager with viewport width (but don't auto-adjust zoom)
     auto viewportWidth = timelineViewport->getWidth();
     if (viewportWidth > 0) {
-        // Update zoom manager with viewport width
         zoomManager->setViewportWidth(viewportWidth);
-        
-        // Show about 60 seconds initially, but ensure minimum zoom for visibility
-        double newZoom = juce::jmax(1.0, viewportWidth / 60.0);
-        if (std::abs(horizontalZoom - newZoom) > 0.1) { // Only update if significantly different
-            horizontalZoom = newZoom;
-            // Update zoom on timeline and track content
-            timeline->setZoom(horizontalZoom);
-            trackContentPanel->setZoom(horizontalZoom);
-        }
     }
     
     updateContentSizes();
@@ -306,9 +296,6 @@ void MainView::setupTrackSynchronization() {
 void MainView::setupZoomManagerCallbacks() {
     // Set up callback to handle zoom changes
     zoomManager->onZoomChanged = [this](double newZoom) {
-        // Use simple crosshair cursor for zoom operations
-        setMouseCursor(juce::MouseCursor::CrosshairCursor);
-        
         // Temporarily remove scroll bar listener to prevent race condition
         trackContentViewport->getHorizontalScrollBar().removeListener(this);
         
@@ -325,8 +312,12 @@ void MainView::setupZoomManagerCallbacks() {
     
     // Set up callback to handle zoom end
     zoomManager->onZoomEnd = [this]() {
-        // Reset cursor to normal when zoom ends
-        setMouseCursor(juce::MouseCursor::NormalCursor);
+        // Zoom end handling - cursor is managed by onCursorChanged callback
+    };
+    
+    // Set up callback to handle cursor changes
+    zoomManager->onCursorChanged = [this](juce::MouseCursor::StandardCursorType cursorType) {
+        setMouseCursor(cursorType);
     };
     
     // Set up callback to handle scroll changes
@@ -360,6 +351,9 @@ void MainView::setupZoomManagerCallbacks() {
     
     // Set up timeline zoom callback to use ZoomManager with playhead centering
     timeline->onZoomChanged = [this](double newZoom, int mouseX) {
+        // Set crosshair cursor during zoom operations
+        setMouseCursor(juce::MouseCursor::CrosshairCursor);
+        
         // Since playhead gets set on mouseDown, it's already at the desired position
         // Center zoom around the playhead position for consistent behavior
         zoomManager->setZoomCentered(newZoom, playheadPosition);
@@ -367,7 +361,10 @@ void MainView::setupZoomManagerCallbacks() {
     
     // Set up timeline zoom end callback
     timeline->onZoomEnd = [this]() {
-        // Call the ZoomManager's onZoomEnd callback
+        // Reset cursor to normal when zoom ends
+        setMouseCursor(juce::MouseCursor::NormalCursor);
+        
+        // Call ZoomManager's zoom end callback
         if (zoomManager->onZoomEnd) {
             zoomManager->onZoomEnd();
         }
