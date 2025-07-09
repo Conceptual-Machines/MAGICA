@@ -26,6 +26,9 @@ set(DAW_CORE_SOURCES
     magica.cpp
     core/Config.cpp
     engine/tracktion_engine_wrapper.cpp
+    # UI components needed by tests
+    ui/components/TimelineComponent.cpp
+    ui/components/ZoomManager.cpp
 )
 
 # DAW UI sources
@@ -96,6 +99,7 @@ target_link_libraries(magica_daw
     juce::juce_core
     juce::juce_data_structures
     juce::juce_audio_basics
+    juce::juce_gui_basics
     tracktion::tracktion_engine
 )
 
