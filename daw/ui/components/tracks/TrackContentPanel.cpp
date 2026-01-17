@@ -318,13 +318,111 @@ juce::Rectangle<int> TrackContentPanel::getTrackLaneArea(int trackIndex) const {
     return juce::Rectangle<int>(0, yPosition, getWidth(), height);
 }
 
+bool TrackContentPanel::isInSelectableArea(int x, int y) const {
+    // Check if we're in an empty track area (not on a clip)
+    // For now, entire track area is selectable since we don't have clips yet
+    // In the future, check if clicking on upper half of clips
+    for (size_t i = 0; i < trackLanes.size(); ++i) {
+        if (getTrackLaneArea(static_cast<int>(i)).contains(x, y)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+double TrackContentPanel::pixelToTime(int pixel) const {
+    if (currentZoom > 0) {
+        return static_cast<double>(pixel - LEFT_PADDING) / currentZoom;
+    }
+    return 0.0;
+}
+
+int TrackContentPanel::timeToPixel(double time) const {
+    return static_cast<int>(time * currentZoom) + LEFT_PADDING;
+}
+
 void TrackContentPanel::mouseDown(const juce::MouseEvent& event) {
     // Select track based on click position
-    for (int i = 0; i < trackLanes.size(); ++i) {
-        if (getTrackLaneArea(i).contains(event.getPosition())) {
-            selectTrack(i);
+    for (size_t i = 0; i < trackLanes.size(); ++i) {
+        if (getTrackLaneArea(static_cast<int>(i)).contains(event.getPosition())) {
+            selectTrack(static_cast<int>(i));
             break;
         }
+    }
+
+    // Start time selection if in selectable area
+    if (isInSelectableArea(event.x, event.y)) {
+        isCreatingSelection = true;
+        selectionStartX = event.x;
+        selectionStartTime = juce::jmax(0.0, pixelToTime(event.x));
+
+        // Apply snap to grid if callback is set
+        if (snapTimeToGrid) {
+            selectionStartTime = snapTimeToGrid(selectionStartTime);
+        }
+
+        selectionEndTime = selectionStartTime;
+    }
+}
+
+void TrackContentPanel::mouseDrag(const juce::MouseEvent& event) {
+    if (isCreatingSelection) {
+        // Update selection end time
+        selectionEndTime = juce::jmax(0.0, juce::jmin(timelineLength, pixelToTime(event.x)));
+
+        // Apply snap to grid if callback is set
+        if (snapTimeToGrid) {
+            selectionEndTime = snapTimeToGrid(selectionEndTime);
+        }
+
+        // Notify about selection change
+        if (onTimeSelectionChanged) {
+            double start = juce::jmin(selectionStartTime, selectionEndTime);
+            double end = juce::jmax(selectionStartTime, selectionEndTime);
+            onTimeSelectionChanged(start, end);
+        }
+    }
+}
+
+void TrackContentPanel::mouseUp(const juce::MouseEvent& event) {
+    if (isCreatingSelection) {
+        isCreatingSelection = false;
+
+        // Finalize selection
+        selectionEndTime = juce::jmax(0.0, juce::jmin(timelineLength, pixelToTime(event.x)));
+
+        // Apply snap to grid if callback is set
+        if (snapTimeToGrid) {
+            selectionEndTime = snapTimeToGrid(selectionEndTime);
+        }
+
+        // Normalize so start < end
+        double start = juce::jmin(selectionStartTime, selectionEndTime);
+        double end = juce::jmax(selectionStartTime, selectionEndTime);
+
+        // Only create selection if it has meaningful duration
+        if (end - start > 0.01) {  // At least 10ms selection
+            if (onTimeSelectionChanged) {
+                onTimeSelectionChanged(start, end);
+            }
+        } else {
+            // Clear selection if too small (just a click)
+            if (onTimeSelectionChanged) {
+                onTimeSelectionChanged(-1.0, -1.0);
+            }
+        }
+
+        selectionStartTime = -1.0;
+        selectionEndTime = -1.0;
+    }
+}
+
+void TrackContentPanel::mouseMove(const juce::MouseEvent& event) {
+    // Update cursor based on area
+    if (isInSelectableArea(event.x, event.y)) {
+        setMouseCursor(juce::MouseCursor::IBeamCursor);
+    } else {
+        setMouseCursor(juce::MouseCursor::NormalCursor);
     }
 }
 

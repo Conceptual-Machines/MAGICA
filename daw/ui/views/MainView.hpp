@@ -4,7 +4,6 @@
 
 #include <memory>
 
-#include "../components/common/LayoutDebugPanel.hpp"
 #include "../components/common/SvgButton.hpp"
 #include "../components/timeline/TimelineComponent.hpp"
 #include "../components/timeline/ZoomManager.hpp"
@@ -47,6 +46,10 @@ class MainView : public juce::Component, public juce::ScrollBar::Listener {
         return horizontalZoom;
     }
 
+    // Callbacks for external components
+    std::function<void(double, bool, bool)>
+        onLoopLengthChanged;  // (lengthInSeconds, loopEnabled, useBarsBeats)
+
     // ScrollBar::Listener implementation
     void scrollBarMoved(juce::ScrollBar* scrollBarThatHasMoved, double newRangeStart) override;
 
@@ -82,13 +85,14 @@ class MainView : public juce::Component, public juce::ScrollBar::Listener {
     class PlayheadComponent;
     std::unique_ptr<PlayheadComponent> playheadComponent;
 
+    // Selection overlay component (for time selection and loop region in track area)
+    class SelectionOverlayComponent;
+    std::unique_ptr<SelectionOverlayComponent> selectionOverlay;
+
     // Zoom management
     std::unique_ptr<ZoomManager> zoomManager;
     std::unique_ptr<ZoomScrollBar> horizontalZoomScrollBar;
     std::unique_ptr<ZoomScrollBar> verticalZoomScrollBar;
-
-    // Layout debug panel (F11 to toggle)
-    std::unique_ptr<LayoutDebugPanel> layoutDebugPanel;
 
     // Zoom and scroll state
     double horizontalZoom = 1.0;  // Pixels per second
@@ -120,6 +124,37 @@ class MainView : public juce::Component, public juce::ScrollBar::Listener {
     static constexpr int RESIZE_HANDLE_WIDTH = 4;
     int lastMouseX = 0;
 
+    // Time selection state (temporary range highlight)
+    struct TimeSelection {
+        double startTime = -1.0;
+        double endTime = -1.0;
+        bool isActive() const {
+            return startTime >= 0 && endTime > startTime;
+        }
+        void clear() {
+            startTime = -1.0;
+            endTime = -1.0;
+        }
+    };
+
+    // Loop region state (persistent loop markers)
+    struct LoopRegion {
+        double startTime = -1.0;
+        double endTime = -1.0;
+        bool enabled = false;
+        bool isValid() const {
+            return startTime >= 0 && endTime > startTime;
+        }
+        void clear() {
+            startTime = -1.0;
+            endTime = -1.0;
+            enabled = false;
+        }
+    };
+
+    TimeSelection timeSelection;
+    LoopRegion loopRegion;
+
     // Helper methods
     void updateContentSizes();
     void syncHorizontalScrolling();
@@ -134,6 +169,11 @@ class MainView : public juce::Component, public juce::ScrollBar::Listener {
     // Resize handle helper methods
     juce::Rectangle<int> getResizeHandleArea() const;
     void paintResizeHandle(juce::Graphics& g);
+
+    // Selection and loop helper methods
+    void setupSelectionCallbacks();
+    void clearTimeSelection();
+    void createLoopFromSelection();
 
     // Zoom scroll bar synchronization
     void updateHorizontalZoomScrollBar();
@@ -168,6 +208,28 @@ class MainView::PlayheadComponent : public juce::Component {
     double dragStartPosition = 0.0;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PlayheadComponent)
+};
+
+// Selection overlay component that draws time selection and loop region
+class MainView::SelectionOverlayComponent : public juce::Component {
+  public:
+    SelectionOverlayComponent(MainView& owner);
+    ~SelectionOverlayComponent() override;
+
+    void paint(juce::Graphics& g) override;
+
+    // Hit testing - transparent to mouse events
+    bool hitTest(int x, int y) override {
+        return false;
+    }
+
+  private:
+    MainView& owner;
+
+    void drawTimeSelection(juce::Graphics& g);
+    void drawLoopRegion(juce::Graphics& g);
+
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(SelectionOverlayComponent)
 };
 
 }  // namespace magica

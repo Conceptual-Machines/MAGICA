@@ -68,14 +68,23 @@ void MainView::setupComponents() {
                                        DarkTheme::getColour(DarkTheme::TEXT_PRIMARY));
     timeDisplayToggleButton->onClick = [this]() {
         auto currentMode = timeline->getTimeDisplayMode();
+        bool useBarsBeats;
         if (currentMode == TimeDisplayMode::Seconds) {
             timeline->setTimeDisplayMode(TimeDisplayMode::BarsBeats);
             trackContentPanel->setTimeDisplayMode(TimeDisplayMode::BarsBeats);
             timeDisplayToggleButton->setButtonText("BARS");
+            useBarsBeats = true;
         } else {
             timeline->setTimeDisplayMode(TimeDisplayMode::Seconds);
             trackContentPanel->setTimeDisplayMode(TimeDisplayMode::Seconds);
             timeDisplayToggleButton->setButtonText("TIME");
+            useBarsBeats = false;
+        }
+
+        // Update loop length display with new mode
+        if (onLoopLengthChanged && loopRegion.isValid()) {
+            double length = loopRegion.endTime - loopRegion.startTime;
+            onLoopLengthChanged(length, loopRegion.enabled, useBarsBeats);
         }
     };
     addAndMakeVisible(timeDisplayToggleButton.get());
@@ -86,6 +95,10 @@ void MainView::setupComponents() {
     trackContentViewport->setViewedComponent(trackContentPanel.get(), false);
     trackContentViewport->setScrollBarsShown(true, true);
     addAndMakeVisible(*trackContentViewport);
+
+    // Create selection overlay component (below playhead)
+    selectionOverlay = std::make_unique<SelectionOverlayComponent>(*this);
+    addAndMakeVisible(*selectionOverlay);
 
     // Create playhead component (always on top)
     playheadComponent = std::make_unique<PlayheadComponent>(*this);
@@ -142,15 +155,7 @@ void MainView::setupComponents() {
     };
     addAndMakeVisible(*verticalZoomScrollBar);
 
-    // Create layout debug panel (F11 to toggle)
-    layoutDebugPanel = std::make_unique<LayoutDebugPanel>();
-    layoutDebugPanel->setVisible(false);
-    layoutDebugPanel->onLayoutChanged = [this]() {
-        resized();
-        repaint();
-    };
-    addAndMakeVisible(*layoutDebugPanel);
-    layoutDebugPanel->toFront(false);
+    // Layout debug panel removed for now
 
     // Set up scroll synchronization
     trackContentViewport->getHorizontalScrollBar().addListener(this);
@@ -168,6 +173,9 @@ void MainView::setupCallbacks() {
     timeline->onPlayheadPositionChanged = [this](double position) {
         setPlayheadPosition(position);
     };
+
+    // Set up selection and loop callbacks
+    setupSelectionCallbacks();
 }
 
 MainView::~MainView() {
@@ -234,23 +242,22 @@ void MainView::resized() {
     // Track content viewport gets the remaining space
     trackContentViewport->setBounds(bounds);
 
+    // Selection overlay covers the track content area (same as playhead area but below it)
+    auto overlayArea = bounds;
+    // Reduce the area to avoid covering scrollbars
+    int scrollBarThickness = trackContentViewport->getScrollBarThickness();
+    overlayArea =
+        overlayArea.withTrimmedRight(scrollBarThickness).withTrimmedBottom(scrollBarThickness);
+    selectionOverlay->setBounds(overlayArea);
+
     // Playhead component extends from above timeline down to track content
     // This allows the triangle to be drawn in the timeline area
     auto playheadArea = bounds;
     playheadArea =
         playheadArea.withTop(getTimelineHeight() - 20);  // Start 20px above timeline border
-    // Reduce the area to avoid covering scrollbars
-    int scrollBarThickness = trackContentViewport->getScrollBarThickness();
     playheadArea =
         playheadArea.withTrimmedRight(scrollBarThickness).withTrimmedBottom(scrollBarThickness);
     playheadComponent->setBounds(playheadArea);
-
-    // Position layout debug panel in top-right corner
-    if (layoutDebugPanel != nullptr) {
-        int panelWidth = layoutDebugPanel->getWidth();
-        int panelHeight = layoutDebugPanel->getHeight();
-        layoutDebugPanel->setBounds(getWidth() - panelWidth - 10, 10, panelWidth, panelHeight);
-    }
 
     // Update zoom manager with viewport width (but preserve user's zoom)
     auto viewportWidth = timelineViewport->getWidth();
@@ -377,12 +384,25 @@ bool MainView::keyPressed(const juce::KeyPress& key) {
         return true;
     }
 
-    // Check for F11 to toggle layout debug panel
-    if (key == juce::KeyPress::F11Key) {
-        layoutDebugPanel->setVisible(!layoutDebugPanel->isVisible());
-        if (layoutDebugPanel->isVisible()) {
-            layoutDebugPanel->toFront(false);
+    // Check for 'L' to create loop from selection
+    if (key == juce::KeyPress('l') || key == juce::KeyPress('L')) {
+        if (timeSelection.isActive()) {
+            createLoopFromSelection();
         }
+        return true;
+    }
+
+    // Check for 'S' to toggle snap to grid
+    if (key == juce::KeyPress('s') || key == juce::KeyPress('S')) {
+        bool newSnapState = !timeline->isSnapEnabled();
+        timeline->setSnapEnabled(newSnapState);
+        std::cout << "🎯 SNAP: " << (newSnapState ? "enabled" : "disabled") << std::endl;
+        return true;
+    }
+
+    // Check for Escape to clear time selection
+    if (key == juce::KeyPress::escapeKey) {
+        clearTimeSelection();
         return true;
     }
 
@@ -427,8 +447,9 @@ void MainView::scrollBarMoved(juce::ScrollBar* scrollBarThatHasMoved, double new
         zoomManager->setCurrentScrollPosition(static_cast<int>(newRangeStart));
         // Update zoom scroll bar
         updateHorizontalZoomScrollBar();
-        // Force playhead repaint when scrolling
+        // Force playhead and selection overlay repaint when scrolling
         playheadComponent->repaint();
+        selectionOverlay->repaint();
     }
 
     // Update vertical zoom scroll bar when track content viewport scrolls vertically
@@ -532,6 +553,7 @@ void MainView::setupZoomManagerCallbacks() {
         updateContentSizes();
         updateHorizontalZoomScrollBar();
         playheadComponent->repaint();
+        selectionOverlay->repaint();
         repaint();
 
         // Re-add scroll bar listener after zoom operations are complete
@@ -854,6 +876,170 @@ void MainView::resetZoomToFitTimeline() {
         std::cout << "🎯 ZOOM RESET: timelineLength=" << timelineLength
                   << ", availableWidth=" << availableWidth << ", fitZoom=" << fitZoom << std::endl;
     }
+}
+
+void MainView::clearTimeSelection() {
+    timeSelection.clear();
+    timeline->clearTimeSelection();
+    if (selectionOverlay) {
+        selectionOverlay->repaint();
+    }
+}
+
+void MainView::createLoopFromSelection() {
+    if (timeSelection.isActive()) {
+        loopRegion.startTime = timeSelection.startTime;
+        loopRegion.endTime = timeSelection.endTime;
+        loopRegion.enabled = true;
+
+        // Update timeline with loop region
+        timeline->setLoopRegion(loopRegion.startTime, loopRegion.endTime);
+
+        // Clear time selection after creating loop
+        timeSelection.clear();
+        timeline->clearTimeSelection();
+
+        if (selectionOverlay) {
+            selectionOverlay->repaint();
+        }
+
+        // Notify external listeners about loop length change
+        if (onLoopLengthChanged) {
+            double length = loopRegion.endTime - loopRegion.startTime;
+            bool useBarsBeats = timeline->getTimeDisplayMode() == TimeDisplayMode::BarsBeats;
+            onLoopLengthChanged(length, true, useBarsBeats);
+        }
+
+        std::cout << "🔁 LOOP CREATED: " << loopRegion.startTime << "s - " << loopRegion.endTime
+                  << "s" << std::endl;
+    }
+}
+
+void MainView::setupSelectionCallbacks() {
+    // Set up snap to grid callback for track content panel
+    trackContentPanel->snapTimeToGrid = [this](double time) {
+        return timeline->snapTimeToGrid(time);
+    };
+
+    // Set up time selection callback from track content panel
+    trackContentPanel->onTimeSelectionChanged = [this](double start, double end) {
+        if (start < 0 || end < 0) {
+            timeSelection.clear();
+            timeline->clearTimeSelection();
+        } else {
+            timeSelection.startTime = start;
+            timeSelection.endTime = end;
+            timeline->setTimeSelection(start, end);
+        }
+        if (selectionOverlay) {
+            selectionOverlay->repaint();
+        }
+    };
+
+    // Set up loop region callback from timeline
+    timeline->onLoopRegionChanged = [this](double start, double end) {
+        if (start < 0 || end < 0) {
+            loopRegion.clear();
+        } else {
+            loopRegion.startTime = start;
+            loopRegion.endTime = end;
+            loopRegion.enabled = true;
+        }
+        if (selectionOverlay) {
+            selectionOverlay->repaint();
+        }
+
+        // Notify external listeners about loop length change
+        if (onLoopLengthChanged) {
+            double length =
+                loopRegion.isValid() ? (loopRegion.endTime - loopRegion.startTime) : 0.0;
+            bool useBarsBeats = timeline->getTimeDisplayMode() == TimeDisplayMode::BarsBeats;
+            onLoopLengthChanged(length, loopRegion.enabled, useBarsBeats);
+        }
+    };
+}
+
+// SelectionOverlayComponent implementation
+MainView::SelectionOverlayComponent::SelectionOverlayComponent(MainView& owner) : owner(owner) {
+    setInterceptsMouseClicks(false, false);  // Transparent to all mouse events
+}
+
+MainView::SelectionOverlayComponent::~SelectionOverlayComponent() = default;
+
+void MainView::SelectionOverlayComponent::paint(juce::Graphics& g) {
+    drawTimeSelection(g);
+    drawLoopRegion(g);
+}
+
+void MainView::SelectionOverlayComponent::drawTimeSelection(juce::Graphics& g) {
+    if (!owner.timeSelection.isActive()) {
+        return;
+    }
+
+    // Calculate pixel positions
+    // Add LEFT_PADDING (18) to align with timeline markers
+    int startX = static_cast<int>(owner.timeSelection.startTime * owner.horizontalZoom) + 18;
+    int endX = static_cast<int>(owner.timeSelection.endTime * owner.horizontalZoom) + 18;
+
+    // Adjust for scroll offset
+    int scrollOffset = owner.trackContentViewport->getViewPositionX();
+    startX -= scrollOffset;
+    endX -= scrollOffset;
+
+    // Skip if out of view
+    if (endX < 0 || startX > getWidth()) {
+        return;
+    }
+
+    // Clamp to visible area
+    startX = juce::jmax(0, startX);
+    endX = juce::jmin(getWidth(), endX);
+
+    // Draw semi-transparent selection highlight
+    g.setColour(DarkTheme::getColour(DarkTheme::TIME_SELECTION));
+    g.fillRect(startX, 0, endX - startX, getHeight());
+
+    // Draw selection edges (use drawLine for consistent alignment with ruler markers)
+    g.setColour(DarkTheme::getColour(DarkTheme::ACCENT_BLUE).withAlpha(0.8f));
+    g.drawLine(static_cast<float>(startX), 0.0f, static_cast<float>(startX),
+               static_cast<float>(getHeight()), 2.0f);
+    g.drawLine(static_cast<float>(endX), 0.0f, static_cast<float>(endX),
+               static_cast<float>(getHeight()), 2.0f);
+}
+
+void MainView::SelectionOverlayComponent::drawLoopRegion(juce::Graphics& g) {
+    if (!owner.loopRegion.isValid() || !owner.loopRegion.enabled) {
+        return;
+    }
+
+    // Calculate pixel positions
+    int startX = static_cast<int>(owner.loopRegion.startTime * owner.horizontalZoom) + 18;
+    int endX = static_cast<int>(owner.loopRegion.endTime * owner.horizontalZoom) + 18;
+
+    // Adjust for scroll offset
+    int scrollOffset = owner.trackContentViewport->getViewPositionX();
+    startX -= scrollOffset;
+    endX -= scrollOffset;
+
+    // Skip if out of view
+    if (endX < 0 || startX > getWidth()) {
+        return;
+    }
+
+    // Clamp to visible area
+    startX = juce::jmax(0, startX);
+    endX = juce::jmin(getWidth(), endX);
+
+    // Draw semi-transparent loop region
+    g.setColour(DarkTheme::getColour(DarkTheme::LOOP_REGION));
+    g.fillRect(startX, 0, endX - startX, getHeight());
+
+    // Draw loop region edges (use drawLine for consistent alignment with ruler markers)
+    g.setColour(DarkTheme::getColour(DarkTheme::LOOP_MARKER).withAlpha(0.8f));
+    g.drawLine(static_cast<float>(startX), 0.0f, static_cast<float>(startX),
+               static_cast<float>(getHeight()), 2.0f);
+    g.drawLine(static_cast<float>(endX), 0.0f, static_cast<float>(endX),
+               static_cast<float>(getHeight()), 2.0f);
 }
 
 }  // namespace magica

@@ -90,6 +90,11 @@ MainWindow::MainComponent::MainComponent() {
     mainView = std::make_unique<MainView>();
     addAndMakeVisible(*mainView);
 
+    // Wire up loop length updates to transport panel
+    mainView->onLoopLengthChanged = [this](double length, bool enabled, bool useBarsBeats) {
+        transportPanel->setLoopLength(length, enabled, useBarsBeats);
+    };
+
     bottomPanel = std::make_unique<BottomPanel>();
     addAndMakeVisible(*bottomPanel);
 

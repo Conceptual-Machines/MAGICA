@@ -24,6 +24,12 @@ class TransportPanel : public juce::Component {
     std::function<void(bool)> onLoop;
     std::function<void(double)> onTempoChange;
 
+    // Update displays
+    void setPlayheadPosition(double positionInSeconds, int bars, int beats, int ticks);
+    void setLoopLength(double lengthInSeconds, bool loopEnabled, bool useBarsBeats = false);
+    void setTempo(double bpm);
+    void setTimeSignature(int numerator, int denominator);
+
   private:
     // Transport controls (left section)
     std::unique_ptr<SvgButton> playButton;
@@ -35,6 +41,7 @@ class TransportPanel : public juce::Component {
     // Time display (center section)
     std::unique_ptr<juce::Label> timeDisplay;
     std::unique_ptr<juce::Label> positionDisplay;
+    std::unique_ptr<juce::Label> loopLengthDisplay;
 
     // Tempo and quantize (right section)
     std::unique_ptr<juce::Label> tempoLabel;
@@ -60,6 +67,8 @@ class TransportPanel : public juce::Component {
     bool isPaused = false;
     bool isLooping = false;
     double currentTempo = 120.0;
+    int timeSignatureNumerator = 4;
+    int timeSignatureDenominator = 4;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(TransportPanel)
 };

@@ -59,6 +59,9 @@ class TrackContentPanel : public juce::Component {
     // Callbacks
     std::function<void(int)> onTrackSelected;
     std::function<void(int, int)> onTrackHeightChanged;
+    std::function<void(double, double)> onTimeSelectionChanged;  // startTime, endTime
+    std::function<double(double)>
+        snapTimeToGrid;  // Callback to snap time to grid (provided by MainView)
 
   private:
     // Layout constants
@@ -96,6 +99,20 @@ class TrackContentPanel : public juce::Component {
 
     // Mouse handling
     void mouseDown(const juce::MouseEvent& event) override;
+    void mouseDrag(const juce::MouseEvent& event) override;
+    void mouseUp(const juce::MouseEvent& event) override;
+    void mouseMove(const juce::MouseEvent& event) override;
+
+    // Selection state
+    bool isCreatingSelection = false;
+    double selectionStartTime = -1.0;
+    double selectionEndTime = -1.0;
+    int selectionStartX = 0;
+
+    // Helper to check if a position is in a selectable area
+    bool isInSelectableArea(int x, int y) const;
+    double pixelToTime(int pixel) const;
+    int timeToPixel(double time) const;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(TrackContentPanel)
 };

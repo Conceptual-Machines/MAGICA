@@ -89,6 +89,13 @@ class DarkTheme {
     static constexpr auto LEVEL_METER_YELLOW = 0xFFFFAA44;  // Level meter (mid)
     static constexpr auto LEVEL_METER_RED = 0xFFAA4444;     // Level meter (high)
 
+    // ==========================================================================
+    // Selection and loop regions
+    // ==========================================================================
+    static constexpr auto TIME_SELECTION = 0x335588AA;  // Semi-transparent blue for time selection
+    static constexpr auto LOOP_REGION = 0x3344AA66;     // Semi-transparent green for loop region
+    static constexpr auto LOOP_MARKER = 0xFF44AA66;     // Solid green for loop flag markers
+
     // Apply the theme to JUCE's LookAndFeel
     static void applyToLookAndFeel(juce::LookAndFeel& laf);
 

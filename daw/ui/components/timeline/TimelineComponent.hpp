@@ -87,13 +87,42 @@ class TimelineComponent : public juce::Component {
         return arrangementLocked;
     }
 
+    // Loop region management
+    void setLoopRegion(double startTime, double endTime);
+    void clearLoopRegion();
+    bool isLoopEnabled() const {
+        return loopEnabled;
+    }
+    void setLoopEnabled(bool enabled);
+    double getLoopStartTime() const {
+        return loopStartTime;
+    }
+    double getLoopEndTime() const {
+        return loopEndTime;
+    }
+
+    // Snap to grid
+    void setSnapEnabled(bool enabled) {
+        snapEnabled = enabled;
+    }
+    bool isSnapEnabled() const {
+        return snapEnabled;
+    }
+    double snapTimeToGrid(double time) const;
+    double getSnapInterval() const;  // Returns current snap interval based on zoom and display mode
+
+    // Time selection (for visual feedback in ruler area)
+    void setTimeSelection(double startTime, double endTime);
+    void clearTimeSelection();
+
     // Callback for playhead position changes
     std::function<void(double)> onPlayheadPositionChanged;
     std::function<void(int, const ArrangementSection&)> onSectionChanged;
     std::function<void(const juce::String&, double, double)> onSectionAdded;
     std::function<void(double, double, int)>
         onZoomChanged;  // Callback for zoom changes (newZoom, anchorTime, anchorScreenX)
-    std::function<void()> onZoomEnd;  // Callback when zoom operation ends
+    std::function<void()> onZoomEnd;                          // Callback when zoom operation ends
+    std::function<void(double, double)> onLoopRegionChanged;  // Callback when loop region changes
 
   private:
     // Layout constants
@@ -118,6 +147,20 @@ class TimelineComponent : public juce::Component {
     bool isDraggingStart = false;    // true for start edge, false for end edge
     bool arrangementLocked = false;  // Lock arrangement sections to prevent accidental movement
 
+    // Loop region state
+    double loopStartTime = -1.0;
+    double loopEndTime = -1.0;
+    bool loopEnabled = false;
+    bool isDraggingLoopStart = false;
+    bool isDraggingLoopEnd = false;
+
+    // Snap to grid state
+    bool snapEnabled = true;  // Snap enabled by default
+
+    // Time selection state (for ruler highlight)
+    double timeSelectionStart = -1.0;
+    double timeSelectionEnd = -1.0;
+
     // Mouse interaction state
     bool isZooming = false;
     bool isPendingPlayheadClick = false;  // True if we might set playhead on mouseUp
@@ -136,11 +179,16 @@ class TimelineComponent : public juce::Component {
     void drawPlayhead(juce::Graphics& g);
     void drawArrangementSections(juce::Graphics& g);
     void drawSection(juce::Graphics& g, const ArrangementSection& section, bool isSelected) const;
+    void drawLoopMarkers(juce::Graphics& g);
+    void drawTimeSelection(juce::Graphics& g);
 
     // Arrangement interaction helpers
     int findSectionAtPosition(int x, int y) const;
     bool isOnSectionEdge(int x, int sectionIndex, bool& isStartEdge) const;
     juce::String getDefaultSectionName() const;
+
+    // Loop marker interaction helpers
+    bool isOnLoopMarker(int x, int y, bool& isStartMarker) const;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(TimelineComponent)
 };
