@@ -184,10 +184,12 @@ void TrackContentPanel::drawTimeGrid(juce::Graphics& g, juce::Rectangle<int> are
 
     if (displayMode == TimeDisplayMode::Seconds) {
         // ===== SECONDS MODE =====
-        g.setColour(DarkTheme::getColour(DarkTheme::GRID_LINE).brighter(0.2f));
-
-        const double intervals[] = {0.001, 0.005, 0.01, 0.05, 0.1,  0.25, 0.5,
-                                    1.0,   2.0,   5.0,  10.0, 30.0, 60.0};
+        // Extended intervals for deep zoom (matching TimelineComponent)
+        const double intervals[] = {0.0001, 0.0002, 0.0005,       // Sub-millisecond
+                                    0.001,  0.002,  0.005,        // Milliseconds
+                                    0.01,   0.02,   0.05,         // Centiseconds
+                                    0.1,    0.2,    0.25,   0.5,  // Deciseconds
+                                    1.0,    2.0,    5.0,    10.0, 15.0, 30.0, 60.0};  // Seconds
 
         double gridInterval = 1.0;
         for (double interval : intervals) {
@@ -200,7 +202,27 @@ void TrackContentPanel::drawTimeGrid(juce::Graphics& g, juce::Rectangle<int> are
         for (double time = 0.0; time <= timelineLength; time += gridInterval) {
             int x = static_cast<int>(time * currentZoom) + LEFT_PADDING;
             if (x >= area.getX() && x <= area.getRight()) {
-                g.drawLine(x, area.getY(), x, area.getBottom(), 1.0f);
+                // Determine line brightness based on time hierarchy
+                bool isMajor = false;
+                if (gridInterval >= 1.0) {
+                    isMajor = true;
+                } else if (gridInterval >= 0.1) {
+                    isMajor = std::fmod(time, 1.0) < 0.0001;
+                } else if (gridInterval >= 0.01) {
+                    isMajor = std::fmod(time, 0.1) < 0.0001;
+                } else if (gridInterval >= 0.001) {
+                    isMajor = std::fmod(time, 0.01) < 0.0001;
+                } else {
+                    isMajor = std::fmod(time, 0.001) < 0.00001;
+                }
+
+                if (isMajor) {
+                    g.setColour(DarkTheme::getColour(DarkTheme::GRID_LINE).brighter(0.3f));
+                    g.drawLine(x, area.getY(), x, area.getBottom(), 1.0f);
+                } else {
+                    g.setColour(DarkTheme::getColour(DarkTheme::GRID_LINE).brighter(0.1f));
+                    g.drawLine(x, area.getY(), x, area.getBottom(), 0.5f);
+                }
             }
         }
     } else {
@@ -208,8 +230,8 @@ void TrackContentPanel::drawTimeGrid(juce::Graphics& g, juce::Rectangle<int> are
         double secondsPerBeat = 60.0 / tempoBPM;
         double secondsPerBar = secondsPerBeat * timeSignatureNumerator;
 
-        // Find appropriate interval
-        const double beatFractions[] = {0.25, 0.5, 1.0, 2.0};
+        // Find appropriate interval (including 32nd and 64th notes for deep zoom)
+        const double beatFractions[] = {0.0625, 0.125, 0.25, 0.5, 1.0, 2.0};
         const int barMultiples[] = {1, 2, 4, 8, 16, 32};
 
         double markerIntervalBeats = 1.0;
@@ -242,16 +264,20 @@ void TrackContentPanel::drawTimeGrid(juce::Graphics& g, juce::Rectangle<int> are
         for (double time = 0.0; time <= timelineLength; time += markerIntervalSeconds) {
             int x = static_cast<int>(time * currentZoom) + LEFT_PADDING;
             if (x >= area.getX() && x <= area.getRight()) {
-                // Brighter line on bar boundaries
+                // Determine line style based on musical position
                 double totalBeats = time / secondsPerBeat;
                 bool isBarLine = std::fmod(totalBeats, timeSignatureNumerator) < 0.001;
+                bool isBeatLine = std::fmod(totalBeats, 1.0) < 0.001;
 
                 if (isBarLine) {
                     g.setColour(DarkTheme::getColour(DarkTheme::GRID_LINE).brighter(0.4f));
                     g.drawLine(x, area.getY(), x, area.getBottom(), 1.5f);
-                } else {
-                    g.setColour(DarkTheme::getColour(DarkTheme::GRID_LINE).brighter(0.1f));
+                } else if (isBeatLine) {
+                    g.setColour(DarkTheme::getColour(DarkTheme::GRID_LINE).brighter(0.2f));
                     g.drawLine(x, area.getY(), x, area.getBottom(), 1.0f);
+                } else {
+                    g.setColour(DarkTheme::getColour(DarkTheme::GRID_LINE).brighter(0.05f));
+                    g.drawLine(x, area.getY(), x, area.getBottom(), 0.5f);
                 }
             }
         }

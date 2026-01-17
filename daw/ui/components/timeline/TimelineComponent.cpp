@@ -441,8 +441,13 @@ void TimelineComponent::drawTimeMarkers(juce::Graphics& g) {
 
     if (displayMode == TimeDisplayMode::Seconds) {
         // ===== SECONDS MODE =====
-        const double intervals[] = {0.001, 0.005, 0.01, 0.05, 0.1,  0.25, 0.5,
-                                    1.0,   2.0,   5.0,  10.0, 30.0, 60.0};
+        // Extended intervals for deep zoom (down to 100 microseconds)
+        const double intervals[] = {
+            0.0001, 0.0002, 0.0005,       // Sub-millisecond (100μs, 200μs, 500μs)
+            0.001,  0.002,  0.005,        // Milliseconds (1ms, 2ms, 5ms)
+            0.01,   0.02,   0.05,         // Centiseconds (10ms, 20ms, 50ms)
+            0.1,    0.2,    0.25,   0.5,  // Deciseconds
+            1.0,    2.0,    5.0,    10.0, 15.0, 30.0, 60.0};  // Seconds and minutes
 
         double markerInterval = 1.0;
         for (double interval : intervals) {
@@ -455,8 +460,20 @@ void TimelineComponent::drawTimeMarkers(juce::Graphics& g) {
         for (double time = 0.0; time <= timelineLength; time += markerInterval) {
             int x = timeToPixel(time) + LEFT_PADDING;
             if (x >= 0 && x < getWidth()) {
-                bool isMajor =
-                    (markerInterval >= 1.0) || (std::fmod(time, markerInterval * 5) < 0.0001);
+                // Determine major tick: every 5th or 10th interval, or second boundaries
+                bool isMajor = false;
+                if (markerInterval >= 1.0) {
+                    isMajor = true;  // All second markers are major
+                } else if (markerInterval >= 0.1) {
+                    isMajor = std::fmod(time, 1.0) < 0.0001;  // Major on whole seconds
+                } else if (markerInterval >= 0.01) {
+                    isMajor = std::fmod(time, 0.1) < 0.0001;  // Major on 100ms
+                } else if (markerInterval >= 0.001) {
+                    isMajor = std::fmod(time, 0.01) < 0.0001;  // Major on 10ms
+                } else {
+                    isMajor = std::fmod(time, 0.001) < 0.00001;  // Major on 1ms
+                }
+
                 int tickHeight = isMajor ? majorTickHeight : minorTickHeight;
 
                 g.setColour(DarkTheme::getColour(isMajor ? DarkTheme::TEXT_SECONDARY
@@ -466,12 +483,31 @@ void TimelineComponent::drawTimeMarkers(juce::Graphics& g) {
 
                 if (isMajor) {
                     juce::String timeStr;
-                    if (markerInterval >= 1.0) {
+                    if (time >= 60.0) {
+                        // Minutes:seconds format
                         int minutes = static_cast<int>(time) / 60;
                         int seconds = static_cast<int>(time) % 60;
                         timeStr = juce::String::formatted("%d:%02d", minutes, seconds);
+                    } else if (markerInterval >= 1.0 || time >= 1.0) {
+                        // Seconds with appropriate precision
+                        if (markerInterval >= 1.0) {
+                            timeStr = juce::String(static_cast<int>(time)) + "s";
+                        } else {
+                            timeStr = juce::String(time, 1) + "s";
+                        }
+                    } else if (markerInterval >= 0.01 || time >= 0.01) {
+                        // Milliseconds (show as Xms)
+                        int ms = static_cast<int>(time * 1000);
+                        timeStr = juce::String(ms) + "ms";
                     } else {
-                        timeStr = juce::String(time, 1) + "s";
+                        // Sub-millisecond (show as X.Xms or Xμs)
+                        double ms = time * 1000.0;
+                        if (ms >= 0.1) {
+                            timeStr = juce::String(ms, 1) + "ms";
+                        } else {
+                            int us = static_cast<int>(time * 1000000);
+                            timeStr = juce::String(us) + "μs";
+                        }
                     }
 
                     g.setColour(DarkTheme::getColour(DarkTheme::TEXT_SECONDARY));
@@ -486,8 +522,9 @@ void TimelineComponent::drawTimeMarkers(juce::Graphics& g) {
         double secondsPerBeat = 60.0 / tempoBPM;
         double secondsPerBar = secondsPerBeat * timeSignatureNumerator;
 
-        // Define musical intervals: 16th, 8th, quarter, half, bar, 2 bars, 4 bars, 8 bars
-        const double beatFractions[] = {0.25, 0.5, 1.0, 2.0};
+        // Define musical intervals: 64th, 32nd, 16th, 8th, quarter, half, bar, multi-bars
+        // Beat fractions: 0.0625 = 64th, 0.125 = 32nd, 0.25 = 16th, 0.5 = 8th, 1.0 = quarter
+        const double beatFractions[] = {0.0625, 0.125, 0.25, 0.5, 1.0, 2.0};
         const int barMultiples[] = {1, 2, 4, 8, 16, 32};
 
         // Find appropriate interval
@@ -526,23 +563,54 @@ void TimelineComponent::drawTimeMarkers(juce::Graphics& g) {
                 // Calculate bar and beat position
                 double totalBeats = time / secondsPerBeat;
                 int bar = static_cast<int>(totalBeats / timeSignatureNumerator) + 1;
-                int beatInBar = static_cast<int>(std::fmod(totalBeats, timeSignatureNumerator)) + 1;
+                double beatInBarFractional = std::fmod(totalBeats, timeSignatureNumerator);
+                int beatInBar = static_cast<int>(beatInBarFractional) + 1;
 
-                // Major tick on bar boundaries, minor on beats
-                bool isMajor = (beatInBar == 1);
-                int tickHeight = isMajor ? majorTickHeight : minorTickHeight;
+                // Determine tick importance based on musical position
+                bool isBarStart = beatInBarFractional < 0.001;
+                bool isBeatStart = std::fmod(beatInBarFractional, 1.0) < 0.001;
 
-                g.setColour(DarkTheme::getColour(isMajor ? DarkTheme::TEXT_SECONDARY
-                                                         : DarkTheme::TEXT_DIM));
+                // Major tick on bar boundaries, medium on beat boundaries, minor on subdivisions
+                bool isMajor = isBarStart;
+                bool isMedium = !isBarStart && isBeatStart;
+                int tickHeight = isMajor ? majorTickHeight
+                                         : (isMedium ? (majorTickHeight * 2 / 3) : minorTickHeight);
+
+                if (isMajor) {
+                    g.setColour(DarkTheme::getColour(DarkTheme::TEXT_SECONDARY));
+                } else if (isMedium) {
+                    g.setColour(DarkTheme::getColour(DarkTheme::TEXT_SECONDARY).withAlpha(0.7f));
+                } else {
+                    g.setColour(DarkTheme::getColour(DarkTheme::TEXT_DIM));
+                }
                 g.drawVerticalLine(x, static_cast<float>(rulerBottom - tickHeight),
                                    static_cast<float>(rulerBottom));
 
-                // Label on major ticks (bar start)
-                if (isMajor) {
-                    juce::String barStr = juce::String(bar);
+                // Label on bar starts, and on beats when zoomed in enough
+                bool showLabel = false;
+                juce::String labelStr;
 
+                if (isBarStart) {
+                    showLabel = true;
+                    labelStr = juce::String(bar);
+                } else if (isBeatStart && markerIntervalBeats <= 0.5) {
+                    // Show beat labels when zoomed to 8th notes or finer
+                    showLabel = true;
+                    labelStr = juce::String(bar) + "." + juce::String(beatInBar);
+                } else if (markerIntervalBeats <= 0.125) {
+                    // At 32nd notes or finer, show subdivision labels
+                    double subdivision = std::fmod(beatInBarFractional, 1.0);
+                    if (std::fmod(subdivision, 0.25) < 0.001) {  // Show on 16th note boundaries
+                        showLabel = true;
+                        int sixteenth = static_cast<int>(subdivision * 4) + 1;
+                        labelStr = juce::String(bar) + "." + juce::String(beatInBar) + "." +
+                                   juce::String(sixteenth);
+                    }
+                }
+
+                if (showLabel) {
                     g.setColour(DarkTheme::getColour(DarkTheme::TEXT_SECONDARY));
-                    g.drawText(barStr, x - 35, labelY, 70, labelHeight,
+                    g.drawText(labelStr, x - 35, labelY, 70, labelHeight,
                                juce::Justification::centred);
                 }
             }
