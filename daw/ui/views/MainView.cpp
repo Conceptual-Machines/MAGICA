@@ -28,17 +28,14 @@ MainView::MainView() : playheadPosition(0.0), horizontalZoom(20.0), initialZoomS
     // Set up the centralized timeline controller
     setupTimelineController();
 
-    // Set up zoom manager (legacy, being phased out)
-    setupZoomManager();
-
     // Set up UI components
     setupComponents();
 
     // Set up callbacks
     setupCallbacks();
 
-    // Connect zoom manager callbacks
-    setupZoomManagerCallbacks();
+    // Set up timeline zoom/scroll callbacks
+    setupTimelineCallbacks();
 }
 
 void MainView::setupTimelineController() {
@@ -61,11 +58,6 @@ void MainView::syncStateFromController() {
     // Update selection and loop caches
     timeSelection = state.selection;
     loopRegion = state.loop;
-}
-
-void MainView::setupZoomManager() {
-    // Create zoom manager
-    zoomManager = std::make_unique<ZoomManager>();
 }
 
 void MainView::setupComponents() {
@@ -168,9 +160,10 @@ void MainView::setupComponents() {
             double scrollTime = start * timelineLength;
             int scrollX = static_cast<int>(scrollTime * newZoom);
 
-            // Update via zoom manager
-            zoomManager->setZoom(newZoom);
-            zoomManager->setCurrentScrollPosition(scrollX);
+            // Dispatch to TimelineController
+            timelineController->dispatch(SetZoomEvent{newZoom});
+            timelineController->dispatch(
+                SetScrollPositionEvent{scrollX, trackContentViewport->getViewPositionY()});
         }
     };
     addAndMakeVisible(*horizontalZoomScrollBar);
@@ -231,9 +224,6 @@ void MainView::setupCallbacks() {
 
         // Dispatch to controller
         timelineController->dispatch(ScrollByDeltaEvent{scrollDeltaX, scrollDeltaY});
-
-        // Also update legacy zoom manager for backward compatibility
-        zoomManager->setCurrentScrollPosition(timelineController->getState().zoom.scrollX);
     };
 
     // Handle time selection from timeline ruler
@@ -462,9 +452,6 @@ void MainView::resized() {
     if (viewportWidth > 0) {
         // Dispatch viewport resize event to controller
         timelineController->dispatch(ViewportResizedEvent{viewportWidth, viewportHeight});
-
-        // Also update legacy zoom manager
-        zoomManager->setViewportWidth(viewportWidth);
         timeline->setViewportWidth(viewportWidth);
 
         // Set initial zoom to show configurable duration on first resize
@@ -482,9 +469,6 @@ void MainView::resized() {
                 // Dispatch initial zoom via controller
                 timelineController->dispatch(SetZoomCenteredEvent{zoomForDefaultView, 0.0});
 
-                // Also update legacy zoom manager
-                zoomManager->setZoomCentered(zoomForDefaultView, 0.0);
-
                 std::cout << "🎯 INITIAL ZOOM: showing " << zoomViewDuration
                           << " seconds, availableWidth=" << availableWidth
                           << ", zoomForDefaultView=" << zoomForDefaultView << std::endl;
@@ -500,9 +484,6 @@ void MainView::resized() {
 void MainView::setHorizontalZoom(double zoomFactor) {
     // Dispatch to controller
     timelineController->dispatch(SetZoomEvent{zoomFactor});
-
-    // Also update legacy zoom manager for backward compatibility
-    zoomManager->setZoom(timelineController->getState().zoom.horizontalZoom);
 }
 
 void MainView::setVerticalZoom(double zoomFactor) {
@@ -545,9 +526,6 @@ void MainView::selectTrack(int trackIndex) {
 void MainView::setTimelineLength(double lengthInSeconds) {
     // Dispatch to controller
     timelineController->dispatch(SetTimelineLengthEvent{lengthInSeconds});
-
-    // Also update legacy zoom manager for backward compatibility
-    zoomManager->setTimelineLength(lengthInSeconds);
 
     // Update child components directly (will eventually be handled by listener)
     timeline->setTimelineLength(lengthInSeconds);
@@ -691,9 +669,6 @@ void MainView::scrollBarMoved(juce::ScrollBar* scrollBarThatHasMoved, double new
         // Update controller state
         timelineController->dispatch(SetScrollPositionEvent{scrollX, scrollY});
 
-        // Update legacy zoom manager
-        zoomManager->setCurrentScrollPosition(scrollX);
-
         // Sync timeline viewport
         timelineViewport->setViewPosition(scrollX, 0);
 
@@ -795,61 +770,7 @@ void MainView::updateVerticalZoomScrollBar() {
     verticalZoomScrollBar->setVisibleRange(visibleStart, visibleEnd);
 }
 
-void MainView::setupZoomManagerCallbacks() {
-    // Set up callback to handle zoom changes from legacy ZoomManager
-    // This bridges the old ZoomManager to the new TimelineController
-    zoomManager->onZoomChanged = [this](double newZoom) {
-        // Temporarily remove scroll bar listener to prevent race condition
-        trackContentViewport->getHorizontalScrollBar().removeListener(this);
-
-        // Sync with controller state
-        horizontalZoom = newZoom;
-        timeline->setZoom(newZoom);
-        trackContentPanel->setZoom(newZoom);
-        updateContentSizes();
-        updateHorizontalZoomScrollBar();
-        playheadComponent->repaint();
-        selectionOverlay->repaint();
-        repaint();
-
-        // Re-add scroll bar listener after zoom operations are complete
-        trackContentViewport->getHorizontalScrollBar().addListener(this);
-    };
-
-    // Set up callback to handle zoom end
-    zoomManager->onZoomEnd = [this]() {
-        // Zoom end handling - cursor is managed by onCursorChanged callback
-    };
-
-    // Set up callback to handle cursor changes
-    zoomManager->onCursorChanged = [this](juce::MouseCursor::StandardCursorType cursorType) {
-        setMouseCursor(cursorType);
-    };
-
-    // Set up callback to handle scroll changes from legacy ZoomManager
-    zoomManager->onScrollChanged = [this](int scrollX) {
-        // Temporarily remove scroll bar listener to prevent feedback loops
-        trackContentViewport->getHorizontalScrollBar().removeListener(this);
-
-        // Set both viewports to the same position
-        timelineViewport->setViewPosition(scrollX, 0);
-        trackContentViewport->setViewPosition(scrollX, trackContentViewport->getViewPositionY());
-
-        // Force viewport to update its scrollbars
-        trackContentViewport->resized();
-
-        // Update zoom scroll bar to reflect new position
-        updateHorizontalZoomScrollBar();
-
-        // Re-add scroll bar listener
-        trackContentViewport->getHorizontalScrollBar().addListener(this);
-    };
-
-    // Set up callback to handle content size changes
-    zoomManager->onContentSizeChanged = [this]([[maybe_unused]] int contentWidth) {
-        updateContentSizes();
-    };
-
+void MainView::setupTimelineCallbacks() {
     // Set up timeline zoom callback - dispatches to TimelineController
     timeline->onZoomChanged = [this](double newZoom, double anchorTime, int anchorContentX) {
         // Set crosshair cursor during zoom operations
@@ -865,15 +786,6 @@ void MainView::setupZoomManagerCallbacks() {
         // Dispatch to controller with anchor information
         timelineController->dispatch(
             SetZoomAnchoredEvent{newZoom, anchorTime, zoomAnchorViewportX});
-
-        // Keep legacy ZoomManager in sync
-        zoomManager->setZoom(timelineController->getState().zoom.horizontalZoom);
-        zoomManager->setCurrentScrollPosition(timelineController->getState().zoom.scrollX);
-
-        // Trigger scroll update via legacy system for now
-        if (zoomManager->onScrollChanged) {
-            zoomManager->onScrollChanged(timelineController->getState().zoom.scrollX);
-        }
     };
 
     // Set up timeline zoom end callback
@@ -883,11 +795,6 @@ void MainView::setupZoomManagerCallbacks() {
 
         // Reset cursor to normal when zoom ends
         setMouseCursor(juce::MouseCursor::NormalCursor);
-
-        // Call ZoomManager's zoom end callback
-        if (zoomManager->onZoomEnd) {
-            zoomManager->onZoomEnd();
-        }
     };
 
     // Set up zoom-to-fit callback (e.g., double-click to fit loop region)
@@ -897,16 +804,6 @@ void MainView::setupZoomManagerCallbacks() {
 
         // Dispatch to controller
         timelineController->dispatch(ZoomToFitEvent{startTime, endTime, 0.05});
-
-        // Keep legacy ZoomManager in sync
-        const auto& state = timelineController->getState();
-        zoomManager->setZoom(state.zoom.horizontalZoom);
-        zoomManager->setCurrentScrollPosition(state.zoom.scrollX);
-
-        // Trigger scroll update via legacy system
-        if (zoomManager->onScrollChanged) {
-            zoomManager->onScrollChanged(state.zoom.scrollX);
-        }
     };
 }
 
@@ -1179,9 +1076,6 @@ void MainView::paintMasterResizeHandle(juce::Graphics& g) {
 void MainView::resetZoomToFitTimeline() {
     // Dispatch to controller
     timelineController->dispatch(ResetZoomEvent{});
-
-    // Also update legacy zoom manager for backward compatibility
-    zoomManager->setZoomCentered(timelineController->getState().zoom.horizontalZoom, 0.0);
 
     std::cout << "🎯 ZOOM RESET: timelineLength=" << timelineController->getState().timelineLength
               << ", zoom=" << timelineController->getState().zoom.horizontalZoom << std::endl;

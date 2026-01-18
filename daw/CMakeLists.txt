@@ -65,7 +65,6 @@ set(DAW_CORE_SOURCES
     engine/tracktion_engine_wrapper.cpp
     # UI components needed by tests
     ui/components/timeline/TimelineComponent.cpp
-    ui/components/timeline/ZoomManager.cpp
     # State management
     ui/state/TimelineController.cpp
 )
@@ -104,7 +103,6 @@ set(DAW_UI_SOURCES
     ui/components/timeline/TimelineComponent.cpp
     ui/components/timeline/TimelineFiller.cpp
     ui/components/timeline/TimeRuler.cpp
-    ui/components/timeline/ZoomManager.cpp
     ui/components/timeline/ZoomScrollBar.cpp
     # Components - Tracks
     ui/components/tracks/TrackHeadersPanel.cpp
@@ -170,7 +168,6 @@ set(DAW_HEADERS
     ui/components/timeline/TimelineComponent.hpp
     ui/components/timeline/TimelineFiller.hpp
     ui/components/timeline/TimeRuler.hpp
-    ui/components/timeline/ZoomManager.hpp
     ui/components/timeline/ZoomScrollBar.hpp
     # Components - Tracks
     ui/components/tracks/TrackHeadersPanel.hpp

@@ -65,8 +65,6 @@ class TimelineComponent : public juce::Component, public TimelineStateListener {
     double barsToTime(double bars) const;
     juce::String formatTimePosition(double timeInSeconds) const;
 
-    // Note: Uses callbacks to communicate with ZoomManager via MainView
-
     // Mouse interaction
     void mouseDown(const juce::MouseEvent& event) override;
     void mouseMove(const juce::MouseEvent& event) override;

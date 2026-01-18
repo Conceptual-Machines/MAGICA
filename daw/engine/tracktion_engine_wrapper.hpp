@@ -101,15 +101,6 @@ class TracktionEngineWrapper : public TransportInterface,
     std::vector<std::string> getAvailableEffects() const override;
     std::vector<std::string> getTrackEffects(const std::string& track_id) const override;
 
-    // Legacy methods for backward compatibility (deprecated)
-    std::string createAudioClip(const std::string& track_id, const std::string& file_path,
-                                double start_time, double length);
-    std::string createMidiClip(const std::string& track_id, double start_time, double length);
-    void setClipPosition(const std::string& clip_id, double start_time);
-    double getClipPosition(const std::string& clip_id) const;
-    void setClipLength(const std::string& clip_id, double length);
-    std::vector<std::string> getClipsInTrack(const std::string& track_id) const;
-
   private:
     // Tracktion Engine components
     std::unique_ptr<tracktion::Engine> engine_;

@@ -477,35 +477,6 @@ std::vector<std::string> TracktionEngineWrapper::getTrackEffects(
     return {};
 }
 
-// Legacy methods for backward compatibility
-std::string TracktionEngineWrapper::createAudioClip(const std::string& track_id,
-                                                    const std::string& file_path, double start_time,
-                                                    double length) {
-    return addAudioClip(track_id, start_time, file_path);
-}
-
-std::string TracktionEngineWrapper::createMidiClip(const std::string& track_id, double start_time,
-                                                   double length) {
-    return addMidiClip(track_id, start_time, length, {});
-}
-
-void TracktionEngineWrapper::setClipPosition(const std::string& clip_id, double start_time) {
-    moveClip(clip_id, start_time);
-}
-
-double TracktionEngineWrapper::getClipPosition(const std::string& clip_id) const {
-    return getClipStartTime(clip_id);
-}
-
-void TracktionEngineWrapper::setClipLength(const std::string& clip_id, double length) {
-    resizeClip(clip_id, length);
-}
-
-std::vector<std::string> TracktionEngineWrapper::getClipsInTrack(
-    const std::string& track_id) const {
-    return getTrackClips(track_id);
-}
-
 // Helper methods
 tracktion::Track* TracktionEngineWrapper::findTrackById(const std::string& track_id) const {
     auto it = trackMap_.find(track_id);

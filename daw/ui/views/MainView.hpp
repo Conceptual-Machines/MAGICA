@@ -7,7 +7,6 @@
 #include "../components/common/GridOverlayComponent.hpp"
 #include "../components/common/SvgButton.hpp"
 #include "../components/timeline/TimelineComponent.hpp"
-#include "../components/timeline/ZoomManager.hpp"
 #include "../components/timeline/ZoomScrollBar.hpp"
 #include "../components/tracks/TrackContentPanel.hpp"
 #include "../components/tracks/TrackHeadersPanel.hpp"
@@ -120,8 +119,7 @@ class MainView : public juce::Component,
     // Timeline state management (single source of truth)
     std::unique_ptr<TimelineController> timelineController;
 
-    // Legacy zoom management (to be removed after full migration)
-    std::unique_ptr<ZoomManager> zoomManager;
+    // Zoom scroll bars
     std::unique_ptr<ZoomScrollBar> horizontalZoomScrollBar;
     std::unique_ptr<ZoomScrollBar> verticalZoomScrollBar;
 
@@ -183,8 +181,7 @@ class MainView : public juce::Component,
     void syncTrackHeights();
     void setupTrackSynchronization();
     void setupTimelineController();
-    void setupZoomManagerCallbacks();
-    void setupZoomManager();
+    void setupTimelineCallbacks();
     void setupComponents();
     void setupCallbacks();
     void resetZoomToFitTimeline();
