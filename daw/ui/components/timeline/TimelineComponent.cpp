@@ -431,13 +431,30 @@ void TimelineComponent::mouseDrag(const juce::MouseEvent& event) {
         // Use exponential scaling for smooth, fluid zoom
         int deltaY = mouseDownY - event.y;
 
-        // Check for modifier keys for accelerated zoom
+        // Check for modifier keys for zoom speed control
         bool isShiftHeld = event.mods.isShiftDown();
+        bool isAltHeld = event.mods.isAltDown();
+        bool isCtrlOrCmdHeld = event.mods.isCommandDown() || event.mods.isCtrlDown();
 
         // Sensitivity: pixels of drag to double/halve zoom (higher = less sensitive)
-        double sensitivity = 150.0;  // Base: 150px drag to double zoom
-        if (isShiftHeld) {
-            sensitivity = 50.0;  // Shift: faster zoom
+        // Base: 150px drag to double zoom
+        double sensitivity = 150.0;
+
+        if (isCtrlOrCmdHeld && isShiftHeld) {
+            sensitivity = 25.0;  // Cmd/Ctrl+Shift: super fast zoom (6x faster)
+        } else if (isShiftHeld) {
+            sensitivity = 50.0;  // Shift: fast zoom (3x faster)
+        } else if (isAltHeld) {
+            sensitivity = 400.0;  // Alt/Option: fine zoom (slower, more precise)
+        }
+
+        // Progressive acceleration: the further you drag, the faster it goes
+        // This helps when you need to zoom very far
+        double absDeltaY = std::abs(static_cast<double>(deltaY));
+        if (absDeltaY > 100.0) {
+            // After 100px of drag, progressively reduce sensitivity (faster zoom)
+            double accelerationFactor = 1.0 + (absDeltaY - 100.0) / 200.0;
+            sensitivity /= accelerationFactor;
         }
 
         // Exponential zoom: drag up doubles, drag down halves
