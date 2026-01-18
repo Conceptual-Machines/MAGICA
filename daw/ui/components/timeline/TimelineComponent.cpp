@@ -528,22 +528,40 @@ void TimelineComponent::mouseDrag(const juce::MouseEvent& event) {
         bool isShiftHeld = event.mods.isShiftDown();
         bool isAltHeld = event.mods.isAltDown();
 
-        // Sensitivity: pixels of drag to double/halve zoom (higher = less sensitive)
-        // Base: 150px drag to double zoom
-        double sensitivity = 150.0;
+        // Zoom-level-dependent sensitivity (Bitwig-like behavior):
+        // - At low zoom (zoomed out): more responsive (less drag needed)
+        // - At high zoom (zoomed in): finer control (more drag needed)
+        // This makes zooming feel natural at all levels
+        auto& config = magica::Config::getInstance();
+        double minZoomLevel = config.getMinZoomLevel();
+        double maxZoomLevel = config.getMaxZoomLevel();
 
+        // Calculate where we are in the zoom range (0 = min, 1 = max)
+        // Use log scale since zoom is exponential
+        double logMin = std::log(minZoomLevel);
+        double logMax = std::log(maxZoomLevel);
+        double logCurrent = std::log(zoomStartValue);
+        double zoomPosition = (logCurrent - logMin) / (logMax - logMin);
+        zoomPosition = juce::jlimit(0.0, 1.0, zoomPosition);
+
+        // Base sensitivity scales with zoom position:
+        // - At min zoom (position=0): 60px to double (very responsive)
+        // - At max zoom (position=1): 200px to double (fine control)
+        double baseSensitivity = 60.0 + zoomPosition * 140.0;
+
+        double sensitivity = baseSensitivity;
         if (isShiftHeld) {
-            sensitivity = 50.0;  // Shift: fast zoom (3x faster)
+            sensitivity = baseSensitivity * 0.4;  // Shift: fast zoom (2.5x faster)
         } else if (isAltHeld) {
-            sensitivity = 400.0;  // Alt/Option: fine zoom (slower, more precise)
+            sensitivity = baseSensitivity * 2.5;  // Alt/Option: fine zoom (slower)
         }
 
         // Progressive acceleration: the further you drag, the faster it goes
         // This helps when you need to zoom very far
         double absDeltaY = std::abs(static_cast<double>(deltaY));
-        if (absDeltaY > 100.0) {
-            // After 100px of drag, progressively reduce sensitivity (faster zoom)
-            double accelerationFactor = 1.0 + (absDeltaY - 100.0) / 200.0;
+        if (absDeltaY > 80.0) {
+            // After 80px of drag, progressively reduce sensitivity (faster zoom)
+            double accelerationFactor = 1.0 + (absDeltaY - 80.0) / 150.0;
             sensitivity /= accelerationFactor;
         }
 
@@ -553,21 +571,18 @@ void TimelineComponent::mouseDrag(const juce::MouseEvent& event) {
         double newZoom = zoomStartValue * std::pow(2.0, exponent);
 
         // Calculate minimum zoom based on timeline length and viewport width
-        auto& config = magica::Config::getInstance();
-        double minZoom = config.getMinZoomLevel();
+        double minZoom = minZoomLevel;
         if (timelineLength > 0 && viewportWidth > 0) {
             double availableWidth = viewportWidth - 50.0;
             minZoom = availableWidth / timelineLength;
-            minZoom = juce::jmax(minZoom, config.getMinZoomLevel());
+            minZoom = juce::jmax(minZoom, minZoomLevel);
         }
-
-        double maxZoom = config.getMaxZoomLevel();
 
         // Apply limits
         if (std::isnan(newZoom) || newZoom < minZoom) {
             newZoom = minZoom;
-        } else if (newZoom > maxZoom) {
-            newZoom = maxZoom;
+        } else if (newZoom > maxZoomLevel) {
+            newZoom = maxZoomLevel;
         }
 
         // Call the callback with zoom value, anchor time, and screen position
