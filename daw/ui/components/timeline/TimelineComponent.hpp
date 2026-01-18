@@ -159,6 +159,8 @@ class TimelineComponent : public juce::Component {
     bool loopEnabled = false;
     bool isDraggingLoopStart = false;
     bool isDraggingLoopEnd = false;
+    bool isDraggingLoopRegion = false;  // Dragging entire loop region
+    double loopDragOffset = 0.0;        // Offset from click position to loop start
 
     // Snap to grid state
     bool snapEnabled = true;  // Snap enabled by default
@@ -198,6 +200,7 @@ class TimelineComponent : public juce::Component {
 
     // Loop marker interaction helpers
     bool isOnLoopMarker(int x, int y, bool& isStartMarker) const;
+    bool isOnLoopTopBorder(int x, int y) const;  // Check if on the top connecting line
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(TimelineComponent)
 };
