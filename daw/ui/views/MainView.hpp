@@ -11,10 +11,13 @@
 #include "../components/tracks/TrackContentPanel.hpp"
 #include "../components/tracks/TrackHeadersPanel.hpp"
 #include "../layout/LayoutConfig.hpp"
+#include "../state/TimelineController.hpp"
 
 namespace magica {
 
-class MainView : public juce::Component, public juce::ScrollBar::Listener {
+class MainView : public juce::Component,
+                 public juce::ScrollBar::Listener,
+                 public TimelineStateListener {
   public:
     MainView();
     ~MainView() override;
@@ -56,6 +59,21 @@ class MainView : public juce::Component, public juce::ScrollBar::Listener {
     // ScrollBar::Listener implementation
     void scrollBarMoved(juce::ScrollBar* scrollBarThatHasMoved, double newRangeStart) override;
 
+    // TimelineStateListener implementation
+    void timelineStateChanged(const TimelineState& state) override;
+    void zoomStateChanged(const TimelineState& state) override;
+    void playheadStateChanged(const TimelineState& state) override;
+    void selectionStateChanged(const TimelineState& state) override;
+    void loopStateChanged(const TimelineState& state) override;
+
+    // Access to the timeline controller (for child components)
+    TimelineController& getTimelineController() {
+        return *timelineController;
+    }
+    const TimelineController& getTimelineController() const {
+        return *timelineController;
+    }
+
     // Keyboard handling
     bool keyPressed(const juce::KeyPress& key) override;
 
@@ -92,19 +110,24 @@ class MainView : public juce::Component, public juce::ScrollBar::Listener {
     class SelectionOverlayComponent;
     std::unique_ptr<SelectionOverlayComponent> selectionOverlay;
 
-    // Zoom management
+    // Timeline state management (single source of truth)
+    std::unique_ptr<TimelineController> timelineController;
+
+    // Legacy zoom management (to be removed after full migration)
     std::unique_ptr<ZoomManager> zoomManager;
     std::unique_ptr<ZoomScrollBar> horizontalZoomScrollBar;
     std::unique_ptr<ZoomScrollBar> verticalZoomScrollBar;
 
-    // Zoom and scroll state
+    // Cached state from controller for quick access
+    // These are updated when TimelineStateListener callbacks are called
     double horizontalZoom = 1.0;  // Pixels per second
     double verticalZoom = 1.0;    // Track height multiplier
-    double timelineLength = 0.0;  // Total timeline length in seconds (loaded from config)
+    double timelineLength = 0.0;  // Total timeline length in seconds
     double playheadPosition = 0.0;
 
-    // Synchronization guard to prevent infinite recursion
+    // Synchronization guards to prevent infinite recursion
     bool isUpdatingTrackSelection = false;
+    bool isUpdatingLoopRegion = false;
     // Note: Zoom/scroll race conditions are prevented by temporarily removing scroll bar listeners
 
     // Initial zoom setup flag
@@ -127,47 +150,23 @@ class MainView : public juce::Component, public juce::ScrollBar::Listener {
     static constexpr int RESIZE_HANDLE_WIDTH = 4;
     int lastMouseX = 0;
 
-    // Time selection state (temporary range highlight)
-    struct TimeSelection {
-        double startTime = -1.0;
-        double endTime = -1.0;
-        bool isActive() const {
-            return startTime >= 0 && endTime > startTime;
-        }
-        void clear() {
-            startTime = -1.0;
-            endTime = -1.0;
-        }
-    };
-
-    // Loop region state (persistent loop markers)
-    struct LoopRegion {
-        double startTime = -1.0;
-        double endTime = -1.0;
-        bool enabled = false;
-        bool isValid() const {
-            return startTime >= 0 && endTime > startTime;
-        }
-        void clear() {
-            startTime = -1.0;
-            endTime = -1.0;
-            enabled = false;
-        }
-    };
-
-    TimeSelection timeSelection;
-    LoopRegion loopRegion;
+    // Time selection and loop region are now managed by TimelineController
+    // Local caches for quick access (updated via listener callbacks)
+    magica::TimeSelection timeSelection;
+    magica::LoopRegion loopRegion;
 
     // Helper methods
     void updateContentSizes();
     void syncHorizontalScrolling();
     void syncTrackHeights();
     void setupTrackSynchronization();
+    void setupTimelineController();
     void setupZoomManagerCallbacks();
     void setupZoomManager();
     void setupComponents();
     void setupCallbacks();
     void resetZoomToFitTimeline();
+    void syncStateFromController();
 
     // Resize handle helper methods
     juce::Rectangle<int> getResizeHandleArea() const;

@@ -22,7 +22,10 @@ MainView::MainView() : playheadPosition(0.0), horizontalZoom(20.0), initialZoomS
     // Make this component focusable to receive keyboard events
     setWantsKeyboardFocus(true);
 
-    // Set up zoom manager
+    // Set up the centralized timeline controller
+    setupTimelineController();
+
+    // Set up zoom manager (legacy, being phased out)
     setupZoomManager();
 
     // Set up UI components
@@ -35,6 +38,28 @@ MainView::MainView() : playheadPosition(0.0), horizontalZoom(20.0), initialZoomS
     setupZoomManagerCallbacks();
 }
 
+void MainView::setupTimelineController() {
+    timelineController = std::make_unique<TimelineController>();
+    timelineController->addListener(this);
+
+    // Sync initial state from controller
+    syncStateFromController();
+}
+
+void MainView::syncStateFromController() {
+    const auto& state = timelineController->getState();
+
+    // Update cached values
+    horizontalZoom = state.zoom.horizontalZoom;
+    verticalZoom = state.zoom.verticalZoom;
+    timelineLength = state.timelineLength;
+    playheadPosition = state.playhead.position;
+
+    // Update selection and loop caches
+    timeSelection = state.selection;
+    loopRegion = state.loop;
+}
+
 void MainView::setupZoomManager() {
     // Create zoom manager
     zoomManager = std::make_unique<ZoomManager>();
@@ -44,6 +69,7 @@ void MainView::setupComponents() {
     // Create timeline viewport
     timelineViewport = std::make_unique<juce::Viewport>();
     timeline = std::make_unique<TimelineComponent>();
+    timeline->setController(timelineController.get());  // Connect to centralized state
     timelineViewport->setViewedComponent(timeline.get(), false);
     timelineViewport->setScrollBarsShown(false, false);
     addAndMakeVisible(*timelineViewport);
@@ -67,24 +93,31 @@ void MainView::setupComponents() {
     timeDisplayToggleButton->setColour(juce::TextButton::textColourOffId,
                                        DarkTheme::getColour(DarkTheme::TEXT_PRIMARY));
     timeDisplayToggleButton->onClick = [this]() {
-        auto currentMode = timeline->getTimeDisplayMode();
+        auto currentMode = timelineController->getState().display.timeDisplayMode;
+        TimeDisplayMode newMode;
         bool useBarsBeats;
+
         if (currentMode == TimeDisplayMode::Seconds) {
-            timeline->setTimeDisplayMode(TimeDisplayMode::BarsBeats);
-            trackContentPanel->setTimeDisplayMode(TimeDisplayMode::BarsBeats);
+            newMode = TimeDisplayMode::BarsBeats;
             timeDisplayToggleButton->setButtonText("BARS");
             useBarsBeats = true;
         } else {
-            timeline->setTimeDisplayMode(TimeDisplayMode::Seconds);
-            trackContentPanel->setTimeDisplayMode(TimeDisplayMode::Seconds);
+            newMode = TimeDisplayMode::Seconds;
             timeDisplayToggleButton->setButtonText("TIME");
             useBarsBeats = false;
         }
 
+        // Dispatch to controller
+        timelineController->dispatch(SetTimeDisplayModeEvent{newMode});
+
+        // Also update child components directly for now
+        timeline->setTimeDisplayMode(newMode);
+        trackContentPanel->setTimeDisplayMode(newMode);
+
         // Update loop length display with new mode
-        if (onLoopLengthChanged && loopRegion.isValid()) {
-            double length = loopRegion.endTime - loopRegion.startTime;
-            onLoopLengthChanged(length, loopRegion.enabled, useBarsBeats);
+        const auto& loop = timelineController->getState().loop;
+        if (onLoopLengthChanged && loop.isValid()) {
+            onLoopLengthChanged(loop.getDuration(), loop.enabled, useBarsBeats);
         }
     };
     addAndMakeVisible(timeDisplayToggleButton.get());
@@ -92,6 +125,7 @@ void MainView::setupComponents() {
     // Create track content viewport
     trackContentViewport = std::make_unique<juce::Viewport>();
     trackContentPanel = std::make_unique<TrackContentPanel>();
+    trackContentPanel->setController(timelineController.get());  // Connect to centralized state
     trackContentViewport->setViewedComponent(trackContentPanel.get(), false);
     trackContentViewport->setScrollBarsShown(true, true);
     addAndMakeVisible(*trackContentViewport);
@@ -171,49 +205,31 @@ void MainView::setupComponents() {
 void MainView::setupCallbacks() {
     // Set up timeline callbacks
     timeline->onPlayheadPositionChanged = [this](double position) {
-        setPlayheadPosition(position);
+        timelineController->dispatch(SetPlayheadPositionEvent{position});
     };
 
     // Handle scroll requests from timeline (for trackpad scrolling over ruler)
     timeline->onScrollRequested = [this](float deltaX, float deltaY) {
-        // Get current scroll position
-        int currentX = trackContentViewport->getViewPositionX();
-        int currentY = trackContentViewport->getViewPositionY();
-
         // Calculate scroll amount (scale delta for smooth scrolling)
-        // deltaX/deltaY are normalized values, typically -1 to 1
         const float scrollSpeed = 50.0f;
         int scrollDeltaX = static_cast<int>(-deltaX * scrollSpeed);
         int scrollDeltaY = static_cast<int>(-deltaY * scrollSpeed);
 
-        // Apply horizontal scroll (primary use case for timeline)
-        int newX = juce::jmax(0, currentX + scrollDeltaX);
+        // Dispatch to controller
+        timelineController->dispatch(ScrollByDeltaEvent{scrollDeltaX, scrollDeltaY});
 
-        // Clamp to content bounds
-        int maxX = trackContentPanel->getWidth() - trackContentViewport->getWidth();
-        newX = juce::jmin(newX, juce::jmax(0, maxX));
-
-        // Update both viewports
-        timelineViewport->setViewPosition(newX, 0);
-        trackContentViewport->setViewPosition(newX, currentY);
-
-        // Update zoom manager scroll position
-        zoomManager->setCurrentScrollPosition(newX);
-        updateHorizontalZoomScrollBar();
+        // Also update legacy zoom manager for backward compatibility
+        zoomManager->setCurrentScrollPosition(timelineController->getState().zoom.scrollX);
     };
 
     // Handle time selection from timeline ruler
     timeline->onTimeSelectionChanged = [this](double start, double end) {
         if (start < 0 || end < 0) {
-            // Clear selection
-            timeSelection.clear();
+            timelineController->dispatch(ClearTimeSelectionEvent{});
         } else {
-            timeSelection.startTime = start;
-            timeSelection.endTime = end;
-        }
-        // Update selection overlay in track area
-        if (selectionOverlay) {
-            selectionOverlay->repaint();
+            timelineController->dispatch(SetTimeSelectionEvent{start, end});
+            // Move playhead to follow the left side of selection
+            timelineController->dispatch(SetPlayheadPositionEvent{start});
         }
     };
 
@@ -222,10 +238,101 @@ void MainView::setupCallbacks() {
 }
 
 MainView::~MainView() {
+    // Remove listener before destruction
+    if (timelineController) {
+        timelineController->removeListener(this);
+    }
+
     // Save configuration on shutdown
     auto& config = magica::Config::getInstance();
     config.saveToFile("magica_config.txt");
     std::cout << "🎯 CONFIG: Saved configuration on shutdown" << std::endl;
+}
+
+// ===== TimelineStateListener Implementation =====
+
+void MainView::timelineStateChanged(const TimelineState& state) {
+    // General state change handler - sync all cached values
+    syncStateFromController();
+}
+
+void MainView::zoomStateChanged(const TimelineState& state) {
+    // Update cached zoom values
+    horizontalZoom = state.zoom.horizontalZoom;
+    verticalZoom = state.zoom.verticalZoom;
+
+    // Update child components
+    timeline->setZoom(horizontalZoom);
+    trackContentPanel->setZoom(horizontalZoom);
+    trackContentPanel->setVerticalZoom(verticalZoom);
+
+    // Update viewports with new scroll position
+    timelineViewport->setViewPosition(state.zoom.scrollX, 0);
+    trackContentViewport->setViewPosition(state.zoom.scrollX, state.zoom.scrollY);
+
+    // Update content sizes
+    updateContentSizes();
+
+    // Update zoom scroll bars
+    updateHorizontalZoomScrollBar();
+    updateVerticalZoomScrollBar();
+
+    // Repaint
+    playheadComponent->repaint();
+    selectionOverlay->repaint();
+    repaint();
+}
+
+void MainView::playheadStateChanged(const TimelineState& state) {
+    playheadPosition = state.playhead.position;
+    playheadComponent->setPlayheadPosition(playheadPosition);
+    playheadComponent->repaint();
+}
+
+void MainView::selectionStateChanged(const TimelineState& state) {
+    timeSelection = state.selection;
+
+    // Update timeline component
+    if (timeSelection.isActive()) {
+        timeline->setTimeSelection(timeSelection.startTime, timeSelection.endTime);
+    } else {
+        timeline->clearTimeSelection();
+    }
+
+    // Update selection overlay
+    if (selectionOverlay) {
+        selectionOverlay->repaint();
+    }
+}
+
+void MainView::loopStateChanged(const TimelineState& state) {
+    loopRegion = state.loop;
+
+    // Prevent recursive updates
+    isUpdatingLoopRegion = true;
+
+    // Update timeline component
+    if (loopRegion.isValid()) {
+        timeline->setLoopRegion(loopRegion.startTime, loopRegion.endTime);
+        timeline->setLoopEnabled(loopRegion.enabled);
+    } else {
+        timeline->clearLoopRegion();
+    }
+
+    isUpdatingLoopRegion = false;
+
+    // Update selection overlay
+    if (selectionOverlay) {
+        selectionOverlay->repaint();
+    }
+
+    // Notify external listeners about loop length change
+    if (onLoopLengthChanged) {
+        double length = loopRegion.isValid() ? loopRegion.getDuration() : 0.0;
+        bool useBarsBeats =
+            timelineController->getState().display.timeDisplayMode == TimeDisplayMode::BarsBeats;
+        onLoopLengthChanged(length, loopRegion.enabled, useBarsBeats);
+    }
 }
 
 void MainView::paint(juce::Graphics& g) {
@@ -302,11 +409,15 @@ void MainView::resized() {
         playheadArea.withTrimmedRight(scrollBarThickness).withTrimmedBottom(scrollBarThickness);
     playheadComponent->setBounds(playheadArea);
 
-    // Update zoom manager with viewport width (but preserve user's zoom)
+    // Notify controller about viewport resize
     auto viewportWidth = timelineViewport->getWidth();
+    auto viewportHeight = trackContentViewport->getHeight();
     if (viewportWidth > 0) {
+        // Dispatch viewport resize event to controller
+        timelineController->dispatch(ViewportResizedEvent{viewportWidth, viewportHeight});
+
+        // Also update legacy zoom manager
         zoomManager->setViewportWidth(viewportWidth);
-        // Also update timeline component with viewport width for minimum zoom calculation
         timeline->setViewportWidth(viewportWidth);
 
         // Set initial zoom to show configurable duration on first resize
@@ -321,7 +432,10 @@ void MainView::resized() {
                 // Ensure minimum zoom level for usability
                 zoomForDefaultView = juce::jmax(zoomForDefaultView, 0.5);
 
-                // Set zoom centered at the beginning of timeline
+                // Dispatch initial zoom via controller
+                timelineController->dispatch(SetZoomCenteredEvent{zoomForDefaultView, 0.0});
+
+                // Also update legacy zoom manager
                 zoomManager->setZoomCentered(zoomForDefaultView, 0.0);
 
                 std::cout << "🎯 INITIAL ZOOM: showing " << zoomViewDuration
@@ -330,9 +444,6 @@ void MainView::resized() {
 
                 initialZoomSet = true;
             }
-        } else {
-            std::cout << "🎯 VIEWPORT UPDATE: width=" << viewportWidth << " (zoom preserved)"
-                      << std::endl;
         }
     }
 
@@ -340,13 +451,16 @@ void MainView::resized() {
 }
 
 void MainView::setHorizontalZoom(double zoomFactor) {
-    horizontalZoom = juce::jmax(0.1, zoomFactor);
-    zoomManager->setZoom(horizontalZoom);
-    // Ensure horizontalZoom stays in sync with ZoomManager
-    horizontalZoom = zoomManager->getCurrentZoom();
+    // Dispatch to controller
+    timelineController->dispatch(SetZoomEvent{zoomFactor});
+
+    // Also update legacy zoom manager for backward compatibility
+    zoomManager->setZoom(timelineController->getState().zoom.horizontalZoom);
 }
 
 void MainView::setVerticalZoom(double zoomFactor) {
+    // Vertical zoom is still managed locally for now
+    // TODO: Move to TimelineController when vertical zoom events are added
     verticalZoom = juce::jmax(0.5, juce::jmin(3.0, zoomFactor));
     updateContentSizes();
 }
@@ -382,24 +496,33 @@ void MainView::selectTrack(int trackIndex) {
 }
 
 void MainView::setTimelineLength(double lengthInSeconds) {
-    timelineLength = lengthInSeconds;
+    // Dispatch to controller
+    timelineController->dispatch(SetTimelineLengthEvent{lengthInSeconds});
+
+    // Also update legacy zoom manager for backward compatibility
+    zoomManager->setTimelineLength(lengthInSeconds);
+
+    // Update child components directly (will eventually be handled by listener)
     timeline->setTimelineLength(lengthInSeconds);
     trackContentPanel->setTimelineLength(lengthInSeconds);
-    zoomManager->setTimelineLength(lengthInSeconds);
 }
 
 void MainView::setPlayheadPosition(double position) {
-    playheadPosition = juce::jlimit(0.0, timelineLength, position);
-    playheadComponent->setPlayheadPosition(playheadPosition);
-    playheadComponent->repaint();
+    // Dispatch to controller
+    timelineController->dispatch(SetPlayheadPositionEvent{position});
 }
 
 void MainView::toggleArrangementLock() {
-    timeline->setArrangementLocked(!timeline->isArrangementLocked());
+    // Toggle via controller
+    bool newLockedState = !timelineController->getState().display.arrangementLocked;
+    timelineController->dispatch(SetArrangementLockedEvent{newLockedState});
+
+    // Also update timeline component directly for now
+    timeline->setArrangementLocked(newLockedState);
     timeline->repaint();
 
     // Update lock button icon
-    if (timeline->isArrangementLocked()) {
+    if (newLockedState) {
         arrangementLockButton->updateSvgData(BinaryData::lock_svg, BinaryData::lock_svgSize);
         arrangementLockButton->setTooltip("Arrangement locked - Click to unlock (F4)");
     } else {
@@ -410,36 +533,25 @@ void MainView::toggleArrangementLock() {
 }
 
 bool MainView::isArrangementLocked() const {
-    return timeline->isArrangementLocked();
+    return timelineController->getState().display.arrangementLocked;
 }
 
 void MainView::setLoopEnabled(bool enabled) {
     // If enabling loop and there's an active time selection, create loop from it
-    if (enabled && timeSelection.isActive()) {
-        createLoopFromSelection();
-        return;  // createLoopFromSelection already handles all the state updates
+    if (enabled && timelineController->getState().selection.isActive()) {
+        timelineController->dispatch(CreateLoopFromSelectionEvent{});
+        return;
     }
 
-    loopRegion.enabled = enabled;
-    timeline->setLoopEnabled(enabled);
-
-    if (selectionOverlay) {
-        selectionOverlay->repaint();
-    }
-
-    // Notify external listeners about loop state change
-    if (onLoopLengthChanged) {
-        double length = loopRegion.isValid() ? (loopRegion.endTime - loopRegion.startTime) : 0.0;
-        bool useBarsBeats = timeline->getTimeDisplayMode() == TimeDisplayMode::BarsBeats;
-        onLoopLengthChanged(length, enabled, useBarsBeats);
-    }
+    // Dispatch to controller
+    timelineController->dispatch(SetLoopEnabledEvent{enabled});
 }
 
 // Add keyboard event handler for zoom reset shortcut
 bool MainView::keyPressed(const juce::KeyPress& key) {
     // Check for Ctrl+0 (or Cmd+0 on Mac) to reset zoom to fit timeline
     if (key == juce::KeyPress('0', juce::ModifierKeys::commandModifier, 0)) {
-        resetZoomToFitTimeline();
+        timelineController->dispatch(ResetZoomEvent{});
         return true;
     }
 
@@ -451,23 +563,42 @@ bool MainView::keyPressed(const juce::KeyPress& key) {
 
     // Check for 'L' to create loop from selection
     if (key == juce::KeyPress('l') || key == juce::KeyPress('L')) {
-        if (timeSelection.isActive()) {
-            createLoopFromSelection();
+        if (timelineController->getState().selection.isActive()) {
+            timelineController->dispatch(CreateLoopFromSelectionEvent{});
         }
         return true;
     }
 
     // Check for 'S' to toggle snap to grid
     if (key == juce::KeyPress('s') || key == juce::KeyPress('S')) {
-        bool newSnapState = !timeline->isSnapEnabled();
-        timeline->setSnapEnabled(newSnapState);
+        bool newSnapState = !timelineController->getState().display.snapEnabled;
+        timelineController->dispatch(SetSnapEnabledEvent{newSnapState});
+        timeline->setSnapEnabled(newSnapState);  // Also update timeline directly for now
         std::cout << "🎯 SNAP: " << (newSnapState ? "enabled" : "disabled") << std::endl;
+        return true;
+    }
+
+    // Check for Ctrl+Z / Cmd+Z for undo
+    if (key == juce::KeyPress('z', juce::ModifierKeys::commandModifier, 0)) {
+        if (timelineController->undo()) {
+            std::cout << "🎯 UNDO: State restored" << std::endl;
+        }
+        return true;
+    }
+
+    // Check for Ctrl+Shift+Z / Cmd+Shift+Z for redo
+    if (key ==
+        juce::KeyPress('z', juce::ModifierKeys::commandModifier | juce::ModifierKeys::shiftModifier,
+                       0)) {
+        if (timelineController->redo()) {
+            std::cout << "🎯 REDO: State restored" << std::endl;
+        }
         return true;
     }
 
     // Check for Escape to clear time selection
     if (key == juce::KeyPress::escapeKey) {
-        clearTimeSelection();
+        timelineController->dispatch(ClearTimeSelectionEvent{});
         return true;
     }
 
@@ -507,11 +638,21 @@ void MainView::updateContentSizes() {
 void MainView::scrollBarMoved(juce::ScrollBar* scrollBarThatHasMoved, double newRangeStart) {
     // Sync timeline viewport when track content viewport scrolls horizontally
     if (scrollBarThatHasMoved == &trackContentViewport->getHorizontalScrollBar()) {
-        timelineViewport->setViewPosition(static_cast<int>(newRangeStart), 0);
-        // Notify zoom manager of scroll position change
-        zoomManager->setCurrentScrollPosition(static_cast<int>(newRangeStart));
+        int scrollX = static_cast<int>(newRangeStart);
+        int scrollY = trackContentViewport->getViewPositionY();
+
+        // Update controller state
+        timelineController->dispatch(SetScrollPositionEvent{scrollX, scrollY});
+
+        // Update legacy zoom manager
+        zoomManager->setCurrentScrollPosition(scrollX);
+
+        // Sync timeline viewport
+        timelineViewport->setViewPosition(scrollX, 0);
+
         // Update zoom scroll bar
         updateHorizontalZoomScrollBar();
+
         // Force playhead and selection overlay repaint when scrolling
         playheadComponent->repaint();
         selectionOverlay->repaint();
@@ -607,11 +748,13 @@ void MainView::updateVerticalZoomScrollBar() {
 }
 
 void MainView::setupZoomManagerCallbacks() {
-    // Set up callback to handle zoom changes
+    // Set up callback to handle zoom changes from legacy ZoomManager
+    // This bridges the old ZoomManager to the new TimelineController
     zoomManager->onZoomChanged = [this](double newZoom) {
         // Temporarily remove scroll bar listener to prevent race condition
         trackContentViewport->getHorizontalScrollBar().removeListener(this);
 
+        // Sync with controller state
         horizontalZoom = newZoom;
         timeline->setZoom(newZoom);
         trackContentPanel->setZoom(newZoom);
@@ -635,12 +778,12 @@ void MainView::setupZoomManagerCallbacks() {
         setMouseCursor(cursorType);
     };
 
-    // Set up callback to handle scroll changes
+    // Set up callback to handle scroll changes from legacy ZoomManager
     zoomManager->onScrollChanged = [this](int scrollX) {
         // Temporarily remove scroll bar listener to prevent feedback loops
         trackContentViewport->getHorizontalScrollBar().removeListener(this);
 
-        // Set both viewports to the same position and let JUCE handle scroll bars
+        // Set both viewports to the same position
         timelineViewport->setViewPosition(scrollX, 0);
         trackContentViewport->setViewPosition(scrollX, trackContentViewport->getViewPositionY());
 
@@ -659,36 +802,29 @@ void MainView::setupZoomManagerCallbacks() {
         updateContentSizes();
     };
 
-    // Set up timeline zoom callback to use ZoomManager with mouse-centered zoom
+    // Set up timeline zoom callback - dispatches to TimelineController
     timeline->onZoomChanged = [this](double newZoom, double anchorTime, int anchorContentX) {
         // Set crosshair cursor during zoom operations
         setMouseCursor(juce::MouseCursor::CrosshairCursor);
 
         // On first zoom callback, capture the viewport-relative position
-        // anchorContentX is in content coordinates, we need viewport-relative
         if (!isZoomActive) {
             isZoomActive = true;
             int currentScrollX = trackContentViewport->getViewPositionX();
             zoomAnchorViewportX = anchorContentX - currentScrollX;
         }
 
-        // Calculate scroll position to keep anchorTime at the same viewport position
-        int anchorPixelPos = static_cast<int>(anchorTime * newZoom) + 18;
-        int newScrollX = anchorPixelPos - zoomAnchorViewportX;
+        // Dispatch to controller with anchor information
+        timelineController->dispatch(
+            SetZoomAnchoredEvent{newZoom, anchorTime, zoomAnchorViewportX});
 
-        // Clamp scroll to valid range
-        int contentWidth = static_cast<int>(timelineLength * newZoom);
-        int viewportWidth = trackContentViewport->getWidth();
-        int maxScrollX = juce::jmax(0, contentWidth - viewportWidth);
-        newScrollX = juce::jlimit(0, maxScrollX, newScrollX);
+        // Keep legacy ZoomManager in sync
+        zoomManager->setZoom(timelineController->getState().zoom.horizontalZoom);
+        zoomManager->setCurrentScrollPosition(timelineController->getState().zoom.scrollX);
 
-        // Update zoom and scroll directly
-        zoomManager->setZoom(newZoom);
-        zoomManager->setCurrentScrollPosition(newScrollX);
-
-        // Trigger scroll update
+        // Trigger scroll update via legacy system for now
         if (zoomManager->onScrollChanged) {
-            zoomManager->onScrollChanged(newScrollX);
+            zoomManager->onScrollChanged(timelineController->getState().zoom.scrollX);
         }
     };
 
@@ -703,6 +839,25 @@ void MainView::setupZoomManagerCallbacks() {
         // Call ZoomManager's zoom end callback
         if (zoomManager->onZoomEnd) {
             zoomManager->onZoomEnd();
+        }
+    };
+
+    // Set up zoom-to-fit callback (e.g., double-click to fit loop region)
+    timeline->onZoomToFitRequested = [this](double startTime, double endTime) {
+        if (endTime <= startTime)
+            return;
+
+        // Dispatch to controller
+        timelineController->dispatch(ZoomToFitEvent{startTime, endTime, 0.05});
+
+        // Keep legacy ZoomManager in sync
+        const auto& state = timelineController->getState();
+        zoomManager->setZoom(state.zoom.horizontalZoom);
+        zoomManager->setCurrentScrollPosition(state.zoom.scrollX);
+
+        // Trigger scroll update via legacy system
+        if (zoomManager->onScrollChanged) {
+            zoomManager->onScrollChanged(state.zoom.scrollX);
         }
     };
 }
@@ -727,25 +882,13 @@ void MainView::PlayheadComponent::paint(juce::Graphics& g) {
     int scrollOffset = owner.trackContentViewport->getViewPositionX();
     playheadX -= scrollOffset;
 
-    // Debug output to diagnose sync issues
-    std::cout << "🎯 PLAYHEAD: pos=" << playheadPosition << ", zoom=" << owner.horizontalZoom
-              << ", scrollOffset=" << scrollOffset << ", finalX=" << playheadX << std::endl;
-
     // Only draw if playhead is visible
     if (playheadX >= 0 && playheadX < getWidth()) {
-        // Draw playhead handle triangle sitting entirely in timeline area
-        // Triangle top at y=8 (timeline area), point at y=20 (exactly on timeline border)
+        // Draw playhead handle triangle in the ruler area only (no vertical line)
         g.setColour(DarkTheme::getColour(DarkTheme::ACCENT_BLUE));
         juce::Path triangle;
         triangle.addTriangle(playheadX - 6, 8, playheadX + 6, 8, playheadX, 20);
         g.fillPath(triangle);
-
-        // Draw playhead line from timeline border down through tracks
-        g.setColour(juce::Colours::black.withAlpha(0.6f));
-        g.drawLine(playheadX + 1, 20, playheadX + 1, getHeight(), 5.0f);
-
-        g.setColour(DarkTheme::getColour(DarkTheme::ACCENT_BLUE));
-        g.drawLine(playheadX, 20, playheadX, getHeight(), 4.0f);
     }
 }
 
@@ -754,21 +897,10 @@ void MainView::PlayheadComponent::setPlayheadPosition(double position) {
     repaint();
 }
 
-bool MainView::PlayheadComponent::hitTest(int x, [[maybe_unused]] int y) {
-    // Only intercept mouse events when near the actual playhead
-    if (playheadPosition < 0 || playheadPosition > owner.timelineLength) {
-        return false;
-    }
-
-    // Calculate playhead position in pixels
-    int playheadX = static_cast<int>(playheadPosition * owner.horizontalZoom) + 18;
-
-    // Adjust for horizontal scroll offset
-    int scrollOffset = owner.trackContentViewport->getViewPositionX();
-    playheadX -= scrollOffset;
-
-    // Only intercept if within 10 pixels of the playhead
-    return std::abs(x - playheadX) <= 10;
+bool MainView::PlayheadComponent::hitTest([[maybe_unused]] int x, [[maybe_unused]] int y) {
+    // Don't intercept mouse events - playhead is display-only (just a triangle)
+    // Clicks pass through to timeline/tracks for time selection
+    return false;
 }
 
 void MainView::PlayheadComponent::mouseDown(const juce::MouseEvent& e) {
@@ -925,107 +1057,61 @@ void MainView::paintResizeHandle(juce::Graphics& g) {
 }
 
 void MainView::resetZoomToFitTimeline() {
-    // Calculate zoom level that fits the entire timeline in the viewport
-    int viewportWidth = trackContentViewport->getWidth();
-    int availableWidth = viewportWidth - 18;  // Account for LEFT_PADDING
+    // Dispatch to controller
+    timelineController->dispatch(ResetZoomEvent{});
 
-    if (availableWidth > 0 && timelineLength > 0) {
-        double fitZoom = static_cast<double>(availableWidth) / timelineLength;
+    // Also update legacy zoom manager for backward compatibility
+    zoomManager->setZoomCentered(timelineController->getState().zoom.horizontalZoom, 0.0);
 
-        // Ensure minimum zoom level for usability
-        fitZoom = juce::jmax(fitZoom, 0.5);
-
-        // Set zoom centered at the beginning of timeline
-        zoomManager->setZoomCentered(fitZoom, 0.0);
-
-        std::cout << "🎯 ZOOM RESET: timelineLength=" << timelineLength
-                  << ", availableWidth=" << availableWidth << ", fitZoom=" << fitZoom << std::endl;
-    }
+    std::cout << "🎯 ZOOM RESET: timelineLength=" << timelineController->getState().timelineLength
+              << ", zoom=" << timelineController->getState().zoom.horizontalZoom << std::endl;
 }
 
 void MainView::clearTimeSelection() {
-    timeSelection.clear();
-    timeline->clearTimeSelection();
-    if (selectionOverlay) {
-        selectionOverlay->repaint();
-    }
+    // Dispatch to controller
+    timelineController->dispatch(ClearTimeSelectionEvent{});
 }
 
 void MainView::createLoopFromSelection() {
-    if (timeSelection.isActive()) {
-        loopRegion.startTime = timeSelection.startTime;
-        loopRegion.endTime = timeSelection.endTime;
-        loopRegion.enabled = true;
+    // Dispatch to controller - it handles clearing selection after creating loop
+    timelineController->dispatch(CreateLoopFromSelectionEvent{});
 
-        // Update timeline with loop region
-        timeline->setLoopRegion(loopRegion.startTime, loopRegion.endTime);
-
-        // Clear time selection after creating loop
-        timeSelection.clear();
-        timeline->clearTimeSelection();
-
-        if (selectionOverlay) {
-            selectionOverlay->repaint();
-        }
-
-        // Notify external listeners about loop length change
-        if (onLoopLengthChanged) {
-            double length = loopRegion.endTime - loopRegion.startTime;
-            bool useBarsBeats = timeline->getTimeDisplayMode() == TimeDisplayMode::BarsBeats;
-            onLoopLengthChanged(length, true, useBarsBeats);
-        }
-
-        std::cout << "🔁 LOOP CREATED: " << loopRegion.startTime << "s - " << loopRegion.endTime
+    const auto& state = timelineController->getState();
+    if (state.loop.isValid()) {
+        std::cout << "🔁 LOOP CREATED: " << state.loop.startTime << "s - " << state.loop.endTime
                   << "s" << std::endl;
     }
 }
 
 void MainView::setupSelectionCallbacks() {
     // Set up snap to grid callback for track content panel
+    // This uses the controller's state for snapping
     trackContentPanel->snapTimeToGrid = [this](double time) {
-        return timeline->snapTimeToGrid(time);
+        return timelineController->getState().snapTimeToGrid(time);
     };
 
     // Set up time selection callback from track content panel
     trackContentPanel->onTimeSelectionChanged = [this](double start, double end) {
         if (start < 0 || end < 0) {
-            timeSelection.clear();
-            timeline->clearTimeSelection();
+            timelineController->dispatch(ClearTimeSelectionEvent{});
         } else {
-            timeSelection.startTime = start;
-            timeSelection.endTime = end;
-            timeline->setTimeSelection(start, end);
-        }
-        if (selectionOverlay) {
-            selectionOverlay->repaint();
+            timelineController->dispatch(SetTimeSelectionEvent{start, end});
+            // Move playhead to follow the left side of selection
+            timelineController->dispatch(SetPlayheadPositionEvent{start});
         }
     };
 
     // Set up loop region callback from timeline
     timeline->onLoopRegionChanged = [this](double start, double end) {
-        if (start < 0 || end < 0) {
-            loopRegion.clear();
-        } else {
-            // Only enable if this is a new loop region (wasn't valid before)
-            bool wasValid = loopRegion.isValid();
-            loopRegion.startTime = start;
-            loopRegion.endTime = end;
-            if (!wasValid) {
-                loopRegion.enabled = true;
-            }
-            // Sync enabled state with timeline
-            timeline->setLoopEnabled(loopRegion.enabled);
-        }
-        if (selectionOverlay) {
-            selectionOverlay->repaint();
+        // Prevent recursive updates - only dispatch if user changed it, not programmatic update
+        if (isUpdatingLoopRegion) {
+            return;
         }
 
-        // Notify external listeners about loop length change
-        if (onLoopLengthChanged) {
-            double length =
-                loopRegion.isValid() ? (loopRegion.endTime - loopRegion.startTime) : 0.0;
-            bool useBarsBeats = timeline->getTimeDisplayMode() == TimeDisplayMode::BarsBeats;
-            onLoopLengthChanged(length, loopRegion.enabled, useBarsBeats);
+        if (start < 0 || end < 0) {
+            timelineController->dispatch(ClearLoopRegionEvent{});
+        } else {
+            timelineController->dispatch(SetLoopRegionEvent{start, end});
         }
     };
 }
@@ -1043,14 +1129,15 @@ void MainView::SelectionOverlayComponent::paint(juce::Graphics& g) {
 }
 
 void MainView::SelectionOverlayComponent::drawTimeSelection(juce::Graphics& g) {
-    if (!owner.timeSelection.isActive()) {
+    const auto& state = owner.timelineController->getState();
+    if (!state.selection.isActive()) {
         return;
     }
 
     // Calculate pixel positions
     // Add LEFT_PADDING (18) to align with timeline markers
-    int startX = static_cast<int>(owner.timeSelection.startTime * owner.horizontalZoom) + 18;
-    int endX = static_cast<int>(owner.timeSelection.endTime * owner.horizontalZoom) + 18;
+    int startX = static_cast<int>(state.selection.startTime * state.zoom.horizontalZoom) + 18;
+    int endX = static_cast<int>(state.selection.endTime * state.zoom.horizontalZoom) + 18;
 
     // Adjust for scroll offset
     int scrollOffset = owner.trackContentViewport->getViewPositionX();
@@ -1079,14 +1166,16 @@ void MainView::SelectionOverlayComponent::drawTimeSelection(juce::Graphics& g) {
 }
 
 void MainView::SelectionOverlayComponent::drawLoopRegion(juce::Graphics& g) {
+    const auto& state = owner.timelineController->getState();
+
     // Always draw if there's a valid loop region, but use grey when disabled
-    if (!owner.loopRegion.isValid()) {
+    if (!state.loop.isValid()) {
         return;
     }
 
     // Calculate pixel positions
-    int startX = static_cast<int>(owner.loopRegion.startTime * owner.horizontalZoom) + 18;
-    int endX = static_cast<int>(owner.loopRegion.endTime * owner.horizontalZoom) + 18;
+    int startX = static_cast<int>(state.loop.startTime * state.zoom.horizontalZoom) + 18;
+    int endX = static_cast<int>(state.loop.endTime * state.zoom.horizontalZoom) + 18;
 
     // Adjust for scroll offset
     int scrollOffset = owner.trackContentViewport->getViewPositionX();
@@ -1107,7 +1196,7 @@ void MainView::SelectionOverlayComponent::drawLoopRegion(juce::Graphics& g) {
     endX = juce::jmin(getWidth(), endX);
 
     // Use different colors based on enabled state
-    bool enabled = owner.loopRegion.enabled;
+    bool enabled = state.loop.enabled;
     juce::Colour regionColour = enabled ? DarkTheme::getColour(DarkTheme::LOOP_REGION)
                                         : juce::Colour(0x15808080);  // Light grey, very transparent
     juce::Colour markerColour = enabled
