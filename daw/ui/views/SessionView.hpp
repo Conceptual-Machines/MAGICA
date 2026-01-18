@@ -17,7 +17,7 @@ namespace magica {
  * - Scene launch buttons on the right
  * - Real-time clip status indicators
  */
-class SessionView : public juce::Component {
+class SessionView : public juce::Component, private juce::ScrollBar::Listener {
   public:
     SessionView();
     ~SessionView() override;
@@ -26,6 +26,12 @@ class SessionView : public juce::Component {
     void resized() override;
 
   private:
+    // ScrollBar::Listener
+    void scrollBarMoved(juce::ScrollBar* scrollBar, double newRangeStart) override;
+
+    // Track header horizontal offset (synced with grid scroll)
+    int trackHeaderScrollOffset = 0;
+
     // Grid configuration
     static constexpr int NUM_TRACKS = 8;
     static constexpr int NUM_SCENES = 8;

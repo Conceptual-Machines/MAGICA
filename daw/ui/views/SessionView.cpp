@@ -34,6 +34,7 @@ SessionView::SessionView() {
     gridViewport = std::make_unique<juce::Viewport>();
     gridViewport->setViewedComponent(gridContent.get(), false);
     gridViewport->setScrollBarsShown(true, true);
+    gridViewport->getHorizontalScrollBar().addListener(this);
     addAndMakeVisible(*gridViewport);
 
     setupTrackHeaders();
@@ -41,16 +42,18 @@ SessionView::SessionView() {
     setupSceneButtons();
 }
 
-SessionView::~SessionView() = default;
+SessionView::~SessionView() {
+    gridViewport->getHorizontalScrollBar().removeListener(this);
+}
 
 void SessionView::paint(juce::Graphics& g) {
     g.fillAll(DarkTheme::getColour(DarkTheme::BACKGROUND));
 
-    // Draw vertical separators between track headers
+    // Draw vertical separators between track headers (synced with scroll)
     g.setColour(DarkTheme::getColour(DarkTheme::SEPARATOR));
     int trackWidth = CLIP_SLOT_SIZE + CLIP_SLOT_MARGIN;
     for (int i = 0; i < NUM_TRACKS - 1; ++i) {
-        int x = (i + 1) * trackWidth - TRACK_SEPARATOR_WIDTH;
+        int x = (i + 1) * trackWidth - TRACK_SEPARATOR_WIDTH - trackHeaderScrollOffset;
         g.fillRect(x, 0, TRACK_SEPARATOR_WIDTH, TRACK_HEADER_HEIGHT);
     }
 }
@@ -64,7 +67,7 @@ void SessionView::resized() {
 
     int trackWidth = CLIP_SLOT_SIZE + CLIP_SLOT_MARGIN;
     for (size_t i = 0; i < NUM_TRACKS; ++i) {
-        int x = static_cast<int>(i) * trackWidth;
+        int x = static_cast<int>(i) * trackWidth - trackHeaderScrollOffset;
         int width = trackWidth - TRACK_SEPARATOR_WIDTH;
         trackHeaders[i]->setBounds(x, 0, width, TRACK_HEADER_HEIGHT);
     }
@@ -96,6 +99,15 @@ void SessionView::resized() {
             int y = static_cast<int>(scene) * (CLIP_SLOT_SIZE + CLIP_SLOT_MARGIN);
             clipSlots[track][scene]->setBounds(x, y, CLIP_SLOT_SIZE, CLIP_SLOT_SIZE);
         }
+    }
+}
+
+void SessionView::scrollBarMoved(juce::ScrollBar* scrollBar, double newRangeStart) {
+    if (scrollBar == &gridViewport->getHorizontalScrollBar()) {
+        trackHeaderScrollOffset = static_cast<int>(newRangeStart);
+        // Reposition headers and repaint separators
+        resized();
+        repaint();
     }
 }
 
