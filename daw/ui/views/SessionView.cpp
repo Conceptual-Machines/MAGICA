@@ -94,6 +94,17 @@ void SessionView::tracksChanged() {
     rebuildTracks();
 }
 
+void SessionView::trackPropertyChanged(int trackId) {
+    // Update the track header label when track properties change
+    int index = TrackManager::getInstance().getTrackIndex(trackId);
+    if (index >= 0 && index < static_cast<int>(trackHeaders.size())) {
+        const auto* track = TrackManager::getInstance().getTrack(trackId);
+        if (track) {
+            trackHeaders[index]->setText(track->name, juce::dontSendNotification);
+        }
+    }
+}
+
 void SessionView::rebuildTracks() {
     // Clear existing track headers and clip slots
     trackHeaders.clear();

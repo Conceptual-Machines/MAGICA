@@ -31,6 +31,7 @@ class SessionView : public juce::Component,
 
     // TrackManagerListener
     void tracksChanged() override;
+    void trackPropertyChanged(int trackId) override;
 
   private:
     // ScrollBar::Listener
