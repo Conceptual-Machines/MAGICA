@@ -45,6 +45,14 @@ SessionView::~SessionView() = default;
 
 void SessionView::paint(juce::Graphics& g) {
     g.fillAll(DarkTheme::getColour(DarkTheme::BACKGROUND));
+
+    // Draw vertical separators between track headers
+    g.setColour(DarkTheme::getColour(DarkTheme::SEPARATOR));
+    int trackWidth = CLIP_SLOT_SIZE + CLIP_SLOT_MARGIN;
+    for (int i = 1; i < NUM_TRACKS; ++i) {
+        int x = i * trackWidth - 1;
+        g.fillRect(x, 0, TRACK_SEPARATOR_WIDTH, TRACK_HEADER_HEIGHT);
+    }
 }
 
 void SessionView::resized() {
