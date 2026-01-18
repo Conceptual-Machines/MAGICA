@@ -171,7 +171,8 @@ void TimelineComponent::mouseDown(const juce::MouseEvent& event) {
     int arrangementHeight = layout.arrangementBarHeight;
     int timeRulerHeight = layout.timeRulerHeight;
     int timeRulerEnd = arrangementHeight + timeRulerHeight;
-    int rulerMidpoint = arrangementHeight + (timeRulerHeight / 2);
+    // Split ruler: upper 2/3 for zoom, lower 1/3 for time selection
+    int rulerMidpoint = arrangementHeight + (timeRulerHeight * 2 / 3);
 
     // Define zones based on LayoutConfig
     bool inSectionsArea = event.y <= arrangementHeight;
@@ -266,7 +267,8 @@ void TimelineComponent::mouseMove(const juce::MouseEvent& event) {
     } else {
         // In time ruler area - split into two zones
         // Upper half: zoom (crosshair), Lower half: time selection (I-beam)
-        int rulerMidpoint = arrangementHeight + (timeRulerHeight / 2);
+        // Split ruler: upper 2/3 for zoom, lower 1/3 for time selection
+        int rulerMidpoint = arrangementHeight + (timeRulerHeight * 2 / 3);
 
         if (event.y < rulerMidpoint) {
             // Upper ruler area - zoom cursor
