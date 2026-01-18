@@ -195,6 +195,15 @@ MainWindow::MainComponent::MainComponent() {
     };
     addAndMakeVisible(*bottomResizer);
 
+    // Transport panel resizer (below transport)
+    transportResizer = std::make_unique<ResizeHandle>(ResizeHandle::Vertical);
+    transportResizer->onResize = [this](int delta) {
+        transportHeight =
+            juce::jlimit(MIN_TRANSPORT_HEIGHT, MAX_TRANSPORT_HEIGHT, transportHeight + delta);
+        resized();
+    };
+    addAndMakeVisible(*transportResizer);
+
     // Register for view mode changes
     ViewModeController::getInstance().addListener(this);
 
@@ -282,15 +291,17 @@ void MainWindow::MainComponent::paint(juce::Graphics& g) {
 void MainWindow::MainComponent::resized() {
     auto bounds = getLocalBounds();
 
-    // Transport panel at the top (fixed height)
-    auto transportArea = bounds.removeFromTop(TRANSPORT_HEIGHT);
+    // Transport panel at the top (resizable height)
+    auto transportArea = bounds.removeFromTop(transportHeight);
     transportPanel->setBounds(transportArea);
+
+    // Transport resizer (3px handle below transport)
+    auto transportResizerArea = bounds.removeFromTop(3);
+    transportResizer->setBounds(transportResizerArea);
 
     // Footer bar at the bottom (fixed height)
     auto footerArea = bounds.removeFromBottom(FOOTER_HEIGHT);
     footerBar->setBounds(footerArea);
-
-    // Remove timeline header panel - we'll use fillers instead
 
     // Calculate available space for main content
     auto contentArea = bounds;

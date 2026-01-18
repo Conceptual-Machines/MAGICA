@@ -28,6 +28,10 @@ void TransportPanel::paint(juce::Graphics& g) {
     // Vertical separators
     g.drawVerticalLine(transportArea.getRight(), bounds.getY(), bounds.getBottom());
     g.drawVerticalLine(timeArea.getRight(), bounds.getY(), bounds.getBottom());
+
+    // Bottom border for visual separation from content below
+    g.setColour(DarkTheme::getBorderColour());
+    g.fillRect(0, getHeight() - 1, getWidth(), 1);
 }
 
 void TransportPanel::resized() {

@@ -80,7 +80,9 @@ class MainWindow::MainComponent : public juce::Component, public ViewModeListene
     std::unique_ptr<BottomPanel> bottomPanel;
 
     // Layout constants
-    static constexpr int TRANSPORT_HEIGHT = 60;
+    static constexpr int DEFAULT_TRANSPORT_HEIGHT = 60;
+    static constexpr int MIN_TRANSPORT_HEIGHT = 40;
+    static constexpr int MAX_TRANSPORT_HEIGHT = 120;
     static constexpr int FOOTER_HEIGHT = 40;
     static constexpr int ARRANGEMENT_HEIGHT = 30;
     static constexpr int TIMELINE_HEIGHT = 80;
@@ -92,12 +94,14 @@ class MainWindow::MainComponent : public juce::Component, public ViewModeListene
     static constexpr int MIN_BOTTOM_HEIGHT = 100;
 
     // Panel sizing
+    int transportHeight = DEFAULT_TRANSPORT_HEIGHT;
     int leftPanelWidth = DEFAULT_LEFT_WIDTH;
     int rightPanelWidth = DEFAULT_RIGHT_WIDTH;
     int bottomPanelHeight = DEFAULT_BOTTOM_HEIGHT;
 
     // Resize handles
     class ResizeHandle;
+    std::unique_ptr<ResizeHandle> transportResizer;
     std::unique_ptr<ResizeHandle> leftResizer;
     std::unique_ptr<ResizeHandle> rightResizer;
     std::unique_ptr<ResizeHandle> bottomResizer;
