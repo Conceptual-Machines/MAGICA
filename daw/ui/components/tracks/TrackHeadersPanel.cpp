@@ -42,10 +42,85 @@ TrackHeadersPanel::TrackHeader::TrackHeader(const juce::String& trackName) : nam
 TrackHeadersPanel::TrackHeadersPanel() {
     setSize(TRACK_HEADER_WIDTH, 400);
 
-    // Add some initial tracks
-    addTrack();
-    addTrack();
-    addTrack();
+    // Register as TrackManager listener
+    TrackManager::getInstance().addListener(this);
+
+    // Build tracks from TrackManager
+    tracksChanged();
+}
+
+TrackHeadersPanel::~TrackHeadersPanel() {
+    TrackManager::getInstance().removeListener(this);
+}
+
+void TrackHeadersPanel::tracksChanged() {
+    // Clear existing track headers
+    for (auto& header : trackHeaders) {
+        removeChildComponent(header->nameLabel.get());
+        removeChildComponent(header->muteButton.get());
+        removeChildComponent(header->soloButton.get());
+        removeChildComponent(header->volumeSlider.get());
+        removeChildComponent(header->panSlider.get());
+    }
+    trackHeaders.clear();
+    selectedTrackIndex = -1;
+
+    // Rebuild from TrackManager
+    const auto& tracks = TrackManager::getInstance().getTracks();
+    for (size_t i = 0; i < tracks.size(); ++i) {
+        const auto& track = tracks[i];
+        auto header = std::make_unique<TrackHeader>(track.name);
+        header->muted = track.muted;
+        header->solo = track.soloed;
+        header->volume = track.volume;
+        header->pan = track.pan;
+
+        // Set up callbacks with track ID (not index)
+        int trackId = track.id;
+        setupTrackHeaderWithId(*header, trackId);
+
+        // Add components
+        addAndMakeVisible(*header->nameLabel);
+        addAndMakeVisible(*header->muteButton);
+        addAndMakeVisible(*header->soloButton);
+        addAndMakeVisible(*header->volumeSlider);
+        addAndMakeVisible(*header->panSlider);
+
+        // Update UI state
+        header->muteButton->setToggleState(track.muted, juce::dontSendNotification);
+        header->soloButton->setToggleState(track.soloed, juce::dontSendNotification);
+        header->volumeSlider->setValue(track.volume, juce::dontSendNotification);
+        header->panSlider->setValue(track.pan, juce::dontSendNotification);
+
+        trackHeaders.push_back(std::move(header));
+    }
+
+    updateTrackHeaderLayout();
+    repaint();
+}
+
+void TrackHeadersPanel::trackPropertyChanged(int trackId) {
+    const auto* track = TrackManager::getInstance().getTrack(trackId);
+    if (!track)
+        return;
+
+    int index = TrackManager::getInstance().getTrackIndex(trackId);
+    if (index >= 0 && index < static_cast<int>(trackHeaders.size())) {
+        auto& header = *trackHeaders[index];
+        header.name = track->name;
+        header.muted = track->muted;
+        header.solo = track->soloed;
+        header.volume = track->volume;
+        header.pan = track->pan;
+
+        header.nameLabel->setText(track->name, juce::dontSendNotification);
+        header.muteButton->setToggleState(track->muted, juce::dontSendNotification);
+        header.soloButton->setToggleState(track->soloed, juce::dontSendNotification);
+        header.volumeSlider->setValue(track->volume, juce::dontSendNotification);
+        header.panSlider->setValue(track->pan, juce::dontSendNotification);
+
+        repaint();
+    }
 }
 
 void TrackHeadersPanel::paint(juce::Graphics& g) {
@@ -226,6 +301,58 @@ void TrackHeadersPanel::setupTrackHeader(TrackHeader& header, int trackIndex) {
             if (onTrackPanChanged) {
                 onTrackPanChanged(trackIndex, header.pan);
             }
+        }
+    };
+}
+
+void TrackHeadersPanel::setupTrackHeaderWithId(TrackHeader& header, int trackId) {
+    // Name label callback - updates TrackManager
+    header.nameLabel->onTextChange = [this, trackId]() {
+        int index = TrackManager::getInstance().getTrackIndex(trackId);
+        if (index >= 0 && index < static_cast<int>(trackHeaders.size())) {
+            auto& header = *trackHeaders[index];
+            header.name = header.nameLabel->getText();
+            TrackManager::getInstance().setTrackName(trackId, header.name);
+        }
+    };
+
+    // Mute button callback - updates TrackManager
+    header.muteButton->onClick = [this, trackId]() {
+        int index = TrackManager::getInstance().getTrackIndex(trackId);
+        if (index >= 0 && index < static_cast<int>(trackHeaders.size())) {
+            auto& header = *trackHeaders[index];
+            header.muted = header.muteButton->getToggleState();
+            TrackManager::getInstance().setTrackMuted(trackId, header.muted);
+        }
+    };
+
+    // Solo button callback - updates TrackManager
+    header.soloButton->onClick = [this, trackId]() {
+        int index = TrackManager::getInstance().getTrackIndex(trackId);
+        if (index >= 0 && index < static_cast<int>(trackHeaders.size())) {
+            auto& header = *trackHeaders[index];
+            header.solo = header.soloButton->getToggleState();
+            TrackManager::getInstance().setTrackSoloed(trackId, header.solo);
+        }
+    };
+
+    // Volume slider callback - updates TrackManager
+    header.volumeSlider->onValueChange = [this, trackId]() {
+        int index = TrackManager::getInstance().getTrackIndex(trackId);
+        if (index >= 0 && index < static_cast<int>(trackHeaders.size())) {
+            auto& header = *trackHeaders[index];
+            header.volume = static_cast<float>(header.volumeSlider->getValue());
+            TrackManager::getInstance().setTrackVolume(trackId, header.volume);
+        }
+    };
+
+    // Pan slider callback - updates TrackManager
+    header.panSlider->onValueChange = [this, trackId]() {
+        int index = TrackManager::getInstance().getTrackIndex(trackId);
+        if (index >= 0 && index < static_cast<int>(trackHeaders.size())) {
+            auto& header = *trackHeaders[index];
+            header.pan = static_cast<float>(header.panSlider->getValue());
+            TrackManager::getInstance().setTrackPan(trackId, header.pan);
         }
     };
 }

@@ -5,9 +5,11 @@
 #include <memory>
 #include <vector>
 
+#include "core/TrackManager.hpp"
+
 namespace magica {
 
-class TrackHeadersPanel : public juce::Component {
+class TrackHeadersPanel : public juce::Component, public TrackManagerListener {
   public:
     static constexpr int TRACK_HEADER_WIDTH = 200;
     static constexpr int DEFAULT_TRACK_HEIGHT = 80;
@@ -15,7 +17,11 @@ class TrackHeadersPanel : public juce::Component {
     static constexpr int MAX_TRACK_HEIGHT = 200;
 
     TrackHeadersPanel();
-    ~TrackHeadersPanel() override = default;
+    ~TrackHeadersPanel() override;
+
+    // TrackManagerListener
+    void tracksChanged() override;
+    void trackPropertyChanged(int trackId) override;
 
     void paint(juce::Graphics& g) override;
     void resized() override;
@@ -90,6 +96,7 @@ class TrackHeadersPanel : public juce::Component {
 
     // Helper methods
     void setupTrackHeader(TrackHeader& header, int trackIndex);
+    void setupTrackHeaderWithId(TrackHeader& header, int trackId);
     void paintTrackHeader(juce::Graphics& g, const TrackHeader& header, juce::Rectangle<int> area,
                           bool isSelected);
     void paintResizeHandle(juce::Graphics& g, juce::Rectangle<int> area);

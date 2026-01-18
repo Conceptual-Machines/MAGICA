@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "../../state/TimelineController.hpp"
+#include "core/TrackManager.hpp"
 
 namespace magica {
 
@@ -15,6 +16,7 @@ class TimelineController;
 
 class TrackContentPanel : public juce::Component,
                           public TimelineStateListener,
+                          public TrackManagerListener,
                           private juce::Timer {
   public:
     static constexpr int DEFAULT_TRACK_HEIGHT = 80;
@@ -30,6 +32,9 @@ class TrackContentPanel : public juce::Component,
     // TimelineStateListener implementation
     void timelineStateChanged(const TimelineState& state) override;
     void zoomStateChanged(const TimelineState& state) override;
+
+    // TrackManagerListener implementation
+    void tracksChanged() override;
 
     // Set the controller reference (called by MainView after construction)
     void setController(TimelineController* controller);

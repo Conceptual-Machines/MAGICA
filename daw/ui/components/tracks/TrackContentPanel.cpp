@@ -18,17 +18,36 @@ TrackContentPanel::TrackContentPanel() {
     setSize(1000, 200);
     setOpaque(true);
 
-    // Add some default tracks
-    addTrack();  // Audio Track 1
-    addTrack();  // Audio Track 2
-    addTrack();  // MIDI Track 1
+    // Register as TrackManager listener
+    TrackManager::getInstance().addListener(this);
+
+    // Build tracks from TrackManager
+    tracksChanged();
 }
 
 TrackContentPanel::~TrackContentPanel() {
+    // Unregister from TrackManager
+    TrackManager::getInstance().removeListener(this);
+
     // Unregister from controller if we have one
     if (timelineController) {
         timelineController->removeListener(this);
     }
+}
+
+void TrackContentPanel::tracksChanged() {
+    // Rebuild track lanes from TrackManager
+    trackLanes.clear();
+    selectedTrackIndex = -1;
+
+    const auto& tracks = TrackManager::getInstance().getTracks();
+    for (size_t i = 0; i < tracks.size(); ++i) {
+        auto lane = std::make_unique<TrackLane>();
+        trackLanes.push_back(std::move(lane));
+    }
+
+    resized();
+    repaint();
 }
 
 void TrackContentPanel::setController(TimelineController* controller) {
