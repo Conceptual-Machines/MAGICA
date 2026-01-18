@@ -5,7 +5,7 @@
 namespace magica {
 
 SvgButton::SvgButton(const juce::String& buttonName, const char* svgData, size_t svgDataSize)
-    : juce::Button(buttonName) {
+    : juce::Button(buttonName), dualIconMode(false) {
     // Load SVG from binary data
     if (svgData && svgDataSize > 0) {
         auto svgString = juce::String::fromUTF8(svgData, static_cast<int>(svgDataSize));
@@ -20,6 +20,32 @@ SvgButton::SvgButton(const juce::String& buttonName, const char* svgData, size_t
         }
     } else {
         DBG("No SVG data provided for button: " + buttonName);
+    }
+
+    // Set button properties
+    setWantsKeyboardFocus(false);
+    setMouseClickGrabsKeyboardFocus(false);
+}
+
+SvgButton::SvgButton(const juce::String& buttonName, const char* offSvgData, size_t offSvgDataSize,
+                     const char* onSvgData, size_t onSvgDataSize)
+    : juce::Button(buttonName), dualIconMode(true) {
+    // Load off-state SVG
+    if (offSvgData && offSvgDataSize > 0) {
+        auto svgString = juce::String::fromUTF8(offSvgData, static_cast<int>(offSvgDataSize));
+        auto svgXml = juce::XmlDocument::parse(svgString);
+        if (svgXml) {
+            svgIconOff = juce::Drawable::createFromSVG(*svgXml);
+        }
+    }
+
+    // Load on-state SVG
+    if (onSvgData && onSvgDataSize > 0) {
+        auto svgString = juce::String::fromUTF8(onSvgData, static_cast<int>(onSvgDataSize));
+        auto svgXml = juce::XmlDocument::parse(svgString);
+        if (svgXml) {
+            svgIconOn = juce::Drawable::createFromSVG(*svgXml);
+        }
     }
 
     // Set button properties
@@ -49,6 +75,28 @@ void SvgButton::updateSvgData(const char* svgData, size_t svgDataSize) {
 
 void SvgButton::paintButton(juce::Graphics& g, bool shouldDrawButtonAsHighlighted,
                             bool shouldDrawButtonAsDown) {
+    if (dualIconMode) {
+        // Dual-icon mode: use pre-baked off/on images
+        auto* iconToDraw = (active || shouldDrawButtonAsDown) ? svgIconOn.get() : svgIconOff.get();
+
+        if (!iconToDraw) {
+            return;
+        }
+
+        // Draw the icon to fill the button bounds
+        auto bounds = getLocalBounds().toFloat();
+
+        // Apply slight opacity change on hover
+        float opacity = 1.0f;
+        if (shouldDrawButtonAsHighlighted && !active && !shouldDrawButtonAsDown) {
+            opacity = 0.85f;
+        }
+
+        iconToDraw->drawWithin(g, bounds, juce::RectanglePlacement::centred, opacity);
+        return;
+    }
+
+    // Single-icon mode (legacy behavior)
     if (!svgIcon) {
         // Fallback: draw button name as text
         g.setColour(normalColor);

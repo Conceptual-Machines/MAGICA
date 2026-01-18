@@ -4,22 +4,46 @@
 # Create binary data for fonts and icons
 juce_add_binary_data(MagicaAssets
     SOURCES
+    # Fonts
     ../assets/fonts/Inter-Regular.ttf
     ../assets/fonts/Inter-Medium.ttf
     ../assets/fonts/Inter-SemiBold.ttf
     ../assets/fonts/Inter-Bold.ttf
-    ../assets/icons/play.svg
-    ../assets/icons/pause.svg
-    ../assets/icons/stop.svg
-    ../assets/icons/record.svg
-    ../assets/icons/loop.svg
-    ../assets/icons/repeat.svg
-    ../assets/icons/repeat_one.svg
+    # Transport icons (off/on states)
+    ../assets/icons/play_off.svg
+    ../assets/icons/play_on.svg
+    ../assets/icons/pause_off.svg
+    ../assets/icons/pause_on.svg
+    ../assets/icons/stop_off.svg
+    ../assets/icons/stop_on.svg
+    ../assets/icons/record_off.svg
+    ../assets/icons/record_on.svg
+    ../assets/icons/loop_off.svg
+    ../assets/icons/loop_on.svg
+    ../assets/icons/forward_off.svg
+    ../assets/icons/forward_on.svg
+    ../assets/icons/rewind_off.svg
+    ../assets/icons/rewind_on.svg
+    ../assets/icons/prev_off.svg
+    ../assets/icons/prev_on.svg
+    ../assets/icons/next_off.svg
+    ../assets/icons/next_on.svg
+    # Audio icons
     ../assets/icons/volume_up.svg
+    ../assets/icons/volume_down.svg
+    ../assets/icons/metronome.svg
+    # UI icons
     ../assets/icons/lock.svg
     ../assets/icons/lock_open.svg
     ../assets/icons/add.svg
     ../assets/icons/remove.svg
+    ../assets/icons/settings.svg
+    ../assets/icons/menu.svg
+    ../assets/icons/close.svg
+    ../assets/icons/check.svg
+    ../assets/icons/search.svg
+    ../assets/icons/zoom_in.svg
+    ../assets/icons/zoom_out.svg
 )
 
 # DAW Core sources

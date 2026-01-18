@@ -171,8 +171,8 @@ void TimelineComponent::mouseDown(const juce::MouseEvent& event) {
     bool inSectionsArea = event.y <= arrangementHeight;
     bool inTimeRulerArea = event.y > arrangementHeight && event.y <= timeRulerEnd;
 
-    // Check for loop marker dragging first (in arrangement area)
-    if (inSectionsArea && loopEnabled) {
+    // Check for loop marker dragging first - works in both arrangement and ruler areas
+    if (loopEnabled) {
         bool isStartMarker;
         if (isOnLoopMarker(event.x, event.y, isStartMarker)) {
             if (isStartMarker) {
@@ -222,17 +222,17 @@ void TimelineComponent::mouseMove(const juce::MouseEvent& event) {
     auto& layout = LayoutConfig::getInstance();
     int arrangementHeight = layout.arrangementBarHeight;
 
-    if (event.y <= arrangementHeight) {
-        // In arrangement area - check for loop markers first
-        if (loopEnabled) {
-            bool isStartMarker;
-            if (isOnLoopMarker(event.x, event.y, isStartMarker)) {
-                setMouseCursor(juce::MouseCursor::LeftRightResizeCursor);
-                return;
-            }
+    // Check for loop markers first - they span both arrangement and ruler areas
+    if (loopEnabled) {
+        bool isStartMarker;
+        if (isOnLoopMarker(event.x, event.y, isStartMarker)) {
+            setMouseCursor(juce::MouseCursor::LeftRightResizeCursor);
+            return;
         }
+    }
 
-        // Check for section edges if not locked
+    if (event.y <= arrangementHeight) {
+        // In arrangement area - check for section edges if not locked
         if (!arrangementLocked) {
             int sectionIndex = findSectionAtPosition(event.x, event.y);
             if (sectionIndex >= 0) {
@@ -867,13 +867,8 @@ bool TimelineComponent::isOnLoopMarker(int x, int y, bool& isStartMarker) const 
         return false;
     }
 
-    auto& layout = LayoutConfig::getInstance();
-    int arrangementHeight = layout.arrangementBarHeight;
-
-    // Only check if in arrangement area
-    if (y > arrangementHeight) {
-        return false;
-    }
+    // Loop markers are visible in both arrangement bar and ruler area
+    // No Y restriction - allow detection anywhere vertically
 
     int startX = timeToPixel(loopStartTime) + LEFT_PADDING;
     int endX = timeToPixel(loopEndTime) + LEFT_PADDING;

@@ -8,7 +8,13 @@ namespace magica {
 
 class SvgButton : public juce::Button {
   public:
+    // Single icon constructor (legacy - colors icon based on state)
     SvgButton(const juce::String& buttonName, const char* svgData, size_t svgDataSize);
+
+    // Dual icon constructor (uses separate off/on images with pre-baked colors)
+    SvgButton(const juce::String& buttonName, const char* offSvgData, size_t offSvgDataSize,
+              const char* onSvgData, size_t onSvgDataSize);
+
     ~SvgButton() override = default;
 
     // Button overrides
@@ -18,7 +24,7 @@ class SvgButton : public juce::Button {
     // Update SVG data
     void updateSvgData(const char* svgData, size_t svgDataSize);
 
-    // Set custom colors
+    // Set custom colors (only used in single-icon mode)
     void setNormalColor(juce::Colour color) {
         normalColor = color;
     }
@@ -43,8 +49,12 @@ class SvgButton : public juce::Button {
 
   private:
     std::unique_ptr<juce::Drawable> svgIcon;
+    std::unique_ptr<juce::Drawable> svgIconOff;
+    std::unique_ptr<juce::Drawable> svgIconOn;
 
-    // Colors for different states
+    bool dualIconMode = false;
+
+    // Colors for different states (single-icon mode only)
     juce::Colour normalColor = DarkTheme::getColour(DarkTheme::TEXT_SECONDARY);
     juce::Colour hoverColor = DarkTheme::getColour(DarkTheme::TEXT_PRIMARY);
     juce::Colour pressedColor = DarkTheme::getColour(DarkTheme::ACCENT_BLUE);

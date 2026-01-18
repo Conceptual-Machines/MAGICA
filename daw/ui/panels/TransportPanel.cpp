@@ -34,27 +34,26 @@ void TransportPanel::resized() {
     auto timeArea = getTimeDisplayArea();
     auto tempoArea = getTempoQuantizeArea();
 
-    // Transport controls layout
-    auto buttonWidth = 40;
-    auto buttonHeight = 30;
-    auto buttonY = transportArea.getCentreY() - buttonHeight / 2;
-    auto buttonSpacing = 5;
+    // Transport controls layout (56x56 button icons)
+    auto buttonSize = 44;  // Slightly smaller than 56 to fit nicely
+    auto buttonY = transportArea.getCentreY() - buttonSize / 2;
+    auto buttonSpacing = 4;
 
-    auto x = transportArea.getX() + 10;
+    auto x = transportArea.getX() + 8;
 
-    playButton->setBounds(x, buttonY, buttonWidth, buttonHeight);
-    x += buttonWidth + buttonSpacing;
+    playButton->setBounds(x, buttonY, buttonSize, buttonSize);
+    x += buttonSize + buttonSpacing;
 
-    stopButton->setBounds(x, buttonY, buttonWidth, buttonHeight);
-    x += buttonWidth + buttonSpacing;
+    stopButton->setBounds(x, buttonY, buttonSize, buttonSize);
+    x += buttonSize + buttonSpacing;
 
-    recordButton->setBounds(x, buttonY, buttonWidth, buttonHeight);
-    x += buttonWidth + buttonSpacing;
+    recordButton->setBounds(x, buttonY, buttonSize, buttonSize);
+    x += buttonSize + buttonSpacing;
 
-    pauseButton->setBounds(x, buttonY, buttonWidth, buttonHeight);
-    x += buttonWidth + buttonSpacing + 10;
+    pauseButton->setBounds(x, buttonY, buttonSize, buttonSize);
+    x += buttonSize + buttonSpacing + 8;
 
-    loopButton->setBounds(x, buttonY, buttonWidth, buttonHeight);
+    loopButton->setBounds(x, buttonY, buttonSize, buttonSize);
 
     // Time display layout
     auto timeY = timeArea.getCentreY() - 15;
@@ -66,37 +65,44 @@ void TransportPanel::resized() {
     auto tempoY = tempoArea.getCentreY() - 15;
     auto tempoX = tempoArea.getX() + 10;
 
-    // Tempo section: [-] [120.0] [+]
-    tempoDecreaseButton->setBounds(tempoX, tempoY, 30, 30);
-    tempoDisplay->setBounds(tempoX + 35, tempoY, 70, 30);
-    tempoIncreaseButton->setBounds(tempoX + 110, tempoY, 30, 30);
+    // Tempo section: [120.0] [+]  (stacked vertically)
+    //                       [-]
+    tempoDisplay->setBounds(tempoX, tempoY, 70, 30);
+
+    // Stack +/- buttons vertically next to tempo display
+    int stackX = tempoX + 75;
+    int stackButtonSize = 14;
+    int stackTop = tempoY + 1;
+    tempoIncreaseButton->setBounds(stackX, stackTop, stackButtonSize, stackButtonSize);
+    tempoDecreaseButton->setBounds(stackX, stackTop + stackButtonSize, stackButtonSize,
+                                   stackButtonSize);
 
     // Quantize and metronome
-    quantizeCombo->setBounds(tempoX + 155, tempoY, 80, 30);
-    metronomeButton->setBounds(tempoX + 245, tempoY, 40, 30);
+    quantizeCombo->setBounds(tempoX + 100, tempoY, 70, 30);
+    metronomeButton->setBounds(tempoX + 180, tempoY, 35, 30);
 }
 
 juce::Rectangle<int> TransportPanel::getTransportControlsArea() const {
-    return getLocalBounds().removeFromLeft(250);
+    return getLocalBounds().removeFromLeft(270);  // Wider for 56x56 button icons
 }
 
 juce::Rectangle<int> TransportPanel::getTimeDisplayArea() const {
     auto bounds = getLocalBounds();
-    bounds.removeFromLeft(250);         // Skip transport controls
+    bounds.removeFromLeft(270);         // Skip transport controls
     return bounds.removeFromLeft(360);  // Increased to fit loop length display
 }
 
 juce::Rectangle<int> TransportPanel::getTempoQuantizeArea() const {
     auto bounds = getLocalBounds();
-    bounds.removeFromLeft(610);  // Skip transport and time (250 + 360)
+    bounds.removeFromLeft(630);  // Skip transport and time (270 + 360)
     return bounds;
 }
 
 void TransportPanel::setupTransportButtons() {
-    // Play button
+    // Play button (dual-icon mode with off/on states)
     playButton =
-        std::make_unique<SvgButton>("Play", BinaryData::play_svg, BinaryData::play_svgSize);
-    styleTransportButton(*playButton, DarkTheme::getColour(DarkTheme::ACCENT_GREEN));
+        std::make_unique<SvgButton>("Play", BinaryData::play_off_svg, BinaryData::play_off_svgSize,
+                                    BinaryData::play_on_svg, BinaryData::play_on_svgSize);
     playButton->onClick = [this]() {
         isPlaying = !isPlaying;
         if (isPlaying) {
@@ -114,8 +120,8 @@ void TransportPanel::setupTransportButtons() {
 
     // Stop button
     stopButton =
-        std::make_unique<SvgButton>("Stop", BinaryData::stop_svg, BinaryData::stop_svgSize);
-    styleTransportButton(*stopButton, DarkTheme::getColour(DarkTheme::ACCENT_RED));
+        std::make_unique<SvgButton>("Stop", BinaryData::stop_off_svg, BinaryData::stop_off_svgSize,
+                                    BinaryData::stop_on_svg, BinaryData::stop_on_svgSize);
     stopButton->onClick = [this]() {
         isPlaying = false;
         isPaused = false;
@@ -129,9 +135,9 @@ void TransportPanel::setupTransportButtons() {
     addAndMakeVisible(*stopButton);
 
     // Record button
-    recordButton =
-        std::make_unique<SvgButton>("Record", BinaryData::record_svg, BinaryData::record_svgSize);
-    styleTransportButton(*recordButton, DarkTheme::getColour(DarkTheme::ACCENT_RED));
+    recordButton = std::make_unique<SvgButton>(
+        "Record", BinaryData::record_off_svg, BinaryData::record_off_svgSize,
+        BinaryData::record_on_svg, BinaryData::record_on_svgSize);
     recordButton->onClick = [this]() {
         isRecording = !isRecording;
         recordButton->setActive(isRecording);
@@ -143,9 +149,9 @@ void TransportPanel::setupTransportButtons() {
     addAndMakeVisible(*recordButton);
 
     // Pause button
-    pauseButton =
-        std::make_unique<SvgButton>("Pause", BinaryData::pause_svg, BinaryData::pause_svgSize);
-    styleTransportButton(*pauseButton, DarkTheme::getColour(DarkTheme::ACCENT_ORANGE));
+    pauseButton = std::make_unique<SvgButton>(
+        "Pause", BinaryData::pause_off_svg, BinaryData::pause_off_svgSize, BinaryData::pause_on_svg,
+        BinaryData::pause_on_svgSize);
     pauseButton->onClick = [this]() {
         if (isPlaying) {
             isPaused = !isPaused;
@@ -159,8 +165,8 @@ void TransportPanel::setupTransportButtons() {
 
     // Loop button
     loopButton =
-        std::make_unique<SvgButton>("Loop", BinaryData::loop_svg, BinaryData::loop_svgSize);
-    styleTransportButton(*loopButton, DarkTheme::getColour(DarkTheme::ACCENT_BLUE));
+        std::make_unique<SvgButton>("Loop", BinaryData::loop_off_svg, BinaryData::loop_off_svgSize,
+                                    BinaryData::loop_on_svg, BinaryData::loop_on_svgSize);
     loopButton->onClick = [this]() {
         isLooping = !isLooping;
         loopButton->setActive(isLooping);
@@ -251,8 +257,8 @@ void TransportPanel::setupTempoAndQuantize() {
     addAndMakeVisible(*quantizeCombo);
 
     // Metronome button
-    metronomeButton = std::make_unique<SvgButton>("Metronome", BinaryData::volume_up_svg,
-                                                  BinaryData::volume_up_svgSize);
+    metronomeButton = std::make_unique<SvgButton>("Metronome", BinaryData::metronome_svg,
+                                                  BinaryData::metronome_svgSize);
     styleTransportButton(*metronomeButton, DarkTheme::getColour(DarkTheme::ACCENT_BLUE));
     metronomeButton->onClick = [this]() {
         bool newState = !metronomeButton->isActive();
