@@ -60,7 +60,7 @@ void TransportPanel::resized() {
     auto& config = Config::getInstance();
     bool showBothRows = config.getTransportShowBothFormats();
 
-    int boxWidth = 130;
+    int boxWidth = 160;  // Wider for bars.beats.sub format
     int boxSpacing = 8;
     int primaryHeight = showBothRows ? 18 : 30;
     int secondaryHeight = showBothRows ? 16 : 0;
@@ -123,12 +123,12 @@ juce::Rectangle<int> TransportPanel::getTransportControlsArea() const {
 juce::Rectangle<int> TransportPanel::getTimeDisplayArea() const {
     auto bounds = getLocalBounds();
     bounds.removeFromLeft(270);
-    return bounds.removeFromLeft(430);  // 3 boxes @ 130 + spacing
+    return bounds.removeFromLeft(520);  // 3 boxes @ 160 + spacing
 }
 
 juce::Rectangle<int> TransportPanel::getTempoQuantizeArea() const {
     auto bounds = getLocalBounds();
-    bounds.removeFromLeft(700);
+    bounds.removeFromLeft(790);  // 270 + 520
     return bounds;
 }
 
@@ -323,11 +323,17 @@ juce::String TransportPanel::formatPositionBarsBeats(double seconds) const {
 
     double secondsPerBeat = 60.0 / currentTempo;
     double totalBeats = seconds / secondsPerBeat;
-    int bars = static_cast<int>(totalBeats / timeSignatureNumerator) + 1;
-    int beat =
-        static_cast<int>(std::fmod(totalBeats, static_cast<double>(timeSignatureNumerator))) + 1;
 
-    return juce::String::formatted("%d.%d", bars, beat);
+    int bars = static_cast<int>(totalBeats / timeSignatureNumerator) + 1;
+    double beatInBar = std::fmod(totalBeats, static_cast<double>(timeSignatureNumerator));
+    int beat = static_cast<int>(beatInBar) + 1;
+
+    // Subdivision (16ths within beat) and ticks
+    double beatFraction = std::fmod(beatInBar, 1.0);
+    int subdivision = static_cast<int>(beatFraction * 4) + 1;              // 1-4 (16th notes)
+    int ticks = static_cast<int>(std::fmod(beatFraction * 4, 1.0) * 100);  // 00-99
+
+    return juce::String::formatted("%d.%d.%d.%02d", bars, beat, subdivision, ticks);
 }
 
 juce::String TransportPanel::formatPositionSeconds(double seconds) const {
@@ -345,33 +351,38 @@ juce::String TransportPanel::formatRangeBarsBeats(double startTime, double endTi
 
     double secondsPerBeat = 60.0 / currentTempo;
 
-    // Start position
+    // Start position (bars.beats.subdivision)
     double startBeats = startTime / secondsPerBeat;
     int startBars = static_cast<int>(startBeats / timeSignatureNumerator) + 1;
-    int startBeat =
-        static_cast<int>(std::fmod(startBeats, static_cast<double>(timeSignatureNumerator))) + 1;
+    double startBeatInBar = std::fmod(startBeats, static_cast<double>(timeSignatureNumerator));
+    int startBeat = static_cast<int>(startBeatInBar) + 1;
+    int startSub = static_cast<int>(std::fmod(startBeatInBar, 1.0) * 4) + 1;
 
-    // End position
+    // End position (bars.beats.subdivision)
     double endBeats = endTime / secondsPerBeat;
     int endBars = static_cast<int>(endBeats / timeSignatureNumerator) + 1;
-    int endBeat =
-        static_cast<int>(std::fmod(endBeats, static_cast<double>(timeSignatureNumerator))) + 1;
+    double endBeatInBar = std::fmod(endBeats, static_cast<double>(timeSignatureNumerator));
+    int endBeat = static_cast<int>(endBeatInBar) + 1;
+    int endSub = static_cast<int>(std::fmod(endBeatInBar, 1.0) * 4) + 1;
 
-    // Length in beats
+    // Length in bars.beats.subdivision
     double lengthBeats = (endTime - startTime) / secondsPerBeat;
     int lenBars = static_cast<int>(lengthBeats / timeSignatureNumerator);
-    int lenBeat =
-        static_cast<int>(std::fmod(lengthBeats, static_cast<double>(timeSignatureNumerator)));
+    double lenBeatFrac = std::fmod(lengthBeats, static_cast<double>(timeSignatureNumerator));
+    int lenBeat = static_cast<int>(lenBeatFrac);
+    int lenSub = static_cast<int>(std::fmod(lenBeatFrac, 1.0) * 4);
 
     juce::String lenStr;
     if (lenBars > 0) {
-        lenStr = juce::String::formatted("%d.%d", lenBars, lenBeat);
+        lenStr = juce::String::formatted("%d.%d.%d", lenBars, lenBeat, lenSub);
+    } else if (lenBeat > 0) {
+        lenStr = juce::String::formatted("%d.%d", lenBeat, lenSub);
     } else {
-        lenStr = juce::String::formatted("%d", lenBeat);
+        lenStr = juce::String::formatted(".%d", lenSub);
     }
 
-    return juce::String::formatted("%d.%d-%d.%d-%s", startBars, startBeat, endBars, endBeat,
-                                   lenStr.toRawUTF8());
+    return juce::String::formatted("%d.%d.%d - %d.%d.%d - %s", startBars, startBeat, startSub,
+                                   endBars, endBeat, endSub, lenStr.toRawUTF8());
 }
 
 juce::String TransportPanel::formatRangeSeconds(double startTime, double endTime) const {
