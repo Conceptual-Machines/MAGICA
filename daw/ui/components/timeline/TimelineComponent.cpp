@@ -979,11 +979,11 @@ void TimelineComponent::drawLoopMarkerFlags(juce::Graphics& g) {
                static_cast<float>(lineY), 2.0f);
 
     // Draw tick-like vertical lines at loop boundaries (replaces the regular ticks)
-    // Use drawLine with 1.0f width to match grid lines in TrackContentPanel
+    // Slightly thicker (2.0f) to visually connect with the flags
     g.drawLine(static_cast<float>(startX), static_cast<float>(rulerBottom - majorTickHeight),
-               static_cast<float>(startX), static_cast<float>(rulerBottom), 1.0f);
+               static_cast<float>(startX), static_cast<float>(rulerBottom), 2.0f);
     g.drawLine(static_cast<float>(endX), static_cast<float>(rulerBottom - majorTickHeight),
-               static_cast<float>(endX), static_cast<float>(rulerBottom), 1.0f);
+               static_cast<float>(endX), static_cast<float>(rulerBottom), 2.0f);
 
     // Draw start flag (pointing down) at top
     juce::Path startFlag;
