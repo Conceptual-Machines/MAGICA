@@ -75,8 +75,8 @@ endif()
 # Simple agent system - no external dependencies needed
 
 # Product-based subdirectories
-add_subdirectory(daw)
-add_subdirectory(agents)
+add_subdirectory(magica/daw)
+add_subdirectory(magica/agents)
 
 # Examples
 if(MAGICA_BUILD_EXAMPLES)
@@ -98,4 +98,4 @@ endif()
 install(TARGETS magica_daw_app
     BUNDLE DESTINATION .
     RUNTIME DESTINATION bin
-) 
+)

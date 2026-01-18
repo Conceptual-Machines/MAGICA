@@ -4,10 +4,10 @@
 #include <string>
 #include <vector>
 
-#include "../daw/interfaces/clip_interface.hpp"
-#include "../daw/interfaces/mixer_interface.hpp"
-#include "../daw/interfaces/track_interface.hpp"
-#include "../daw/interfaces/transport_interface.hpp"
+#include "../magica/daw/interfaces/clip_interface.hpp"
+#include "../magica/daw/interfaces/mixer_interface.hpp"
+#include "../magica/daw/interfaces/track_interface.hpp"
+#include "../magica/daw/interfaces/transport_interface.hpp"
 
 // Mock implementation of TransportInterface for testing
 class MockTransportInterface : public TransportInterface {

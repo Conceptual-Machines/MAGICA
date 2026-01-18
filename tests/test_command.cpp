@@ -4,7 +4,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <vector>
 
-#include "../daw/command.hpp"
+#include "../magica/daw/command.hpp"
 
 TEST_CASE("Command Creation and Basic Operations", "[command]") {
     SECTION("Create command with type") {
