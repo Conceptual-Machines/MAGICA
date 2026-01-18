@@ -96,12 +96,11 @@ void TrackContentPanel::zoomStateChanged(const TimelineState& state) {
 void TrackContentPanel::paint(juce::Graphics& g) {
     g.fillAll(DarkTheme::getColour(DarkTheme::TRACK_BACKGROUND));
 
-    // Draw grid as background spanning all tracks
+    // Draw vertical grid lines using full component height (always visible even with no tracks)
     auto gridArea = getLocalBounds();
-    gridArea.setHeight(getTotalTracksHeight());
     paintGrid(g, gridArea);
 
-    // Draw track lanes (without individual grid overlays)
+    // Draw track lanes with horizontal separators
     for (size_t i = 0; i < trackLanes.size(); ++i) {
         auto laneArea = getTrackLaneArea(static_cast<int>(i));
         if (laneArea.intersects(getLocalBounds())) {
