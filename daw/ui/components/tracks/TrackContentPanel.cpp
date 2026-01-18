@@ -393,10 +393,26 @@ int TrackContentPanel::timeToPixel(double time) const {
     return static_cast<int>(time * currentZoom) + LEFT_PADDING;
 }
 
+int TrackContentPanel::getTrackIndexAtY(int y) const {
+    int currentY = 0;
+    for (size_t i = 0; i < trackLanes.size(); ++i) {
+        int trackHeight = static_cast<int>(trackLanes[i]->height * verticalZoom);
+        if (y >= currentY && y < currentY + trackHeight) {
+            return static_cast<int>(i);
+        }
+        currentY += trackHeight;
+    }
+    return -1;  // Not in any track
+}
+
 void TrackContentPanel::mouseDown(const juce::MouseEvent& event) {
     // Store initial mouse position for click vs drag detection
     mouseDownX = event.x;
     mouseDownY = event.y;
+
+    // Capture Shift state and starting track index for per-track selection
+    isShiftHeld = event.mods.isShiftDown();
+    selectionStartTrackIndex = getTrackIndexAtY(event.y);
 
     // Select track based on click position
     for (size_t i = 0; i < trackLanes.size(); ++i) {
@@ -430,11 +446,19 @@ void TrackContentPanel::mouseDrag(const juce::MouseEvent& event) {
             selectionEndTime = snapTimeToGrid(selectionEndTime);
         }
 
+        // Build track indices set based on Shift state
+        std::set<int> trackIndices;
+        if (!isShiftHeld && selectionStartTrackIndex >= 0) {
+            // Single-track selection (only the track where drag started)
+            trackIndices.insert(selectionStartTrackIndex);
+        }
+        // Empty set = all tracks (when Shift is held)
+
         // Notify about selection change
         if (onTimeSelectionChanged) {
             double start = juce::jmin(selectionStartTime, selectionEndTime);
             double end = juce::jmax(selectionStartTime, selectionEndTime);
-            onTimeSelectionChanged(start, end);
+            onTimeSelectionChanged(start, end, trackIndices);
         }
     }
 }
@@ -476,14 +500,24 @@ void TrackContentPanel::mouseUp(const juce::MouseEvent& event) {
 
             // Only create selection if it has meaningful duration
             if (end - start > 0.01) {  // At least 10ms selection
+                // Build track indices set based on Shift state
+                std::set<int> trackIndices;
+                if (!isShiftHeld && selectionStartTrackIndex >= 0) {
+                    // Single-track selection (only the track where drag started)
+                    trackIndices.insert(selectionStartTrackIndex);
+                }
+                // Empty set = all tracks (when Shift is held)
+
                 if (onTimeSelectionChanged) {
-                    onTimeSelectionChanged(start, end);
+                    onTimeSelectionChanged(start, end, trackIndices);
                 }
             }
         }
 
         selectionStartTime = -1.0;
         selectionEndTime = -1.0;
+        selectionStartTrackIndex = -1;
+        isShiftHeld = false;
     }
 }
 

@@ -3,6 +3,7 @@
 #include <juce_gui_basics/juce_gui_basics.h>
 
 #include <memory>
+#include <set>
 #include <vector>
 
 #include "../../state/TimelineController.hpp"
@@ -72,7 +73,8 @@ class TrackContentPanel : public juce::Component, public TimelineStateListener {
     // Callbacks
     std::function<void(int)> onTrackSelected;
     std::function<void(int, int)> onTrackHeightChanged;
-    std::function<void(double, double)> onTimeSelectionChanged;  // startTime, endTime
+    std::function<void(double, double, std::set<int>)>
+        onTimeSelectionChanged;                             // startTime, endTime, trackIndices
     std::function<void(double)> onPlayheadPositionChanged;  // Called when playhead is set via click
     std::function<double(double)>
         snapTimeToGrid;  // Callback to snap time to grid (provided by MainView)
@@ -130,10 +132,15 @@ class TrackContentPanel : public juce::Component, public TimelineStateListener {
     double selectionStartTime = -1.0;
     double selectionEndTime = -1.0;
 
+    // Per-track selection state
+    bool isShiftHeld = false;
+    int selectionStartTrackIndex = -1;
+
     // Helper to check if a position is in a selectable area
     bool isInSelectableArea(int x, int y) const;
     double pixelToTime(int pixel) const;
     int timeToPixel(double time) const;
+    int getTrackIndexAtY(int y) const;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(TrackContentPanel)
 };

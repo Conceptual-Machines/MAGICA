@@ -2,6 +2,7 @@
 
 #include <juce_gui_basics/juce_gui_basics.h>
 
+#include <set>
 #include <variant>
 
 #include "TimelineState.hpp"
@@ -102,10 +103,14 @@ struct SetPlaybackStateEvent {
 
 /**
  * @brief Set time selection range
+ *
+ * trackIndices specifies which tracks are selected.
+ * Empty set = all tracks (backward compatible).
  */
 struct SetTimeSelectionEvent {
     double startTime;
     double endTime;
+    std::set<int> trackIndices;  // Empty = all tracks
 };
 
 /**

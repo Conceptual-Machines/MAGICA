@@ -2,6 +2,7 @@
 
 #include <juce_gui_basics/juce_gui_basics.h>
 
+#include <set>
 #include <vector>
 
 namespace magica {
@@ -35,17 +36,28 @@ struct PlayheadState {
 
 /**
  * @brief Time selection state (temporary range highlight)
+ *
+ * Supports per-track selection via trackIndices set.
+ * Empty trackIndices = all tracks selected (backward compatible).
  */
 struct TimeSelection {
     double startTime = -1.0;
     double endTime = -1.0;
+    std::set<int> trackIndices;  // Empty = all tracks
 
     bool isActive() const {
         return startTime >= 0 && endTime > startTime;
     }
+    bool isAllTracks() const {
+        return trackIndices.empty();
+    }
+    bool includesTrack(int trackIndex) const {
+        return trackIndices.empty() || trackIndices.count(trackIndex) > 0;
+    }
     void clear() {
         startTime = -1.0;
         endTime = -1.0;
+        trackIndices.clear();
     }
     double getDuration() const {
         return isActive() ? (endTime - startTime) : 0.0;

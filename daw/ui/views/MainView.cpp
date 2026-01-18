@@ -3,6 +3,7 @@
 #include <BinaryData.h>
 
 #include <iostream>
+#include <set>
 
 #include "../themes/DarkTheme.hpp"
 #include "Config.hpp"
@@ -1091,11 +1092,12 @@ void MainView::setupSelectionCallbacks() {
     };
 
     // Set up time selection callback from track content panel
-    trackContentPanel->onTimeSelectionChanged = [this](double start, double end) {
+    trackContentPanel->onTimeSelectionChanged = [this](double start, double end,
+                                                       std::set<int> trackIndices) {
         if (start < 0 || end < 0) {
             timelineController->dispatch(ClearTimeSelectionEvent{});
         } else {
-            timelineController->dispatch(SetTimeSelectionEvent{start, end});
+            timelineController->dispatch(SetTimeSelectionEvent{start, end, trackIndices});
             // Move playhead to follow the left side of selection
             timelineController->dispatch(SetPlayheadPositionEvent{start});
         }
@@ -1149,25 +1151,68 @@ void MainView::SelectionOverlayComponent::drawTimeSelection(juce::Graphics& g) {
     startX -= scrollOffset;
     endX -= scrollOffset;
 
-    // Skip if out of view
+    // Skip if out of view horizontally
     if (endX < 0 || startX > getWidth()) {
         return;
     }
 
-    // Clamp to visible area
+    // Clamp to visible area horizontally
     startX = juce::jmax(0, startX);
     endX = juce::jmin(getWidth(), endX);
 
-    // Draw semi-transparent selection highlight
-    g.setColour(DarkTheme::getColour(DarkTheme::TIME_SELECTION));
-    g.fillRect(startX, 0, endX - startX, getHeight());
+    int selectionWidth = endX - startX;
 
-    // Draw selection edges (use drawLine for consistent alignment with ruler markers)
-    g.setColour(DarkTheme::getColour(DarkTheme::ACCENT_BLUE).withAlpha(0.8f));
-    g.drawLine(static_cast<float>(startX), 0.0f, static_cast<float>(startX),
-               static_cast<float>(getHeight()), 2.0f);
-    g.drawLine(static_cast<float>(endX), 0.0f, static_cast<float>(endX),
-               static_cast<float>(getHeight()), 2.0f);
+    // Check if this is an all-tracks selection
+    if (state.selection.isAllTracks()) {
+        // Draw full-height selection (backward compatible behavior)
+        g.setColour(DarkTheme::getColour(DarkTheme::TIME_SELECTION));
+        g.fillRect(startX, 0, selectionWidth, getHeight());
+
+        // Draw selection edges
+        g.setColour(DarkTheme::getColour(DarkTheme::ACCENT_BLUE).withAlpha(0.8f));
+        g.drawLine(static_cast<float>(startX), 0.0f, static_cast<float>(startX),
+                   static_cast<float>(getHeight()), 2.0f);
+        g.drawLine(static_cast<float>(endX), 0.0f, static_cast<float>(endX),
+                   static_cast<float>(getHeight()), 2.0f);
+    } else {
+        // Per-track selection: draw only on selected tracks
+        int scrollY = owner.trackContentViewport->getViewPositionY();
+        int numTracks = owner.trackContentPanel->getNumTracks();
+
+        for (int trackIndex = 0; trackIndex < numTracks; ++trackIndex) {
+            if (state.selection.includesTrack(trackIndex)) {
+                // Get track position and height
+                int trackY = owner.trackContentPanel->getTrackYPosition(trackIndex) - scrollY;
+                int trackHeight = owner.trackContentPanel->getTrackHeight(trackIndex);
+
+                // Apply vertical zoom
+                trackHeight = static_cast<int>(trackHeight * owner.verticalZoom);
+
+                // Skip if track is not visible vertically
+                if (trackY + trackHeight < 0 || trackY > getHeight()) {
+                    continue;
+                }
+
+                // Clamp to visible area vertically
+                int drawY = juce::jmax(0, trackY);
+                int drawBottom = juce::jmin(getHeight(), trackY + trackHeight);
+                int drawHeight = drawBottom - drawY;
+
+                if (drawHeight > 0) {
+                    // Draw semi-transparent selection highlight for this track
+                    g.setColour(DarkTheme::getColour(DarkTheme::TIME_SELECTION));
+                    g.fillRect(startX, drawY, selectionWidth, drawHeight);
+
+                    // Draw selection edges within track bounds
+                    g.setColour(DarkTheme::getColour(DarkTheme::ACCENT_BLUE).withAlpha(0.8f));
+                    g.drawLine(static_cast<float>(startX), static_cast<float>(drawY),
+                               static_cast<float>(startX), static_cast<float>(drawBottom), 2.0f);
+                    g.drawLine(static_cast<float>(endX), static_cast<float>(drawY),
+                               static_cast<float>(endX), static_cast<float>(drawBottom), 2.0f);
+                }
+            }
+        }
+    }
 }
 
 void MainView::SelectionOverlayComponent::drawLoopRegion(juce::Graphics& g) {

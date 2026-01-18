@@ -298,6 +298,7 @@ TimelineController::ChangeFlags TimelineController::handleEvent(const SetTimeSel
 
     state.selection.startTime = start;
     state.selection.endTime = end;
+    state.selection.trackIndices = e.trackIndices;
 
     return ChangeFlags::Selection;
 }
