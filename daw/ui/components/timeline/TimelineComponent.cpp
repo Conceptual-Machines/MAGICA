@@ -615,11 +615,12 @@ void TimelineComponent::drawTimeMarkers(juce::Graphics& g) {
                 int tickHeight = isMajor ? majorTickHeight : minorTickHeight;
 
                 // Draw tick (unless at loop marker position)
+                // Use drawLine with 1.0f width to match grid lines in TrackContentPanel
                 if (!isAtLoopMarker) {
                     g.setColour(DarkTheme::getColour(isMajor ? DarkTheme::TEXT_SECONDARY
                                                              : DarkTheme::TEXT_DIM));
-                    g.drawVerticalLine(x, static_cast<float>(rulerBottom - tickHeight),
-                                       static_cast<float>(rulerBottom));
+                    g.drawLine(static_cast<float>(x), static_cast<float>(rulerBottom - tickHeight),
+                               static_cast<float>(x), static_cast<float>(rulerBottom), 1.0f);
                 }
 
                 if (isMajor) {
@@ -720,6 +721,7 @@ void TimelineComponent::drawTimeMarkers(juce::Graphics& g) {
                                          : (isMedium ? (majorTickHeight * 2 / 3) : minorTickHeight);
 
                 // Draw tick (unless at loop marker position)
+                // Use drawLine with 1.0f width to match grid lines in TrackContentPanel
                 if (!isAtLoopMarker) {
                     if (isMajor) {
                         g.setColour(DarkTheme::getColour(DarkTheme::TEXT_SECONDARY));
@@ -729,8 +731,8 @@ void TimelineComponent::drawTimeMarkers(juce::Graphics& g) {
                     } else {
                         g.setColour(DarkTheme::getColour(DarkTheme::TEXT_DIM));
                     }
-                    g.drawVerticalLine(x, static_cast<float>(rulerBottom - tickHeight),
-                                       static_cast<float>(rulerBottom));
+                    g.drawLine(static_cast<float>(x), static_cast<float>(rulerBottom - tickHeight),
+                               static_cast<float>(x), static_cast<float>(rulerBottom), 1.0f);
                 }
 
                 // Draw label
@@ -977,11 +979,11 @@ void TimelineComponent::drawLoopMarkerFlags(juce::Graphics& g) {
                static_cast<float>(lineY), 2.0f);
 
     // Draw tick-like vertical lines at loop boundaries (replaces the regular ticks)
-    // Use drawVerticalLine for pixel-perfect alignment with regular ticks
-    g.drawVerticalLine(startX, static_cast<float>(rulerBottom - majorTickHeight),
-                       static_cast<float>(rulerBottom));
-    g.drawVerticalLine(endX, static_cast<float>(rulerBottom - majorTickHeight),
-                       static_cast<float>(rulerBottom));
+    // Use drawLine with 1.0f width to match grid lines in TrackContentPanel
+    g.drawLine(static_cast<float>(startX), static_cast<float>(rulerBottom - majorTickHeight),
+               static_cast<float>(startX), static_cast<float>(rulerBottom), 1.0f);
+    g.drawLine(static_cast<float>(endX), static_cast<float>(rulerBottom - majorTickHeight),
+               static_cast<float>(endX), static_cast<float>(rulerBottom), 1.0f);
 
     // Draw start flag (pointing down) at top
     juce::Path startFlag;
@@ -1101,10 +1103,12 @@ void TimelineComponent::drawTimeSelection(juce::Graphics& g) {
     g.setColour(DarkTheme::getColour(DarkTheme::TIME_SELECTION));
     g.fillRect(startX, 0, endX - startX, getHeight());
 
-    // Draw selection edges
+    // Draw selection edges (use drawLine for consistency with grid)
     g.setColour(DarkTheme::getColour(DarkTheme::ACCENT_BLUE).withAlpha(0.6f));
-    g.drawVerticalLine(startX, 0, static_cast<float>(getHeight()));
-    g.drawVerticalLine(endX, 0, static_cast<float>(getHeight()));
+    g.drawLine(static_cast<float>(startX), 0, static_cast<float>(startX),
+               static_cast<float>(getHeight()), 1.0f);
+    g.drawLine(static_cast<float>(endX), 0, static_cast<float>(endX),
+               static_cast<float>(getHeight()), 1.0f);
 }
 
 }  // namespace magica
