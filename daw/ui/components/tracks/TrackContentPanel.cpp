@@ -518,13 +518,31 @@ void TrackContentPanel::mouseDrag(const juce::MouseEvent& event) {
             selectionEndTime = snapTimeToGrid(selectionEndTime);
         }
 
-        // Build track indices set based on Shift state
-        std::set<int> trackIndices;
-        if (!isShiftHeld && selectionStartTrackIndex >= 0) {
-            // Single-track selection (only the track where drag started)
-            trackIndices.insert(selectionStartTrackIndex);
+        // Track the current track under the mouse for multi-track selection
+        selectionEndTrackIndex = getTrackIndexAtY(event.y);
+
+        // Clamp to valid track range (handle dragging above/below track area)
+        if (selectionEndTrackIndex < 0) {
+            // If above first track, select first track; if below last, select last
+            if (event.y < 0) {
+                selectionEndTrackIndex = 0;
+            } else {
+                selectionEndTrackIndex = static_cast<int>(trackLanes.size()) - 1;
+            }
         }
-        // Empty set = all tracks (when Shift is held)
+
+        // Build track indices set: include all tracks between start and end
+        std::set<int> trackIndices;
+        if (isShiftHeld) {
+            // Shift held = all tracks (empty set)
+        } else if (selectionStartTrackIndex >= 0 && selectionEndTrackIndex >= 0) {
+            // Include all tracks from start to end (inclusive)
+            int minTrack = juce::jmin(selectionStartTrackIndex, selectionEndTrackIndex);
+            int maxTrack = juce::jmax(selectionStartTrackIndex, selectionEndTrackIndex);
+            for (int i = minTrack; i <= maxTrack; ++i) {
+                trackIndices.insert(i);
+            }
+        }
 
         // Notify about selection change
         if (onTimeSelectionChanged) {
@@ -575,19 +593,34 @@ void TrackContentPanel::mouseUp(const juce::MouseEvent& event) {
                 selectionEndTime = snapTimeToGrid(selectionEndTime);
             }
 
+            // Get final track index from mouse position
+            selectionEndTrackIndex = getTrackIndexAtY(event.y);
+            if (selectionEndTrackIndex < 0) {
+                if (event.y < 0) {
+                    selectionEndTrackIndex = 0;
+                } else {
+                    selectionEndTrackIndex = static_cast<int>(trackLanes.size()) - 1;
+                }
+            }
+
             // Normalize so start < end
             double start = juce::jmin(selectionStartTime, selectionEndTime);
             double end = juce::jmax(selectionStartTime, selectionEndTime);
 
             // Only create selection if it has meaningful duration
             if (end - start > 0.01) {  // At least 10ms selection
-                // Build track indices set based on Shift state
+                // Build track indices set: include all tracks between start and end
                 std::set<int> trackIndices;
-                if (!isShiftHeld && selectionStartTrackIndex >= 0) {
-                    // Single-track selection (only the track where drag started)
-                    trackIndices.insert(selectionStartTrackIndex);
+                if (isShiftHeld) {
+                    // Shift held = all tracks (empty set)
+                } else if (selectionStartTrackIndex >= 0 && selectionEndTrackIndex >= 0) {
+                    // Include all tracks from start to end (inclusive)
+                    int minTrack = juce::jmin(selectionStartTrackIndex, selectionEndTrackIndex);
+                    int maxTrack = juce::jmax(selectionStartTrackIndex, selectionEndTrackIndex);
+                    for (int i = minTrack; i <= maxTrack; ++i) {
+                        trackIndices.insert(i);
+                    }
                 }
-                // Empty set = all tracks (when Shift is held)
 
                 if (onTimeSelectionChanged) {
                     onTimeSelectionChanged(start, end, trackIndices);
@@ -598,6 +631,7 @@ void TrackContentPanel::mouseUp(const juce::MouseEvent& event) {
         selectionStartTime = -1.0;
         selectionEndTime = -1.0;
         selectionStartTrackIndex = -1;
+        selectionEndTrackIndex = -1;
         isShiftHeld = false;
     }
 }

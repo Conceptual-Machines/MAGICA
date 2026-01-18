@@ -138,6 +138,7 @@ class TrackContentPanel : public juce::Component,
     // Per-track selection state
     bool isShiftHeld = false;
     int selectionStartTrackIndex = -1;
+    int selectionEndTrackIndex = -1;
 
     // Move selection state
     bool isMovingSelection = false;
