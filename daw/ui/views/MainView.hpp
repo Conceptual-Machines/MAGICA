@@ -41,6 +41,9 @@ class MainView : public juce::Component, public juce::ScrollBar::Listener {
     void toggleArrangementLock();
     bool isArrangementLocked() const;
 
+    // Loop controls
+    void setLoopEnabled(bool enabled);
+
     // Zoom accessors
     double getHorizontalZoom() const {
         return horizontalZoom;

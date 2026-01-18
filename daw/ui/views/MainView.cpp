@@ -174,6 +174,34 @@ void MainView::setupCallbacks() {
         setPlayheadPosition(position);
     };
 
+    // Handle scroll requests from timeline (for trackpad scrolling over ruler)
+    timeline->onScrollRequested = [this](float deltaX, float deltaY) {
+        // Get current scroll position
+        int currentX = trackContentViewport->getViewPositionX();
+        int currentY = trackContentViewport->getViewPositionY();
+
+        // Calculate scroll amount (scale delta for smooth scrolling)
+        // deltaX/deltaY are normalized values, typically -1 to 1
+        const float scrollSpeed = 50.0f;
+        int scrollDeltaX = static_cast<int>(-deltaX * scrollSpeed);
+        int scrollDeltaY = static_cast<int>(-deltaY * scrollSpeed);
+
+        // Apply horizontal scroll (primary use case for timeline)
+        int newX = juce::jmax(0, currentX + scrollDeltaX);
+
+        // Clamp to content bounds
+        int maxX = trackContentPanel->getWidth() - trackContentViewport->getWidth();
+        newX = juce::jmin(newX, juce::jmax(0, maxX));
+
+        // Update both viewports
+        timelineViewport->setViewPosition(newX, 0);
+        trackContentViewport->setViewPosition(newX, currentY);
+
+        // Update zoom manager scroll position
+        zoomManager->setCurrentScrollPosition(newX);
+        updateHorizontalZoomScrollBar();
+    };
+
     // Set up selection and loop callbacks
     setupSelectionCallbacks();
 }
@@ -368,6 +396,28 @@ void MainView::toggleArrangementLock() {
 
 bool MainView::isArrangementLocked() const {
     return timeline->isArrangementLocked();
+}
+
+void MainView::setLoopEnabled(bool enabled) {
+    // If enabling loop and there's an active time selection, create loop from it
+    if (enabled && timeSelection.isActive()) {
+        createLoopFromSelection();
+        return;  // createLoopFromSelection already handles all the state updates
+    }
+
+    loopRegion.enabled = enabled;
+    timeline->setLoopEnabled(enabled);
+
+    if (selectionOverlay) {
+        selectionOverlay->repaint();
+    }
+
+    // Notify external listeners about loop state change
+    if (onLoopLengthChanged) {
+        double length = loopRegion.isValid() ? (loopRegion.endTime - loopRegion.startTime) : 0.0;
+        bool useBarsBeats = timeline->getTimeDisplayMode() == TimeDisplayMode::BarsBeats;
+        onLoopLengthChanged(length, enabled, useBarsBeats);
+    }
 }
 
 // Add keyboard event handler for zoom reset shortcut
@@ -1008,7 +1058,8 @@ void MainView::SelectionOverlayComponent::drawTimeSelection(juce::Graphics& g) {
 }
 
 void MainView::SelectionOverlayComponent::drawLoopRegion(juce::Graphics& g) {
-    if (!owner.loopRegion.isValid() || !owner.loopRegion.enabled) {
+    // Always draw if there's a valid loop region, but use grey when disabled
+    if (!owner.loopRegion.isValid()) {
         return;
     }
 
@@ -1026,20 +1077,36 @@ void MainView::SelectionOverlayComponent::drawLoopRegion(juce::Graphics& g) {
         return;
     }
 
-    // Clamp to visible area
+    // Track original positions before clamping (for marker visibility)
+    int originalStartX = startX;
+    int originalEndX = endX;
+
+    // Clamp to visible area for the filled region
     startX = juce::jmax(0, startX);
     endX = juce::jmin(getWidth(), endX);
 
+    // Use different colors based on enabled state
+    bool enabled = owner.loopRegion.enabled;
+    juce::Colour regionColour = enabled ? DarkTheme::getColour(DarkTheme::LOOP_REGION)
+                                        : juce::Colour(0x15808080);  // Light grey, very transparent
+    juce::Colour markerColour = enabled
+                                    ? DarkTheme::getColour(DarkTheme::LOOP_MARKER).withAlpha(0.8f)
+                                    : juce::Colour(0xFF606060);  // Medium grey
+
     // Draw semi-transparent loop region
-    g.setColour(DarkTheme::getColour(DarkTheme::LOOP_REGION));
+    g.setColour(regionColour);
     g.fillRect(startX, 0, endX - startX, getHeight());
 
-    // Draw loop region edges (use drawLine for consistent alignment with ruler markers)
-    g.setColour(DarkTheme::getColour(DarkTheme::LOOP_MARKER).withAlpha(0.8f));
-    g.drawLine(static_cast<float>(startX), 0.0f, static_cast<float>(startX),
-               static_cast<float>(getHeight()), 2.0f);
-    g.drawLine(static_cast<float>(endX), 0.0f, static_cast<float>(endX),
-               static_cast<float>(getHeight()), 2.0f);
+    // Draw loop region edges only if they're actually visible (not clamped)
+    g.setColour(markerColour);
+    if (originalStartX >= 0 && originalStartX <= getWidth()) {
+        g.drawLine(static_cast<float>(originalStartX), 0.0f, static_cast<float>(originalStartX),
+                   static_cast<float>(getHeight()), 2.0f);
+    }
+    if (originalEndX >= 0 && originalEndX <= getWidth()) {
+        g.drawLine(static_cast<float>(originalEndX), 0.0f, static_cast<float>(originalEndX),
+                   static_cast<float>(getHeight()), 2.0f);
+    }
 }
 
 }  // namespace magica

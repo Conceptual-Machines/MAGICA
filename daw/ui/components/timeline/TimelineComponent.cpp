@@ -427,6 +427,23 @@ void TimelineComponent::mouseUp(const juce::MouseEvent& event) {
     repaint();
 }
 
+void TimelineComponent::mouseWheelMove(const juce::MouseEvent& event,
+                                       const juce::MouseWheelDetails& wheel) {
+    // Forward horizontal scroll to parent via callback
+    // This allows scrolling when the mouse is over the timeline ruler
+    if (onScrollRequested) {
+        // Use deltaX for horizontal scroll (trackpad left/right)
+        // Also allow vertical scroll to trigger horizontal scroll when shift is held
+        float deltaX = wheel.deltaX;
+        float deltaY = wheel.deltaY;
+
+        // If there's horizontal movement, scroll horizontally
+        if (std::abs(deltaX) > 0.0f || std::abs(deltaY) > 0.0f) {
+            onScrollRequested(deltaX, deltaY);
+        }
+    }
+}
+
 void TimelineComponent::addSection(const juce::String& name, double startTime, double endTime,
                                    juce::Colour colour) {
     sections.push_back(std::make_unique<ArrangementSection>(startTime, endTime, name, colour));
@@ -813,7 +830,8 @@ void TimelineComponent::setLoopEnabled(bool enabled) {
 }
 
 void TimelineComponent::drawLoopMarkers(juce::Graphics& g) {
-    if (!loopEnabled || loopStartTime < 0 || loopEndTime <= loopStartTime) {
+    // Always draw if there's a valid loop region, but use grey when disabled
+    if (loopStartTime < 0 || loopEndTime <= loopStartTime) {
         return;
     }
 
@@ -830,12 +848,19 @@ void TimelineComponent::drawLoopMarkers(juce::Graphics& g) {
         return;
     }
 
+    // Use different colors based on enabled state
+    juce::Colour regionColour = loopEnabled
+                                    ? DarkTheme::getColour(DarkTheme::LOOP_REGION)
+                                    : juce::Colour(0x15808080);  // Light grey, very transparent
+    juce::Colour markerColour = loopEnabled ? DarkTheme::getColour(DarkTheme::LOOP_MARKER)
+                                            : juce::Colour(0xFF606060);  // Medium grey
+
     // Draw shaded region covering only the ruler area (not arrangement bar)
-    g.setColour(DarkTheme::getColour(DarkTheme::LOOP_REGION));
+    g.setColour(regionColour);
     g.fillRect(startX, rulerTop, endX - startX, totalHeight - rulerTop);
 
     // Draw connecting line across top of ruler
-    g.setColour(DarkTheme::getColour(DarkTheme::LOOP_MARKER));
+    g.setColour(markerColour);
     g.drawLine(static_cast<float>(startX), static_cast<float>(rulerTop + 2),
                static_cast<float>(endX), static_cast<float>(rulerTop + 2), 2.0f);
 
@@ -863,7 +888,8 @@ void TimelineComponent::drawLoopMarkers(juce::Graphics& g) {
 }
 
 bool TimelineComponent::isOnLoopMarker(int x, int y, bool& isStartMarker) const {
-    if (!loopEnabled || loopStartTime < 0 || loopEndTime <= loopStartTime) {
+    // Allow detecting loop markers even when disabled (they're still visible in grey)
+    if (loopStartTime < 0 || loopEndTime <= loopStartTime) {
         return false;
     }
 

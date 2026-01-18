@@ -95,6 +95,9 @@ MainWindow::MainComponent::MainComponent() {
         transportPanel->setLoopLength(length, enabled, useBarsBeats);
     };
 
+    // Wire up transport loop button to main view
+    transportPanel->onLoop = [this](bool enabled) { mainView->setLoopEnabled(enabled); };
+
     bottomPanel = std::make_unique<BottomPanel>();
     addAndMakeVisible(*bottomPanel);
 

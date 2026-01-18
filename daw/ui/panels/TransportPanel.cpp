@@ -298,6 +298,12 @@ void TransportPanel::setPlayheadPosition(double positionInSeconds, int bars, int
 }
 
 void TransportPanel::setLoopLength(double lengthInSeconds, bool loopEnabled, bool useBarsBeats) {
+    // Sync loop button state with the actual loop enabled state
+    if (isLooping != loopEnabled) {
+        isLooping = loopEnabled;
+        loopButton->setActive(isLooping);
+    }
+
     if (!loopEnabled || lengthInSeconds <= 0) {
         loopLengthDisplay->setText("", juce::dontSendNotification);
         return;

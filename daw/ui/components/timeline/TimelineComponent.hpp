@@ -72,6 +72,8 @@ class TimelineComponent : public juce::Component {
     void mouseDrag(const juce::MouseEvent& event) override;
     void mouseDoubleClick(const juce::MouseEvent& event) override;
     void mouseUp(const juce::MouseEvent& event) override;
+    void mouseWheelMove(const juce::MouseEvent& event,
+                        const juce::MouseWheelDetails& wheel) override;
 
     // Arrangement section management
     void addSection(const juce::String& name, double startTime, double endTime,
@@ -123,6 +125,8 @@ class TimelineComponent : public juce::Component {
         onZoomChanged;  // Callback for zoom changes (newZoom, anchorTime, anchorScreenX)
     std::function<void()> onZoomEnd;                          // Callback when zoom operation ends
     std::function<void(double, double)> onLoopRegionChanged;  // Callback when loop region changes
+    std::function<void(float deltaX, float deltaY)>
+        onScrollRequested;  // Callback for scroll requests from mouse wheel
 
   private:
     // Layout constants

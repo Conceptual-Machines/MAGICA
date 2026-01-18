@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git -C /Users/lucaromagnoli/Dropbox/Code/Projects/magica show feature/sequential-commands:daw/interfaces/daw_mode_interface_impl.hpp)",
+      "Bash(gh issue create:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "mcp__TalkToFigma__create_frame",
+      "mcp__TalkToFigma__create_text",
+      "mcp__TalkToFigma__create_rectangle",
+      "mcp__TalkToFigma__set_fill_color",
+      "mcp__TalkToFigma__set_stroke_color",
+      "Bash(make debug:*)",
+      "Bash(cmake --build:*)",
+      "mcp__TalkToFigma__get_document_info",
+      "mcp__TalkToFigma__get_nodes_info",
+      "mcp__TalkToFigma__resize_node",
+      "mcp__TalkToFigma__move_node"
+    ]
+  },
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [
+    "juce-docs"
+  ]
+}
