@@ -41,7 +41,7 @@ release:
 .PHONY: run
 run: debug
 	@echo "🎵 Running Magica DAW..."
-	open "$(BUILD_DIR)/daw/magica_daw_app_artefacts/Debug/Magica DAW.app"
+	open "$(BUILD_DIR)/magica/daw/magica_daw_app_artefacts/Debug/Magica DAW.app"
 
 # Run tests
 .PHONY: test
@@ -101,4 +101,4 @@ help:
 	@echo ""
 	@echo "Build directories:"
 	@echo "  Debug:   $(BUILD_DIR)"
-	@echo "  Release: $(BUILD_DIR_RELEASE)" 
+	@echo "  Release: $(BUILD_DIR_RELEASE)"
