@@ -166,7 +166,7 @@ class MainView : public juce::Component,
     bool isResizingMasterStrip = false;
     int resizeStartY = 0;
     int resizeStartHeight = 0;
-    static constexpr int MASTER_RESIZE_HANDLE_HEIGHT = 4;
+    static constexpr int MASTER_RESIZE_HANDLE_HEIGHT = 8;
 
     // Time selection and loop region are now managed by TimelineController
     // Local caches for quick access (updated via listener callbacks)

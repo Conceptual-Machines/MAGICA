@@ -382,8 +382,6 @@ void MainView::resized() {
     horizontalZoomScrollBar->setBounds(horizontalScrollBarArea);
 
     // Fixed master track row at the bottom (above horizontal scroll bar)
-    // First remove space for the resize handle
-    bounds.removeFromBottom(MASTER_RESIZE_HANDLE_HEIGHT);
     auto masterRowArea = bounds.removeFromBottom(masterStripHeight);
     // Master header on the left (same width as track headers)
     masterHeaderPanel->setBounds(masterRowArea.removeFromLeft(trackHeaderWidth));
@@ -391,6 +389,9 @@ void MainView::resized() {
     masterRowArea.removeFromLeft(layout.componentSpacing);
     // Master content takes the rest
     masterContentPanel->setBounds(masterRowArea);
+
+    // Remove space for the resize handle ABOVE the master row
+    bounds.removeFromBottom(MASTER_RESIZE_HANDLE_HEIGHT);
 
     // Now position vertical scroll bar (after bottom areas removed)
     verticalScrollBarArea.removeFromBottom(ZOOM_SCROLLBAR_SIZE + masterStripHeight +
@@ -1126,9 +1127,11 @@ void MainView::paintResizeHandle(juce::Graphics& g) {
 juce::Rectangle<int> MainView::getMasterResizeHandleArea() const {
     // Position the resize handle in the gap between track content and master strip
     static constexpr int ZOOM_SCROLLBAR_SIZE = 20;
-    int masterTopY =
+    // Master row top is at: getHeight() - ZOOM_SCROLLBAR_SIZE - masterStripHeight
+    // Resize handle is ABOVE that
+    int resizeHandleY =
         getHeight() - ZOOM_SCROLLBAR_SIZE - masterStripHeight - MASTER_RESIZE_HANDLE_HEIGHT;
-    return juce::Rectangle<int>(0, masterTopY, getWidth(), MASTER_RESIZE_HANDLE_HEIGHT);
+    return juce::Rectangle<int>(0, resizeHandleY, getWidth(), MASTER_RESIZE_HANDLE_HEIGHT);
 }
 
 void MainView::paintMasterResizeHandle(juce::Graphics& g) {
@@ -1155,7 +1158,8 @@ void MainView::paintMasterResizeHandle(juce::Graphics& g) {
         int centerX = handleArea.getCentreX();
 
         for (int i = -1; i <= 1; ++i) {
-            g.fillEllipse(centerX + i * 4 - 1, centerY - 1, 2, 2);
+            g.fillEllipse(static_cast<float>(centerX + i * 4 - 1), static_cast<float>(centerY - 1),
+                          2.0f, 2.0f);
         }
     }
 }
