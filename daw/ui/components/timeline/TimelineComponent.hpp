@@ -6,33 +6,34 @@
 #include <vector>
 
 #include "../../layout/LayoutConfig.hpp"
+#include "../../state/TimelineController.hpp"
 
 namespace magica {
 
-// Time display mode for timeline
-enum class TimeDisplayMode {
-    Seconds,   // Display as 0.0s, 1.0s, 2.0s, etc.
-    BarsBeats  // Display as 1.1.1, 1.2.1, 2.1.1, etc. (bar.beat.subdivision)
-};
+// Forward declaration
+class TimelineController;
 
-struct ArrangementSection {
-    double startTime;
-    double endTime;
-    juce::String name;
-    juce::Colour colour;
+// TimeDisplayMode and ArrangementSection are now defined in TimelineState.hpp
 
-    ArrangementSection(double start, double end, const juce::String& sectionName,
-                       juce::Colour sectionColour = juce::Colours::blue)
-        : startTime(start), endTime(end), name(sectionName), colour(sectionColour) {}
-};
-
-class TimelineComponent : public juce::Component {
+class TimelineComponent : public juce::Component, public TimelineStateListener {
   public:
     TimelineComponent();
     ~TimelineComponent() override;
 
     void paint(juce::Graphics& g) override;
     void resized() override;
+
+    // TimelineStateListener implementation
+    void timelineStateChanged(const TimelineState& state) override;
+    void zoomStateChanged(const TimelineState& state) override;
+    void loopStateChanged(const TimelineState& state) override;
+    void selectionStateChanged(const TimelineState& state) override;
+
+    // Set the controller reference (called by MainView after construction)
+    void setController(TimelineController* controller);
+    TimelineController* getController() const {
+        return timelineController;
+    }
 
     // Timeline controls
     void setTimelineLength(double lengthInSeconds);
@@ -129,18 +130,25 @@ class TimelineComponent : public juce::Component {
         onScrollRequested;  // Callback for scroll requests from mouse wheel
     std::function<void(double, double)>
         onTimeSelectionChanged;  // Callback when time selection changes in ruler
+    std::function<void(double, double)>
+        onZoomToFitRequested;  // Callback to zoom to fit a time range (startTime, endTime)
 
   private:
+    // Controller reference (not owned)
+    TimelineController* timelineController = nullptr;
+
     // Layout constants
     static constexpr int LEFT_PADDING = 18;  // Left padding to ensure first time label is visible
 
+    // Local state (cached from controller for quick access during rendering)
+    // These are updated via TimelineStateListener callbacks
     double timelineLength = 300.0;  // 5 minutes
     double playheadPosition = 0.0;
     double zoom = 1.0;         // pixels per second
     int viewportWidth = 1500;  // Default viewport width for minimum zoom calculation
 
     // Time display mode and tempo
-    TimeDisplayMode displayMode = TimeDisplayMode::Seconds;
+    TimeDisplayMode displayMode = TimeDisplayMode::BarsBeats;
     double tempoBPM = 120.0;
     int timeSignatureNumerator = 4;
     int timeSignatureDenominator = 4;

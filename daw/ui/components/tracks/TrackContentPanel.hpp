@@ -5,21 +5,34 @@
 #include <memory>
 #include <vector>
 
-#include "../timeline/TimelineComponent.hpp"  // For TimeDisplayMode
+#include "../../state/TimelineController.hpp"
 
 namespace magica {
 
-class TrackContentPanel : public juce::Component {
+// Forward declaration
+class TimelineController;
+
+class TrackContentPanel : public juce::Component, public TimelineStateListener {
   public:
     static constexpr int DEFAULT_TRACK_HEIGHT = 80;
     static constexpr int MIN_TRACK_HEIGHT = 75;
     static constexpr int MAX_TRACK_HEIGHT = 200;
 
     TrackContentPanel();
-    ~TrackContentPanel() override = default;
+    ~TrackContentPanel() override;
 
     void paint(juce::Graphics& g) override;
     void resized() override;
+
+    // TimelineStateListener implementation
+    void timelineStateChanged(const TimelineState& state) override;
+    void zoomStateChanged(const TimelineState& state) override;
+
+    // Set the controller reference (called by MainView after construction)
+    void setController(TimelineController* controller);
+    TimelineController* getController() const {
+        return timelineController;
+    }
 
     // Track management
     void addTrack();
@@ -64,6 +77,9 @@ class TrackContentPanel : public juce::Component {
         snapTimeToGrid;  // Callback to snap time to grid (provided by MainView)
 
   private:
+    // Controller reference (not owned)
+    TimelineController* timelineController = nullptr;
+
     // Layout constants
     static constexpr int LEFT_PADDING = 18;  // Left padding to align with timeline
 
@@ -82,7 +98,7 @@ class TrackContentPanel : public juce::Component {
     double timelineLength = 0.0;  // Will be loaded from config
 
     // Time display mode and tempo (for grid drawing)
-    TimeDisplayMode displayMode = TimeDisplayMode::Seconds;
+    TimeDisplayMode displayMode = TimeDisplayMode::BarsBeats;
     double tempoBPM = 120.0;
     int timeSignatureNumerator = 4;
     int timeSignatureDenominator = 4;

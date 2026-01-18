@@ -25,7 +25,96 @@ TimelineComponent::TimelineComponent() {
     arrangementLocked = true;
 }
 
-TimelineComponent::~TimelineComponent() = default;
+TimelineComponent::~TimelineComponent() {
+    // Unregister from controller if we have one
+    if (timelineController) {
+        timelineController->removeListener(this);
+    }
+}
+
+void TimelineComponent::setController(TimelineController* controller) {
+    // Unregister from old controller
+    if (timelineController) {
+        timelineController->removeListener(this);
+    }
+
+    timelineController = controller;
+
+    // Register with new controller
+    if (timelineController) {
+        timelineController->addListener(this);
+
+        // Sync initial state
+        const auto& state = timelineController->getState();
+        timelineLength = state.timelineLength;
+        zoom = state.zoom.horizontalZoom;
+        playheadPosition = state.playhead.position;
+        displayMode = state.display.timeDisplayMode;
+        tempoBPM = state.tempo.bpm;
+        timeSignatureNumerator = state.tempo.timeSignatureNumerator;
+        timeSignatureDenominator = state.tempo.timeSignatureDenominator;
+        snapEnabled = state.display.snapEnabled;
+        arrangementLocked = state.display.arrangementLocked;
+
+        // Sync loop region
+        if (state.loop.isValid()) {
+            loopStartTime = state.loop.startTime;
+            loopEndTime = state.loop.endTime;
+            loopEnabled = state.loop.enabled;
+        }
+
+        // Sync time selection
+        if (state.selection.isActive()) {
+            timeSelectionStart = state.selection.startTime;
+            timeSelectionEnd = state.selection.endTime;
+        }
+
+        repaint();
+    }
+}
+
+// ===== TimelineStateListener Implementation =====
+
+void TimelineComponent::timelineStateChanged(const TimelineState& state) {
+    // General state change - sync all cached values
+    timelineLength = state.timelineLength;
+    displayMode = state.display.timeDisplayMode;
+    tempoBPM = state.tempo.bpm;
+    timeSignatureNumerator = state.tempo.timeSignatureNumerator;
+    timeSignatureDenominator = state.tempo.timeSignatureDenominator;
+    snapEnabled = state.display.snapEnabled;
+    arrangementLocked = state.display.arrangementLocked;
+    repaint();
+}
+
+void TimelineComponent::zoomStateChanged(const TimelineState& state) {
+    zoom = state.zoom.horizontalZoom;
+    repaint();
+}
+
+void TimelineComponent::loopStateChanged(const TimelineState& state) {
+    if (state.loop.isValid()) {
+        loopStartTime = state.loop.startTime;
+        loopEndTime = state.loop.endTime;
+        loopEnabled = state.loop.enabled;
+    } else {
+        loopStartTime = -1.0;
+        loopEndTime = -1.0;
+        loopEnabled = false;
+    }
+    repaint();
+}
+
+void TimelineComponent::selectionStateChanged(const TimelineState& state) {
+    if (state.selection.isActive()) {
+        timeSelectionStart = state.selection.startTime;
+        timeSelectionEnd = state.selection.endTime;
+    } else {
+        timeSelectionStart = -1.0;
+        timeSelectionEnd = -1.0;
+    }
+    repaint();
+}
 
 void TimelineComponent::paint(juce::Graphics& g) {
     g.fillAll(DarkTheme::getColour(DarkTheme::TIMELINE_BACKGROUND));
@@ -283,8 +372,8 @@ void TimelineComponent::mouseMove(const juce::MouseEvent& event) {
         int rulerMidpoint = layout.getRulerZoneSplitY();
 
         if (event.y < rulerMidpoint) {
-            // Upper ruler area - zoom cursor
-            setMouseCursor(juce::MouseCursor::CrosshairCursor);
+            // Upper ruler area - zoom cursor (vertical resize indicates drag up/down)
+            setMouseCursor(juce::MouseCursor::UpDownResizeCursor);
         } else {
             // Lower ruler area (near tick labels) - time selection cursor
             setMouseCursor(juce::MouseCursor::IBeamCursor);
@@ -434,15 +523,12 @@ void TimelineComponent::mouseDrag(const juce::MouseEvent& event) {
         // Check for modifier keys for zoom speed control
         bool isShiftHeld = event.mods.isShiftDown();
         bool isAltHeld = event.mods.isAltDown();
-        bool isCtrlOrCmdHeld = event.mods.isCommandDown() || event.mods.isCtrlDown();
 
         // Sensitivity: pixels of drag to double/halve zoom (higher = less sensitive)
         // Base: 150px drag to double zoom
         double sensitivity = 150.0;
 
-        if (isCtrlOrCmdHeld && isShiftHeld) {
-            sensitivity = 25.0;  // Cmd/Ctrl+Shift: super fast zoom (6x faster)
-        } else if (isShiftHeld) {
+        if (isShiftHeld) {
             sensitivity = 50.0;  // Shift: fast zoom (3x faster)
         } else if (isAltHeld) {
             sensitivity = 400.0;  // Alt/Option: fine zoom (slower, more precise)
@@ -488,6 +574,21 @@ void TimelineComponent::mouseDrag(const juce::MouseEvent& event) {
 }
 
 void TimelineComponent::mouseDoubleClick(const juce::MouseEvent& event) {
+    auto& layout = LayoutConfig::getInstance();
+    int rulerTop = layout.arrangementBarHeight;
+
+    // Check if double-click is in the ruler area (below arrangement bar)
+    if (event.y >= rulerTop) {
+        // Double-click in ruler area - zoom to fit loop if enabled
+        if (loopEnabled && loopStartTime >= 0 && loopEndTime > loopStartTime) {
+            if (onZoomToFitRequested) {
+                onZoomToFitRequested(loopStartTime, loopEndTime);
+            }
+            return;
+        }
+    }
+
+    // Handle section editing in arrangement bar
     if (!arrangementLocked) {
         int sectionIndex = findSectionAtPosition(event.x, event.y);
         if (sectionIndex >= 0) {
@@ -507,12 +608,23 @@ void TimelineComponent::mouseDoubleClick(const juce::MouseEvent& event) {
 void TimelineComponent::mouseUp(const juce::MouseEvent& event) {
     // Finalize time selection if we were dragging
     if (isDraggingTimeSelection) {
-        // If selection is too small (just a click), clear it
+        // If selection is too small (just a click), move playhead instead
         if (std::abs(timeSelectionEnd - timeSelectionStart) < 0.01) {
+            // Clear the selection
             timeSelectionStart = -1.0;
             timeSelectionEnd = -1.0;
             if (onTimeSelectionChanged) {
                 onTimeSelectionChanged(-1.0, -1.0);
+            }
+            // Move playhead to click position
+            double clickTime = pixelToTime(event.x);
+            clickTime = juce::jlimit(0.0, timelineLength, clickTime);
+            if (snapEnabled) {
+                clickTime = snapTimeToGrid(clickTime);
+            }
+            setPlayheadPosition(clickTime);
+            if (onPlayheadPositionChanged) {
+                onPlayheadPositionChanged(clickTime);
             }
         }
         isDraggingTimeSelection = false;
@@ -534,7 +646,8 @@ void TimelineComponent::mouseUp(const juce::MouseEvent& event) {
     }
 
     // Handle pending playhead click - if we didn't zoom, set the playhead
-    if (isPendingPlayheadClick && !isZooming) {
+    // Skip if this is a double-click (getNumberOfClicks() > 1) to allow zoom-to-fit
+    if (isPendingPlayheadClick && !isZooming && event.getNumberOfClicks() == 1) {
         // Check if we haven't moved much (it's a click, not a drag)
         int deltaX = std::abs(event.x - mouseDownX);
         int deltaY = std::abs(event.y - mouseDownY);
@@ -633,7 +746,7 @@ void TimelineComponent::drawTimeMarkers(juce::Graphics& g) {
     g.setColour(DarkTheme::getColour(DarkTheme::TEXT_SECONDARY));
     g.setFont(FontManager::getInstance().getUIFont(static_cast<float>(labelFontSize)));
 
-    const int minPixelSpacing = 50;
+    const int minPixelSpacing = layout.minGridPixelSpacing;
 
     if (displayMode == TimeDisplayMode::Seconds) {
         // ===== SECONDS MODE =====
@@ -1113,7 +1226,8 @@ bool TimelineComponent::isOnLoopTopBorder(int x, int y) const {
 
 double TimelineComponent::getSnapInterval() const {
     // Get the visible snap interval based on zoom level and display mode
-    const int minPixelSpacing = 30;
+    auto& layout = LayoutConfig::getInstance();
+    const int minPixelSpacing = layout.minGridPixelSpacing;
 
     if (displayMode == TimeDisplayMode::Seconds) {
         // Seconds mode - snap to time divisions

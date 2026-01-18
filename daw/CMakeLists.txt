@@ -44,6 +44,10 @@ juce_add_binary_data(MagicaAssets
     ../assets/icons/search.svg
     ../assets/icons/zoom_in.svg
     ../assets/icons/zoom_out.svg
+    # Mouse cursors
+    ../assets/icons/mouse_zoom/search.svg
+    ../assets/icons/mouse_zoom/zoom_in.svg
+    ../assets/icons/mouse_zoom/zoom_out.svg
 )
 
 # DAW Core sources
@@ -55,6 +59,8 @@ set(DAW_CORE_SOURCES
     # UI components needed by tests
     ui/components/timeline/TimelineComponent.cpp
     ui/components/timeline/ZoomManager.cpp
+    # State management
+    ui/state/TimelineController.cpp
 )
 
 # DAW UI sources
@@ -63,6 +69,7 @@ set(DAW_UI_SOURCES
     # Themes
     ui/themes/DarkTheme.cpp
     ui/themes/FontManager.cpp
+    ui/themes/CursorManager.cpp
     # Windows
     ui/windows/MainWindow.cpp
     ui/windows/MenuManager.cpp
@@ -104,6 +111,7 @@ set(DAW_HEADERS
     # Themes
     ui/themes/DarkTheme.hpp
     ui/themes/FontManager.hpp
+    ui/themes/CursorManager.hpp
     # Windows
     ui/windows/MainWindow.hpp
     ui/windows/MenuManager.hpp
@@ -119,6 +127,10 @@ set(DAW_HEADERS
     ui/views/PerformanceView.hpp
     # Layout
     ui/layout/LayoutConfig.hpp
+    # State management
+    ui/state/TimelineState.hpp
+    ui/state/TimelineEvents.hpp
+    ui/state/TimelineController.hpp
     # Components - Common
     ui/components/common/SvgButton.hpp
     ui/components/common/ZoomControls.hpp
@@ -193,6 +205,7 @@ target_include_directories(magica_daw_app
     ${CMAKE_CURRENT_SOURCE_DIR}/ui/panels
     ${CMAKE_CURRENT_SOURCE_DIR}/ui/views
     ${CMAKE_CURRENT_SOURCE_DIR}/ui/layout
+    ${CMAKE_CURRENT_SOURCE_DIR}/ui/state
     ${CMAKE_CURRENT_SOURCE_DIR}/ui/components
     ${CMAKE_CURRENT_SOURCE_DIR}/ui/components/common
     ${CMAKE_CURRENT_SOURCE_DIR}/ui/components/timeline

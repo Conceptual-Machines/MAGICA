@@ -9,10 +9,14 @@ namespace magica {
 /**
  * @brief Pure zoom and scroll coordinator for DAW components
  *
+ * @deprecated This class is being phased out in favor of TimelineController.
+ * All new code should use TimelineController for state management.
+ * This class is kept temporarily for backward compatibility during migration.
+ *
  * Handles zoom calculations and scroll coordination through callbacks.
  * No direct references to UI components - communicates entirely through callbacks.
  */
-class ZoomManager {
+class [[deprecated("Use TimelineController instead")]] ZoomManager {
   public:
     ZoomManager();
     ~ZoomManager() = default;

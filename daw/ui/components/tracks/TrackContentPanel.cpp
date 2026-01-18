@@ -2,6 +2,7 @@
 
 #include <iostream>
 
+#include "../../layout/LayoutConfig.hpp"
 #include "../../themes/DarkTheme.hpp"
 #include "../../themes/FontManager.hpp"
 #include "Config.hpp"
@@ -21,6 +22,56 @@ TrackContentPanel::TrackContentPanel() {
     addTrack();  // Audio Track 1
     addTrack();  // Audio Track 2
     addTrack();  // MIDI Track 1
+}
+
+TrackContentPanel::~TrackContentPanel() {
+    // Unregister from controller if we have one
+    if (timelineController) {
+        timelineController->removeListener(this);
+    }
+}
+
+void TrackContentPanel::setController(TimelineController* controller) {
+    // Unregister from old controller
+    if (timelineController) {
+        timelineController->removeListener(this);
+    }
+
+    timelineController = controller;
+
+    // Register with new controller
+    if (timelineController) {
+        timelineController->addListener(this);
+
+        // Sync initial state
+        const auto& state = timelineController->getState();
+        timelineLength = state.timelineLength;
+        currentZoom = state.zoom.horizontalZoom;
+        displayMode = state.display.timeDisplayMode;
+        tempoBPM = state.tempo.bpm;
+        timeSignatureNumerator = state.tempo.timeSignatureNumerator;
+        timeSignatureDenominator = state.tempo.timeSignatureDenominator;
+
+        repaint();
+    }
+}
+
+// ===== TimelineStateListener Implementation =====
+
+void TrackContentPanel::timelineStateChanged(const TimelineState& state) {
+    // General state change - sync cached values
+    timelineLength = state.timelineLength;
+    displayMode = state.display.timeDisplayMode;
+    tempoBPM = state.tempo.bpm;
+    timeSignatureNumerator = state.tempo.timeSignatureNumerator;
+    timeSignatureDenominator = state.tempo.timeSignatureDenominator;
+    repaint();
+}
+
+void TrackContentPanel::zoomStateChanged(const TimelineState& state) {
+    currentZoom = state.zoom.horizontalZoom;
+    resized();
+    repaint();
 }
 
 void TrackContentPanel::paint(juce::Graphics& g) {
@@ -180,7 +231,8 @@ void TrackContentPanel::paintGrid(juce::Graphics& g, juce::Rectangle<int> area) 
 }
 
 void TrackContentPanel::drawTimeGrid(juce::Graphics& g, juce::Rectangle<int> area) {
-    const int minPixelSpacing = 30;
+    auto& layout = LayoutConfig::getInstance();
+    const int minPixelSpacing = layout.minGridPixelSpacing;
 
     if (displayMode == TimeDisplayMode::Seconds) {
         // ===== SECONDS MODE =====

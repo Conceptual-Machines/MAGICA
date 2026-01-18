@@ -1,0 +1,278 @@
+#pragma once
+
+#include <juce_gui_basics/juce_gui_basics.h>
+
+#include <variant>
+
+#include "TimelineState.hpp"
+
+namespace magica {
+
+// ===== Zoom Events =====
+
+/**
+ * @brief Set zoom to a specific value
+ */
+struct SetZoomEvent {
+    double zoom;
+};
+
+/**
+ * @brief Set zoom centered at a specific time position
+ */
+struct SetZoomCenteredEvent {
+    double zoom;
+    double centerTime;
+};
+
+/**
+ * @brief Set zoom while keeping a screen position anchored
+ */
+struct SetZoomAnchoredEvent {
+    double zoom;
+    double anchorTime;
+    int anchorScreenX;
+};
+
+/**
+ * @brief Zoom to fit a time range in the viewport
+ */
+struct ZoomToFitEvent {
+    double startTime;
+    double endTime;
+    double paddingPercent = 0.05;  // 5% padding on each side
+};
+
+/**
+ * @brief Reset zoom to fit entire timeline
+ */
+struct ResetZoomEvent {};
+
+// ===== Scroll Events =====
+
+/**
+ * @brief Set scroll position directly
+ */
+struct SetScrollPositionEvent {
+    int scrollX;
+    int scrollY = -1;  // -1 means don't change
+};
+
+/**
+ * @brief Scroll by a delta amount
+ */
+struct ScrollByDeltaEvent {
+    int deltaX;
+    int deltaY;
+};
+
+/**
+ * @brief Scroll to make a time position visible (centered if possible)
+ */
+struct ScrollToTimeEvent {
+    double time;
+    bool center = true;
+};
+
+// ===== Playhead Events =====
+
+/**
+ * @brief Set playhead to a specific position
+ */
+struct SetPlayheadPositionEvent {
+    double position;
+};
+
+/**
+ * @brief Move playhead by a delta amount (in seconds)
+ */
+struct MovePlayheadByDeltaEvent {
+    double deltaSeconds;
+};
+
+/**
+ * @brief Set playback state
+ */
+struct SetPlaybackStateEvent {
+    bool isPlaying;
+    bool isRecording = false;
+};
+
+// ===== Selection Events =====
+
+/**
+ * @brief Set time selection range
+ */
+struct SetTimeSelectionEvent {
+    double startTime;
+    double endTime;
+};
+
+/**
+ * @brief Clear time selection
+ */
+struct ClearTimeSelectionEvent {};
+
+/**
+ * @brief Create loop region from current selection
+ */
+struct CreateLoopFromSelectionEvent {};
+
+// ===== Loop Events =====
+
+/**
+ * @brief Set loop region
+ */
+struct SetLoopRegionEvent {
+    double startTime;
+    double endTime;
+};
+
+/**
+ * @brief Clear loop region
+ */
+struct ClearLoopRegionEvent {};
+
+/**
+ * @brief Enable or disable loop
+ */
+struct SetLoopEnabledEvent {
+    bool enabled;
+};
+
+/**
+ * @brief Move entire loop region by a delta
+ */
+struct MoveLoopRegionEvent {
+    double deltaSeconds;
+};
+
+// ===== Tempo Events =====
+
+/**
+ * @brief Set tempo (BPM)
+ */
+struct SetTempoEvent {
+    double bpm;
+};
+
+/**
+ * @brief Set time signature
+ */
+struct SetTimeSignatureEvent {
+    int numerator;
+    int denominator;
+};
+
+// ===== Display Events =====
+
+/**
+ * @brief Set time display mode
+ */
+struct SetTimeDisplayModeEvent {
+    TimeDisplayMode mode;
+};
+
+/**
+ * @brief Toggle snap to grid
+ */
+struct SetSnapEnabledEvent {
+    bool enabled;
+};
+
+/**
+ * @brief Set arrangement locked state
+ */
+struct SetArrangementLockedEvent {
+    bool locked;
+};
+
+// ===== Section Events =====
+
+/**
+ * @brief Add a new arrangement section
+ */
+struct AddSectionEvent {
+    juce::String name;
+    double startTime;
+    double endTime;
+    juce::Colour colour = juce::Colours::blue;
+};
+
+/**
+ * @brief Remove an arrangement section
+ */
+struct RemoveSectionEvent {
+    int index;
+};
+
+/**
+ * @brief Move an arrangement section
+ */
+struct MoveSectionEvent {
+    int index;
+    double newStartTime;
+};
+
+/**
+ * @brief Resize an arrangement section
+ */
+struct ResizeSectionEvent {
+    int index;
+    double newStartTime;
+    double newEndTime;
+};
+
+/**
+ * @brief Select an arrangement section
+ */
+struct SelectSectionEvent {
+    int index;  // -1 to deselect
+};
+
+// ===== Viewport Events =====
+
+/**
+ * @brief Notify that viewport has been resized
+ */
+struct ViewportResizedEvent {
+    int width;
+    int height;
+};
+
+/**
+ * @brief Set timeline length
+ */
+struct SetTimelineLengthEvent {
+    double lengthInSeconds;
+};
+
+// ===== The unified TimelineEvent variant =====
+
+/**
+ * @brief Union of all timeline events
+ *
+ * Components dispatch these events to the TimelineController,
+ * which processes them and updates the TimelineState accordingly.
+ */
+using TimelineEvent = std::variant<
+    // Zoom events
+    SetZoomEvent, SetZoomCenteredEvent, SetZoomAnchoredEvent, ZoomToFitEvent, ResetZoomEvent,
+    // Scroll events
+    SetScrollPositionEvent, ScrollByDeltaEvent, ScrollToTimeEvent,
+    // Playhead events
+    SetPlayheadPositionEvent, MovePlayheadByDeltaEvent, SetPlaybackStateEvent,
+    // Selection events
+    SetTimeSelectionEvent, ClearTimeSelectionEvent, CreateLoopFromSelectionEvent,
+    // Loop events
+    SetLoopRegionEvent, ClearLoopRegionEvent, SetLoopEnabledEvent, MoveLoopRegionEvent,
+    // Tempo events
+    SetTempoEvent, SetTimeSignatureEvent,
+    // Display events
+    SetTimeDisplayModeEvent, SetSnapEnabledEvent, SetArrangementLockedEvent,
+    // Section events
+    AddSectionEvent, RemoveSectionEvent, MoveSectionEvent, ResizeSectionEvent, SelectSectionEvent,
+    // Viewport events
+    ViewportResizedEvent, SetTimelineLengthEvent>;
+
+}  // namespace magica

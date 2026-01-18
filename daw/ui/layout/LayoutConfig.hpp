@@ -29,6 +29,9 @@ struct LayoutConfig {
         return arrangementBarHeight + static_cast<int>(timeRulerHeight * rulerZoomAreaRatio);
     }
 
+    // Grid/tick spacing - shared between timeline ruler and track content grid
+    int minGridPixelSpacing = 50;  // Minimum pixels between grid lines/ticks
+
     // Debug mode
     bool showDebugOverlay = false;
 
