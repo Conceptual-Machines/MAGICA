@@ -13,7 +13,9 @@ namespace magica {
 // Forward declaration
 class TimelineController;
 
-class TrackContentPanel : public juce::Component, public TimelineStateListener {
+class TrackContentPanel : public juce::Component,
+                          public TimelineStateListener,
+                          private juce::Timer {
   public:
     static constexpr int DEFAULT_TRACK_HEIGHT = 80;
     static constexpr int MIN_TRACK_HEIGHT = 75;
@@ -143,6 +145,13 @@ class TrackContentPanel : public juce::Component, public TimelineStateListener {
     double moveSelectionOriginalStart = -1.0;
     double moveSelectionOriginalEnd = -1.0;
     std::set<int> moveSelectionOriginalTracks;
+
+    // Pending playhead state (for double-click detection)
+    double pendingPlayheadTime = -1.0;
+    static constexpr int DOUBLE_CLICK_DELAY_MS = 250;
+
+    // Timer callback for delayed playhead setting
+    void timerCallback() override;
 
     // Helper to check if a position is in a selectable area
     bool isInSelectableArea(int x, int y) const;

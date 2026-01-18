@@ -554,7 +554,7 @@ void TrackContentPanel::mouseUp(const juce::MouseEvent& event) {
         int deltaY = std::abs(event.y - mouseDownY);
 
         if (deltaX <= DRAG_THRESHOLD && deltaY <= DRAG_THRESHOLD) {
-            // It was a click - set playhead to clicked position
+            // It was a click - schedule playhead move (delayed to allow double-click detection)
             double clickTime = pixelToTime(mouseDownX);
             clickTime = juce::jlimit(0.0, timelineLength, clickTime);
 
@@ -563,10 +563,9 @@ void TrackContentPanel::mouseUp(const juce::MouseEvent& event) {
                 clickTime = snapTimeToGrid(clickTime);
             }
 
-            // Notify via callback (like TimelineComponent does)
-            if (onPlayheadPositionChanged) {
-                onPlayheadPositionChanged(clickTime);
-            }
+            // Schedule playhead change (will be cancelled if double-click detected)
+            pendingPlayheadTime = clickTime;
+            startTimer(DOUBLE_CLICK_DELAY_MS);
         } else {
             // It was a drag - finalize selection
             selectionEndTime = juce::jmax(0.0, juce::jmin(timelineLength, pixelToTime(event.x)));
@@ -604,6 +603,10 @@ void TrackContentPanel::mouseUp(const juce::MouseEvent& event) {
 }
 
 void TrackContentPanel::mouseDoubleClick(const juce::MouseEvent& event) {
+    // Cancel any pending playhead move (double-click should not move playhead)
+    stopTimer();
+    pendingPlayheadTime = -1.0;
+
     // Double-click on empty area clears selection
     if (!isOnExistingSelection(event.x, event.y)) {
         if (onTimeSelectionChanged) {
@@ -611,6 +614,16 @@ void TrackContentPanel::mouseDoubleClick(const juce::MouseEvent& event) {
             onTimeSelectionChanged(-1.0, -1.0, {});
         }
     }
+}
+
+void TrackContentPanel::timerCallback() {
+    stopTimer();
+
+    // Execute the pending playhead move
+    if (pendingPlayheadTime >= 0 && onPlayheadPositionChanged) {
+        onPlayheadPositionChanged(pendingPlayheadTime);
+    }
+    pendingPlayheadTime = -1.0;
 }
 
 void TrackContentPanel::mouseMove(const juce::MouseEvent& event) {
