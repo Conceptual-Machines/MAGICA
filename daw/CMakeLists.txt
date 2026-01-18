@@ -73,6 +73,8 @@ set(DAW_UI_SOURCES
     # Windows
     ui/windows/MainWindow.cpp
     ui/windows/MenuManager.cpp
+    # Dialogs
+    ui/dialogs/PreferencesDialog.cpp
     # Panels
     ui/panels/TransportPanel.cpp
     ui/panels/TimelineHeaderPanel.cpp
@@ -115,6 +117,8 @@ set(DAW_HEADERS
     # Windows
     ui/windows/MainWindow.hpp
     ui/windows/MenuManager.hpp
+    # Dialogs
+    ui/dialogs/PreferencesDialog.hpp
     # Panels
     ui/panels/TransportPanel.hpp
     ui/panels/TimelineHeaderPanel.hpp
@@ -202,6 +206,7 @@ target_include_directories(magica_daw_app
     ${CMAKE_CURRENT_SOURCE_DIR}/ui
     ${CMAKE_CURRENT_SOURCE_DIR}/ui/themes
     ${CMAKE_CURRENT_SOURCE_DIR}/ui/windows
+    ${CMAKE_CURRENT_SOURCE_DIR}/ui/dialogs
     ${CMAKE_CURRENT_SOURCE_DIR}/ui/panels
     ${CMAKE_CURRENT_SOURCE_DIR}/ui/views
     ${CMAKE_CURRENT_SOURCE_DIR}/ui/layout

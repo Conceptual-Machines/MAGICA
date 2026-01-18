@@ -1,5 +1,6 @@
 #include "MainWindow.hpp"
 
+#include "../dialogs/PreferencesDialog.hpp"
 #include "../panels/BottomPanel.hpp"
 #include "../panels/LeftPanel.hpp"
 #include "../panels/RightPanel.hpp"
@@ -317,11 +318,7 @@ void MainWindow::setupMenuCallbacks() {
                                                "Select all functionality not yet implemented.");
     };
 
-    callbacks.onPreferences = [this]() {
-        // TODO: Implement preferences
-        juce::AlertWindow::showMessageBoxAsync(juce::AlertWindow::InfoIcon, "Preferences",
-                                               "Preferences functionality not yet implemented.");
-    };
+    callbacks.onPreferences = [this]() { PreferencesDialog::showDialog(this); };
 
     // View menu callbacks
     callbacks.onToggleLeftPanel = [this](bool show) {

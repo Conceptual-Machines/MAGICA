@@ -61,11 +61,8 @@ juce::PopupMenu MenuManager::getMenuForIndex(int topLevelMenuIndex, const juce::
         menu.addItem(Delete, "Delete", hasSelection_, false);
         menu.addSeparator();
         menu.addItem(SelectAll, "Select All", true, false);
-
-#if !JUCE_MAC
         menu.addSeparator();
         menu.addItem(Preferences, "Preferences...", true, false);
-#endif
     } else if (menuName == "View") {
         menu.addItem(ToggleLeftPanel, "Show Left Panel", true, leftPanelVisible_);
         menu.addItem(ToggleRightPanel, "Show Right Panel", true, rightPanelVisible_);

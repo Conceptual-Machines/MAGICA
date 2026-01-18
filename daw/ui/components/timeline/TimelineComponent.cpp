@@ -544,16 +544,21 @@ void TimelineComponent::mouseDrag(const juce::MouseEvent& event) {
         double zoomPosition = (logCurrent - logMin) / (logMax - logMin);
         zoomPosition = juce::jlimit(0.0, 1.0, zoomPosition);
 
-        // Base sensitivity scales with zoom position:
-        // - At min zoom (position=0): 60px to double (very responsive)
-        // - At max zoom (position=1): 200px to double (fine control)
-        double baseSensitivity = 60.0 + zoomPosition * 140.0;
+        // Get sensitivity from Config
+        // zoomInSensitivity: pixels to double when zoomed out (lower = faster)
+        // zoomOutSensitivity: pixels to double when zoomed in (higher = finer control)
+        double minZoomSensitivity = config.getZoomInSensitivity();   // 25.0 - fast when zoomed out
+        double maxZoomSensitivity = config.getZoomOutSensitivity();  // 40.0 - finer when zoomed in
+
+        // Scale sensitivity based on zoom position (interpolate between config values)
+        double baseSensitivity =
+            minZoomSensitivity + zoomPosition * (maxZoomSensitivity - minZoomSensitivity);
 
         double sensitivity = baseSensitivity;
         if (isShiftHeld) {
-            sensitivity = baseSensitivity * 0.4;  // Shift: fast zoom (2.5x faster)
+            sensitivity = config.getZoomInSensitivityShift();  // 8.0 - turbo fast
         } else if (isAltHeld) {
-            sensitivity = baseSensitivity * 2.5;  // Alt/Option: fine zoom (slower)
+            sensitivity = baseSensitivity * 3.0;  // Alt/Option: fine zoom (slower)
         }
 
         // Progressive acceleration: the further you drag, the faster it goes
