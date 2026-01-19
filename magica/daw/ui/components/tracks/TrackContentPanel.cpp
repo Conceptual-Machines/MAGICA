@@ -324,10 +324,19 @@ void TrackContentPanel::paintEditCursor(juce::Graphics& g) {
         return;
     }
 
-    // Draw thin vertical line
-    g.setColour(DarkTheme::getColour(DarkTheme::ACCENT_BLUE).withAlpha(0.8f));
-    g.drawVerticalLine(cursorX, static_cast<float>(trackArea.getY()),
-                       static_cast<float>(trackArea.getBottom()));
+    // Draw edit cursor as a prominent white line
+    float top = static_cast<float>(trackArea.getY());
+    float bottom = static_cast<float>(trackArea.getBottom());
+    float x = static_cast<float>(cursorX);
+
+    // Draw glow/shadow for visibility over grid lines
+    g.setColour(juce::Colours::black.withAlpha(0.5f));
+    g.drawLine(x - 1.0f, top, x - 1.0f, bottom, 1.0f);
+    g.drawLine(x + 1.0f, top, x + 1.0f, bottom, 1.0f);
+
+    // Draw main white cursor line
+    g.setColour(juce::Colours::white);
+    g.drawLine(x, top, x, bottom, 2.0f);
 }
 
 juce::Rectangle<int> TrackContentPanel::getTrackLaneArea(int trackIndex) const {
