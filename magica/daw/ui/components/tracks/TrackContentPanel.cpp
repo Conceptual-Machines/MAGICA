@@ -135,6 +135,21 @@ void TrackContentPanel::timelineStateChanged(const TimelineState& state) {
     tempoBPM = state.tempo.bpm;
     timeSignatureNumerator = state.tempo.timeSignatureNumerator;
     timeSignatureDenominator = state.tempo.timeSignatureDenominator;
+
+    // Manage edit cursor blink timer
+    if (state.editCursorPosition >= 0) {
+        // Edit cursor is active - reset blink to visible and ensure timer is running
+        editCursorBlinkVisible_ = true;
+        if (!isTimerRunning()) {
+            startTimer(EDIT_CURSOR_BLINK_MS);
+        }
+    } else {
+        // Edit cursor is hidden - stop blink timer
+        if (isTimerRunning()) {
+            stopTimer();
+        }
+    }
+
     repaint();
 }
 
@@ -312,6 +327,11 @@ void TrackContentPanel::paintEditCursor(juce::Graphics& g) {
 
     // Don't draw if position is invalid (< 0 means hidden)
     if (editCursorPos < 0 || editCursorPos > timelineLength) {
+        return;
+    }
+
+    // Blink effect - only draw when visible
+    if (!editCursorBlinkVisible_) {
         return;
     }
 
@@ -731,13 +751,9 @@ void TrackContentPanel::mouseDoubleClick(const juce::MouseEvent& event) {
 }
 
 void TrackContentPanel::timerCallback() {
-    stopTimer();
-
-    // Execute the pending playhead move
-    if (pendingPlayheadTime >= 0 && onPlayheadPositionChanged) {
-        onPlayheadPositionChanged(pendingPlayheadTime);
-    }
-    pendingPlayheadTime = -1.0;
+    // Toggle edit cursor blink state
+    editCursorBlinkVisible_ = !editCursorBlinkVisible_;
+    repaint();
 }
 
 void TrackContentPanel::mouseMove(const juce::MouseEvent& event) {

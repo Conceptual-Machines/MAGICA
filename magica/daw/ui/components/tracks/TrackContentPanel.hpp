@@ -194,11 +194,11 @@ class TrackContentPanel : public juce::Component,
     void moveClipsWithTimeSelection(double deltaTime);
     void commitClipsInTimeSelection(double deltaTime);
 
-    // Pending playhead state (for double-click detection)
-    double pendingPlayheadTime = -1.0;
-    static constexpr int DOUBLE_CLICK_DELAY_MS = 250;
+    // Edit cursor blink state
+    bool editCursorBlinkVisible_ = true;
+    static constexpr int EDIT_CURSOR_BLINK_MS = 500;  // Blink interval
 
-    // Timer callback for delayed playhead setting
+    // Timer callback for edit cursor blinking
     void timerCallback() override;
 
     // Helper to check if a position is in a selectable area
