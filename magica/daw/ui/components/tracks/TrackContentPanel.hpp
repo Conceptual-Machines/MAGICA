@@ -151,6 +151,7 @@ class TrackContentPanel : public juce::Component,
     // Helper methods
     void paintTrackLane(juce::Graphics& g, const TrackLane& lane, juce::Rectangle<int> area,
                         bool isSelected, int trackIndex);
+    void paintEditCursor(juce::Graphics& g);
     juce::Rectangle<int> getTrackLaneArea(int trackIndex) const;
 
     // Mouse handling

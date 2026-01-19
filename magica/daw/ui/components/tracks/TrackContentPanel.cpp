@@ -4,6 +4,7 @@
 #include <iostream>
 
 #include "../../layout/LayoutConfig.hpp"
+#include "../../state/TimelineEvents.hpp"
 #include "../../themes/DarkTheme.hpp"
 #include "../../themes/FontManager.hpp"
 #include "../../utils/TimelineUtils.hpp"
@@ -156,6 +157,9 @@ void TrackContentPanel::paint(juce::Graphics& g) {
         }
     }
 
+    // Draw edit cursor line on selected track
+    paintEditCursor(g);
+
     // Draw ghost clips (during Alt+drag duplication)
     paintClipGhosts(g);
 
@@ -294,6 +298,34 @@ void TrackContentPanel::paintTrackLane(juce::Graphics& g, const TrackLane& lane,
     // Border (horizontal separators between tracks)
     g.setColour(DarkTheme::getColour(DarkTheme::BORDER));
     g.drawRect(area, 1);
+}
+
+void TrackContentPanel::paintEditCursor(juce::Graphics& g) {
+    if (!timelineController || selectedTrackIndex < 0) {
+        return;
+    }
+
+    const auto& state = timelineController->getState();
+    double editPosition = state.playhead.editPosition;
+
+    // Don't draw if position is invalid
+    if (editPosition < 0 || editPosition > timelineLength) {
+        return;
+    }
+
+    // Calculate X position
+    int cursorX = timeToPixel(editPosition);
+
+    // Only draw on selected track(s)
+    auto trackArea = getTrackLaneArea(selectedTrackIndex);
+    if (trackArea.isEmpty()) {
+        return;
+    }
+
+    // Draw thin vertical line
+    g.setColour(DarkTheme::getColour(DarkTheme::ACCENT_BLUE).withAlpha(0.8f));
+    g.drawVerticalLine(cursorX, static_cast<float>(trackArea.getY()),
+                       static_cast<float>(trackArea.getBottom()));
 }
 
 juce::Rectangle<int> TrackContentPanel::getTrackLaneArea(int trackIndex) const {
@@ -605,7 +637,18 @@ void TrackContentPanel::mouseUp(const juce::MouseEvent& event) {
         int deltaY = std::abs(event.y - mouseDownY);
 
         if (deltaX <= DRAG_THRESHOLD && deltaY <= DRAG_THRESHOLD) {
-            // It was a click - single click does nothing (playhead moved on double-click)
+            // It was a click in lower zone - set edit cursor
+            double clickTime = juce::jmax(0.0, juce::jmin(timelineLength, pixelToTime(event.x)));
+
+            // Apply snap to grid if callback is set
+            if (snapTimeToGrid) {
+                clickTime = snapTimeToGrid(clickTime);
+            }
+
+            // Dispatch edit position change through controller
+            if (timelineController) {
+                timelineController->dispatch(SetEditPositionEvent{clickTime});
+            }
         } else {
             // It was a drag - finalize time selection
             selectionEndTime = juce::jmax(0.0, juce::jmin(timelineLength, pixelToTime(event.x)));
@@ -1480,6 +1523,45 @@ bool TrackContentPanel::keyPressed(const juce::KeyPress& key) {
             if (!newClipIds.empty()) {
                 selectionManager.selectClips(newClipIds);
             }
+            return true;
+        }
+    }
+
+    // S: Split selected clips at edit cursor position
+    if (key == juce::KeyPress('s')) {
+        if (!timelineController) {
+            return false;
+        }
+
+        const auto& state = timelineController->getState();
+        double splitTime = state.playhead.editPosition;
+
+        // Get selected clips
+        const auto& selectedClips = selectionManager.getSelectedClips();
+        if (selectedClips.empty()) {
+            return false;
+        }
+
+        // Split each selected clip that contains the edit cursor
+        std::vector<ClipId> newClipIds;
+        for (ClipId clipId : selectedClips) {
+            const auto* clip = ClipManager::getInstance().getClip(clipId);
+            if (clip && clip->containsTime(splitTime)) {
+                // Split returns the ID of the new right-hand clip
+                ClipId rightClipId = ClipManager::getInstance().splitClip(clipId, splitTime);
+                if (rightClipId != INVALID_CLIP_ID) {
+                    newClipIds.push_back(rightClipId);
+                }
+            }
+        }
+
+        // If splits were made, select both original and new clips
+        if (!newClipIds.empty()) {
+            std::unordered_set<ClipId> newSelection = selectedClips;
+            for (ClipId id : newClipIds) {
+                newSelection.insert(id);
+            }
+            selectionManager.selectClips(newSelection);
             return true;
         }
     }
