@@ -133,6 +133,19 @@ class SelectionManager {
     void toggleClipSelection(ClipId clipId);
 
     /**
+     * @brief Extend selection from anchor to target clip (Shift+click behavior)
+     * Selects all clips in the rectangular region between anchor and target
+     */
+    void extendSelectionTo(ClipId targetClipId);
+
+    /**
+     * @brief Get the anchor clip (last single-clicked clip)
+     */
+    ClipId getAnchorClip() const {
+        return anchorClipId_;
+    }
+
+    /**
      * @brief Get all selected clips
      */
     const std::unordered_set<ClipId>& getSelectedClips() const {
@@ -197,6 +210,7 @@ class SelectionManager {
     SelectionType selectionType_ = SelectionType::None;
     TrackId selectedTrackId_ = INVALID_TRACK_ID;
     ClipId selectedClipId_ = INVALID_CLIP_ID;
+    ClipId anchorClipId_ = INVALID_CLIP_ID;       // Anchor for Shift+click range selection
     std::unordered_set<ClipId> selectedClipIds_;  // For multi-clip selection
     TimeRangeSelection timeRangeSelection_;
 

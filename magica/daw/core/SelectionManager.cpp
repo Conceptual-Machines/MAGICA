@@ -61,6 +61,9 @@ void SelectionManager::selectClip(ClipId clipId) {
     selectionType_ = SelectionType::Clip;
     selectedClipId_ = clipId;
 
+    // Set this as the anchor for Shift+click range selection
+    anchorClipId_ = clipId;
+
     // Also add to the set for consistency
     if (clipId != INVALID_CLIP_ID) {
         selectedClipIds_.insert(clipId);
@@ -175,6 +178,57 @@ void SelectionManager::toggleClipSelection(ClipId clipId) {
     }
 }
 
+void SelectionManager::extendSelectionTo(ClipId targetClipId) {
+    if (targetClipId == INVALID_CLIP_ID) {
+        return;
+    }
+
+    // If no anchor, just select the target
+    if (anchorClipId_ == INVALID_CLIP_ID) {
+        selectClip(targetClipId);
+        return;
+    }
+
+    // Get anchor and target clip info
+    const auto* anchorClip = ClipManager::getInstance().getClip(anchorClipId_);
+    const auto* targetClip = ClipManager::getInstance().getClip(targetClipId);
+
+    if (!anchorClip || !targetClip) {
+        selectClip(targetClipId);
+        return;
+    }
+
+    // Calculate the rectangular region between anchor and target
+    double minTime = std::min(anchorClip->startTime, targetClip->startTime);
+    double maxTime = std::max(anchorClip->startTime + anchorClip->length,
+                              targetClip->startTime + targetClip->length);
+
+    TrackId minTrackId = std::min(anchorClip->trackId, targetClip->trackId);
+    TrackId maxTrackId = std::max(anchorClip->trackId, targetClip->trackId);
+
+    // Find all clips in this region
+    std::unordered_set<ClipId> clipsInRange;
+    const auto& allClips = ClipManager::getInstance().getClips();
+
+    for (const auto& clip : allClips) {
+        // Check if clip's track is in range
+        if (clip.trackId < minTrackId || clip.trackId > maxTrackId) {
+            continue;
+        }
+
+        // Check if clip overlaps with time range
+        double clipEnd = clip.startTime + clip.length;
+        if (clip.startTime < maxTime && clipEnd > minTime) {
+            clipsInRange.insert(clip.id);
+        }
+    }
+
+    // Select all clips in range (preserve anchor)
+    ClipId savedAnchor = anchorClipId_;
+    selectClips(clipsInRange);
+    anchorClipId_ = savedAnchor;
+}
+
 bool SelectionManager::isClipSelected(ClipId clipId) const {
     if (selectionType_ == SelectionType::Clip) {
         return selectedClipId_ == clipId;
@@ -224,6 +278,7 @@ void SelectionManager::clearSelection() {
     selectionType_ = SelectionType::None;
     selectedTrackId_ = INVALID_TRACK_ID;
     selectedClipId_ = INVALID_CLIP_ID;
+    anchorClipId_ = INVALID_CLIP_ID;
     selectedClipIds_.clear();
     timeRangeSelection_ = TimeRangeSelection{};
 

@@ -222,6 +222,18 @@ void ClipComponent::mouseDown(const juce::MouseEvent& e) {
         return;
     }
 
+    // Handle Shift+click for range selection
+    if (e.mods.isShiftDown()) {
+        selectionManager.extendSelectionTo(clipId_);
+        // Update local state
+        isSelected_ = selectionManager.isClipSelected(clipId_);
+
+        // Don't start dragging on Shift+click - it's just for selection
+        dragMode_ = DragMode::None;
+        repaint();
+        return;
+    }
+
     // If clicking on a clip that's already part of a multi-selection,
     // keep the selection and prepare for potential multi-drag
     if (isAlreadySelected && selectionManager.getSelectedClipCount() > 1) {
