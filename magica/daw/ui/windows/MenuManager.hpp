@@ -4,9 +4,11 @@
 
 #include <functional>
 
+#include "core/UndoManager.hpp"
+
 namespace magica {
 
-class MenuManager : public juce::MenuBarModel {
+class MenuManager : public juce::MenuBarModel, public UndoManagerListener {
   public:
     // Menu callbacks
     struct MenuCallbacks {
@@ -83,9 +85,15 @@ class MenuManager : public juce::MenuBarModel {
         return this;
     }
 
+    // UndoManagerListener
+    void undoStateChanged() override {
+        // Force menu to rebuild when undo state changes
+        menuItemsChanged();
+    }
+
   private:
-    MenuManager() = default;
-    ~MenuManager() = default;
+    MenuManager();
+    ~MenuManager();
 
     // Non-copyable
     MenuManager(const MenuManager&) = delete;

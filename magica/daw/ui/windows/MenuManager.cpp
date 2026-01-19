@@ -9,6 +9,15 @@ MenuManager& MenuManager::getInstance() {
     return instance;
 }
 
+MenuManager::MenuManager() {
+    // Register as UndoManager listener to refresh menu when undo state changes
+    UndoManager::getInstance().addListener(this);
+}
+
+MenuManager::~MenuManager() {
+    UndoManager::getInstance().removeListener(this);
+}
+
 void MenuManager::initialize(const MenuCallbacks& callbacks) {
     callbacks_ = callbacks;
 }
