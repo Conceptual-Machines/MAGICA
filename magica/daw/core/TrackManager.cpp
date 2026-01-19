@@ -306,7 +306,8 @@ void TrackManager::setTrackType(TrackId trackId, TrackType type) {
 void TrackManager::setTrackVisible(TrackId trackId, ViewMode mode, bool visible) {
     if (auto* track = getTrack(trackId)) {
         track->viewSettings.setVisible(mode, visible);
-        notifyTrackPropertyChanged(trackId);
+        // Use tracksChanged since visibility affects which tracks are displayed
+        notifyTracksChanged();
     }
 }
 
@@ -320,7 +321,8 @@ void TrackManager::setTrackLocked(TrackId trackId, ViewMode mode, bool locked) {
 void TrackManager::setTrackCollapsed(TrackId trackId, ViewMode mode, bool collapsed) {
     if (auto* track = getTrack(trackId)) {
         track->viewSettings.setCollapsed(mode, collapsed);
-        notifyTrackPropertyChanged(trackId);
+        // Use tracksChanged since collapsing affects which child tracks are displayed
+        notifyTracksChanged();
     }
 }
 

@@ -4,63 +4,58 @@
 
 namespace magica {
 
+// Column IDs
+enum ColumnIds { TrackName = 1, LiveCol, ArrangeCol, MixCol, MasterCol };
+
 // ============================================================================
-// Content Component
+// Content Component with TableListBox
 // ============================================================================
 
 class TrackManagerDialog::ContentComponent : public juce::Component,
-                                             public juce::ListBoxModel,
-                                             public ViewModeListener,
+                                             public juce::TableListBoxModel,
                                              public TrackManagerListener {
   public:
     ContentComponent() {
-        // View mode selector
-        viewModeLabel_.setText("View Mode:", juce::dontSendNotification);
-        viewModeLabel_.setColour(juce::Label::textColourId,
-                                 DarkTheme::getColour(DarkTheme::TEXT_PRIMARY));
-        addAndMakeVisible(viewModeLabel_);
+        // Table setup
+        table_.setModel(this);
+        table_.setColour(juce::ListBox::backgroundColourId,
+                         DarkTheme::getColour(DarkTheme::SURFACE));
+        table_.setRowHeight(26);
+        table_.setHeaderHeight(28);
 
-        viewModeCombo_.addItem("Live", 1);
-        viewModeCombo_.addItem("Arrange", 2);
-        viewModeCombo_.addItem("Mix", 3);
-        viewModeCombo_.addItem("Master", 4);
+        auto& header = table_.getHeader();
+        header.addColumn("Track", TrackName, 180, 100, 300,
+                         juce::TableHeaderComponent::defaultFlags);
+        header.addColumn("Live", LiveCol, 60, 50, 80, juce::TableHeaderComponent::defaultFlags);
+        header.addColumn("Arrange", ArrangeCol, 60, 50, 80,
+                         juce::TableHeaderComponent::defaultFlags);
+        header.addColumn("Mix", MixCol, 60, 50, 80, juce::TableHeaderComponent::defaultFlags);
+        header.addColumn("Master", MasterCol, 60, 50, 80, juce::TableHeaderComponent::defaultFlags);
 
-        auto currentMode = ViewModeController::getInstance().getViewMode();
-        viewModeCombo_.setSelectedId(static_cast<int>(currentMode) + 1, juce::dontSendNotification);
+        // Style the header
+        header.setColour(juce::TableHeaderComponent::backgroundColourId,
+                         DarkTheme::getColour(DarkTheme::PANEL_BACKGROUND));
+        header.setColour(juce::TableHeaderComponent::textColourId,
+                         DarkTheme::getColour(DarkTheme::TEXT_PRIMARY));
 
-        viewModeCombo_.onChange = [this]() {
-            selectedMode_ = static_cast<ViewMode>(viewModeCombo_.getSelectedId() - 1);
-            rebuildTrackList();
-        };
-        addAndMakeVisible(viewModeCombo_);
-
-        selectedMode_ = currentMode;
-
-        // Track list
-        trackListBox_.setModel(this);
-        trackListBox_.setRowHeight(28);
-        trackListBox_.setColour(juce::ListBox::backgroundColourId,
-                                DarkTheme::getColour(DarkTheme::SURFACE));
-        addAndMakeVisible(trackListBox_);
+        addAndMakeVisible(table_);
 
         // Info label
-        infoLabel_.setText("Toggle visibility for tracks in selected view mode",
+        infoLabel_.setText("Click checkboxes to toggle track visibility per view mode",
                            juce::dontSendNotification);
         infoLabel_.setColour(juce::Label::textColourId,
                              DarkTheme::getColour(DarkTheme::TEXT_SECONDARY));
         infoLabel_.setJustificationType(juce::Justification::centred);
         addAndMakeVisible(infoLabel_);
 
-        // Register listeners
-        ViewModeController::getInstance().addListener(this);
+        // Register listener
         TrackManager::getInstance().addListener(this);
 
         rebuildTrackList();
-        setSize(400, 350);
+        setSize(500, 400);
     }
 
     ~ContentComponent() override {
-        ViewModeController::getInstance().removeListener(this);
         TrackManager::getInstance().removeListener(this);
     }
 
@@ -70,24 +65,9 @@ class TrackManagerDialog::ContentComponent : public juce::Component,
 
     void resized() override {
         auto bounds = getLocalBounds().reduced(10);
-
-        auto topRow = bounds.removeFromTop(30);
-        viewModeLabel_.setBounds(topRow.removeFromLeft(80));
-        viewModeCombo_.setBounds(topRow.reduced(5, 2));
-
-        bounds.removeFromTop(10);
-
         infoLabel_.setBounds(bounds.removeFromBottom(25));
         bounds.removeFromBottom(5);
-
-        trackListBox_.setBounds(bounds);
-    }
-
-    // ViewModeListener
-    void viewModeChanged(ViewMode mode, const AudioEngineProfile& /*profile*/) override {
-        viewModeCombo_.setSelectedId(static_cast<int>(mode) + 1, juce::dontSendNotification);
-        selectedMode_ = mode;
-        rebuildTrackList();
+        table_.setBounds(bounds);
     }
 
     // TrackManagerListener
@@ -95,109 +75,153 @@ class TrackManagerDialog::ContentComponent : public juce::Component,
         rebuildTrackList();
     }
 
-    // ListBoxModel implementation (inline since it's simple)
+    // TableListBoxModel implementation
     int getNumRows() override {
-        return static_cast<int>(trackIds_.size());
+        return static_cast<int>(trackRows_.size());
     }
 
-    void paintListBoxItem(int rowNumber, juce::Graphics& g, int width, int height,
-                          bool rowIsSelected) override {
-        if (rowNumber < 0 || rowNumber >= static_cast<int>(trackIds_.size()))
-            return;
-
-        auto trackId = trackIds_[rowNumber];
-        const auto* track = TrackManager::getInstance().getTrack(trackId);
-        if (!track)
-            return;
-
-        // Background
+    void paintRowBackground(juce::Graphics& g, int rowNumber, int /*width*/, int /*height*/,
+                            bool rowIsSelected) override {
         if (rowIsSelected) {
             g.fillAll(DarkTheme::getColour(DarkTheme::ACCENT_BLUE).withAlpha(0.3f));
+        } else if (rowNumber % 2 == 0) {
+            g.fillAll(DarkTheme::getColour(DarkTheme::SURFACE).darker(0.05f));
         }
-
-        // Checkbox area
-        auto checkboxBounds = juce::Rectangle<int>(5, (height - 18) / 2, 18, 18);
-        bool isVisible = track->isVisibleIn(selectedMode_);
-
-        g.setColour(DarkTheme::getColour(DarkTheme::BORDER));
-        g.drawRect(checkboxBounds, 1);
-
-        if (isVisible) {
-            g.setColour(DarkTheme::getColour(DarkTheme::ACCENT_BLUE));
-            g.fillRect(checkboxBounds.reduced(3));
-        }
-
-        // Track name
-        g.setColour(DarkTheme::getColour(DarkTheme::TEXT_PRIMARY));
-        g.drawText(track->name, 30, 0, width - 35, height, juce::Justification::centredLeft);
-
-        // Track type indicator
-        g.setColour(DarkTheme::getColour(DarkTheme::TEXT_SECONDARY));
-        juce::String typeStr = juce::String("[") + getTrackTypeName(track->type) + "]";
-        g.drawText(typeStr, width - 80, 0, 75, height, juce::Justification::centredRight);
     }
 
-    void listBoxItemClicked(int row, const juce::MouseEvent& /*e*/) override {
-        if (row < 0 || row >= static_cast<int>(trackIds_.size()))
+    void paintCell(juce::Graphics& g, int rowNumber, int columnId, int width, int height,
+                   bool /*rowIsSelected*/) override {
+        if (rowNumber < 0 || rowNumber >= static_cast<int>(trackRows_.size()))
             return;
 
-        auto trackId = trackIds_[row];
-        const auto* track = TrackManager::getInstance().getTrack(trackId);
+        const auto& row = trackRows_[rowNumber];
+        const auto* track = TrackManager::getInstance().getTrack(row.trackId);
         if (!track)
             return;
 
-        // Toggle visibility
-        bool currentlyVisible = track->isVisibleIn(selectedMode_);
-        TrackManager::getInstance().setTrackVisible(trackId, selectedMode_, !currentlyVisible);
+        if (columnId == TrackName) {
+            // Draw track name with indentation for hierarchy
+            g.setColour(DarkTheme::getColour(DarkTheme::TEXT_PRIMARY));
+            int indent = row.depth * 20;
+            juce::String displayName = track->name;
 
-        trackListBox_.repaint();
+            // Add group indicator
+            if (track->isGroup()) {
+                displayName = juce::String(juce::CharPointer_UTF8("\xe2\x96\xbc ")) + displayName;
+            }
+
+            g.drawText(displayName, indent + 5, 0, width - indent - 10, height,
+                       juce::Justification::centredLeft);
+        } else {
+            // Draw checkbox for view mode columns
+            ViewMode mode = columnIdToViewMode(columnId);
+            bool isVisible = track->isVisibleIn(mode);
+
+            auto checkBounds = juce::Rectangle<int>((width - 16) / 2, (height - 16) / 2, 16, 16);
+
+            // Checkbox border
+            g.setColour(DarkTheme::getColour(DarkTheme::BORDER));
+            g.drawRect(checkBounds, 1);
+
+            // Checked state
+            if (isVisible) {
+                g.setColour(DarkTheme::getColour(DarkTheme::ACCENT_BLUE));
+                g.fillRect(checkBounds.reduced(3));
+
+                // Draw checkmark
+                g.setColour(DarkTheme::getColour(DarkTheme::TEXT_PRIMARY));
+                juce::Path checkPath;
+                float cx = checkBounds.getCentreX();
+                float cy = checkBounds.getCentreY();
+                checkPath.startNewSubPath(cx - 4, cy);
+                checkPath.lineTo(cx - 1, cy + 3);
+                checkPath.lineTo(cx + 4, cy - 3);
+                g.strokePath(checkPath, juce::PathStrokeType(2.0f));
+            }
+        }
+    }
+
+    void cellClicked(int rowNumber, int columnId, const juce::MouseEvent& /*e*/) override {
+        if (rowNumber < 0 || rowNumber >= static_cast<int>(trackRows_.size()))
+            return;
+        if (columnId == TrackName)
+            return;  // Don't toggle on name column
+
+        const auto& row = trackRows_[rowNumber];
+        const auto* track = TrackManager::getInstance().getTrack(row.trackId);
+        if (!track)
+            return;
+
+        ViewMode mode = columnIdToViewMode(columnId);
+        bool currentlyVisible = track->isVisibleIn(mode);
+        TrackManager::getInstance().setTrackVisible(row.trackId, mode, !currentlyVisible);
+
+        table_.repaint();
     }
 
   private:
+    struct TrackRow {
+        TrackId trackId;
+        int depth;
+    };
+
     void rebuildTrackList() {
-        trackIds_.clear();
+        trackRows_.clear();
         const auto& tracks = TrackManager::getInstance().getTracks();
 
-        DBG("TrackManagerDialog: rebuilding list, found " << tracks.size() << " tracks");
+        // Build hierarchical list - top level first, then children
+        std::function<void(TrackId, int)> addTrackRecursive = [&](TrackId trackId, int depth) {
+            const auto* track = TrackManager::getInstance().getTrack(trackId);
+            if (!track)
+                return;
 
+            trackRows_.push_back({trackId, depth});
+
+            // Add children if it's a group
+            if (track->isGroup()) {
+                for (auto childId : track->childIds) {
+                    addTrackRecursive(childId, depth + 1);
+                }
+            }
+        };
+
+        // Start with top-level tracks
         for (const auto& track : tracks) {
-            trackIds_.push_back(track.id);
+            if (track.isTopLevel()) {
+                addTrackRecursive(track.id, 0);
+            }
         }
 
-        trackListBox_.updateContent();
-        trackListBox_.repaint();
+        table_.updateContent();
+        table_.repaint();
 
-        if (trackIds_.empty()) {
+        if (trackRows_.empty()) {
             infoLabel_.setText("No tracks. Use Track > Add Track to create one.",
                                juce::dontSendNotification);
         } else {
-            infoLabel_.setText("Click a track to toggle visibility in " +
-                                   juce::String(getViewModeName(selectedMode_)) + " view",
+            infoLabel_.setText("Click checkboxes to toggle track visibility per view mode",
                                juce::dontSendNotification);
         }
     }
 
-    static const char* getViewModeName(ViewMode mode) {
-        switch (mode) {
-            case ViewMode::Live:
-                return "Live";
-            case ViewMode::Arrange:
-                return "Arrange";
-            case ViewMode::Mix:
-                return "Mix";
-            case ViewMode::Master:
-                return "Master";
+    static ViewMode columnIdToViewMode(int columnId) {
+        switch (columnId) {
+            case LiveCol:
+                return ViewMode::Live;
+            case ArrangeCol:
+                return ViewMode::Arrange;
+            case MixCol:
+                return ViewMode::Mix;
+            case MasterCol:
+                return ViewMode::Master;
+            default:
+                return ViewMode::Arrange;
         }
-        return "Unknown";
     }
 
-    juce::Label viewModeLabel_;
-    juce::ComboBox viewModeCombo_;
-    juce::ListBox trackListBox_{juce::String(), this};
+    juce::TableListBox table_{"TrackTable", this};
     juce::Label infoLabel_;
-
-    ViewMode selectedMode_ = ViewMode::Arrange;
-    std::vector<TrackId> trackIds_;
+    std::vector<TrackRow> trackRows_;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(ContentComponent)
 };
@@ -210,7 +234,7 @@ TrackManagerDialog::TrackManagerDialog()
     : DialogWindow("Track Manager", DarkTheme::getColour(DarkTheme::PANEL_BACKGROUND), true) {
     content_ = std::make_unique<ContentComponent>();
     setContentOwned(content_.release(), true);
-    centreWithSize(400, 350);
+    centreWithSize(500, 400);
     setResizable(true, true);
     setUsingNativeTitleBar(true);
 
