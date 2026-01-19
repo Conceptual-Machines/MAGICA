@@ -15,10 +15,27 @@ bool TracktionEngineWrapper::initialize() {
         // Initialize Tracktion Engine
         engine_ = std::make_unique<tracktion::Engine>("MagicaDAW");
 
-        // For now, just initialize without creating an edit
-        // This allows the build to succeed and we can expand functionality later
-        std::cout << "Tracktion Engine initialized successfully (minimal mode)" << std::endl;
-        return true;
+        // Create a temporary Edit (project) so transport methods work
+        auto editFile = juce::File::getSpecialLocation(juce::File::tempDirectory)
+                            .getChildFile("magica_temp.tracktionedit");
+
+        currentEdit_ = tracktion::createEmptyEdit(*engine_, editFile);
+
+        if (currentEdit_) {
+            // Set default tempo at position 0
+            auto& tempoSeq = currentEdit_->tempoSequence;
+            if (tempoSeq.getNumTempos() > 0) {
+                auto tempo = tempoSeq.getTempo(0);
+                if (tempo) {
+                    tempo->setBpm(120.0);
+                }
+            }
+            std::cout << "Tracktion Engine initialized with Edit" << std::endl;
+        } else {
+            std::cout << "Tracktion Engine initialized (no Edit created)" << std::endl;
+        }
+
+        return currentEdit_ != nullptr;
 
     } catch (const std::exception& e) {
         std::cerr << "ERROR: Failed to initialize Tracktion Engine: " << e.what() << std::endl;
@@ -146,8 +163,14 @@ bool TracktionEngineWrapper::isRecording() const {
 
 void TracktionEngineWrapper::setTempo(double bpm) {
     if (currentEdit_) {
-        // Simplified tempo setting - just log it for now
-        std::cout << "Set tempo: " << bpm << " BPM" << std::endl;
+        auto& tempoSeq = currentEdit_->tempoSequence;
+        if (tempoSeq.getNumTempos() > 0) {
+            auto tempo = tempoSeq.getTempo(0);
+            if (tempo) {
+                tempo->setBpm(bpm);
+                std::cout << "Set tempo: " << bpm << " BPM" << std::endl;
+            }
+        }
     }
 }
 
@@ -194,6 +217,21 @@ void TracktionEngineWrapper::setLoopRegion(double start_seconds, double end_seco
 bool TracktionEngineWrapper::isLooping() const {
     if (currentEdit_) {
         return currentEdit_->getTransport().looping;
+    }
+    return false;
+}
+
+// Metronome/click track methods
+void TracktionEngineWrapper::setMetronomeEnabled(bool enabled) {
+    if (currentEdit_) {
+        currentEdit_->clickTrackEnabled = enabled;
+        std::cout << "Metronome " << (enabled ? "enabled" : "disabled") << std::endl;
+    }
+}
+
+bool TracktionEngineWrapper::isMetronomeEnabled() const {
+    if (currentEdit_) {
+        return currentEdit_->clickTrackEnabled;
     }
     return false;
 }

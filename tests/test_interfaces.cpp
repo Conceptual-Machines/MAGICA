@@ -300,21 +300,34 @@ TEST_CASE("TrackInterface Mock Implementation", "[track]") {
 
 TEST_CASE("MidiNote Structure", "[clip]") {
     SECTION("Create MIDI note") {
-        MidiNote note(60, 100, 0.0, 1.0);  // Middle C, velocity 100, start at 0, duration 1 beat
+        magica::MidiNote note;  // Middle C, velocity 100, start at 0, duration 1 beat
+        note.noteNumber = 60;
+        note.velocity = 100;
+        note.startBeat = 0.0;
+        note.lengthBeats = 1.0;
 
-        REQUIRE(note.note == 60);
+        REQUIRE(note.noteNumber == 60);
         REQUIRE(note.velocity == 100);
-        REQUIRE(note.start == Catch::Approx(0.0));
-        REQUIRE(note.duration == Catch::Approx(1.0));
+        REQUIRE(note.startBeat == Catch::Approx(0.0));
+        REQUIRE(note.lengthBeats == Catch::Approx(1.0));
     }
 
     SECTION("MIDI note boundaries") {
-        MidiNote low_note(0, 1, 0.0, 0.25);
-        MidiNote high_note(127, 127, 4.0, 2.0);
+        magica::MidiNote low_note;
+        low_note.noteNumber = 0;
+        low_note.velocity = 1;
+        low_note.startBeat = 0.0;
+        low_note.lengthBeats = 0.25;
 
-        REQUIRE(low_note.note == 0);
+        magica::MidiNote high_note;
+        high_note.noteNumber = 127;
+        high_note.velocity = 127;
+        high_note.startBeat = 4.0;
+        high_note.lengthBeats = 2.0;
+
+        REQUIRE(low_note.noteNumber == 0);
         REQUIRE(low_note.velocity == 1);
-        REQUIRE(high_note.note == 127);
+        REQUIRE(high_note.noteNumber == 127);
         REQUIRE(high_note.velocity == 127);
     }
 }

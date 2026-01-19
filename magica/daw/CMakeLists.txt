@@ -81,6 +81,8 @@ set(DAW_CORE_SOURCES
 # DAW UI sources
 set(DAW_UI_SOURCES
     magica_daw_main.cpp
+    # Engine (UI layer integration)
+    engine/PlaybackPositionTimer.cpp
     # Themes
     ui/themes/DarkTheme.cpp
     ui/themes/FontManager.cpp
@@ -155,6 +157,7 @@ set(DAW_HEADERS
     core/ClipManager.hpp
     core/SelectionManager.hpp
     engine/tracktion_engine_wrapper.hpp
+    engine/PlaybackPositionTimer.hpp
     # Interfaces
     interfaces/clip_interface.hpp
     interfaces/mixer_interface.hpp

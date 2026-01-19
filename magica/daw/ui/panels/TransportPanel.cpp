@@ -298,6 +298,8 @@ void TransportPanel::setupTempoAndQuantize() {
     metronomeButton->onClick = [this]() {
         bool newState = !metronomeButton->isActive();
         metronomeButton->setActive(newState);
+        if (onMetronomeToggle)
+            onMetronomeToggle(newState);
     };
     addAndMakeVisible(*metronomeButton);
 }

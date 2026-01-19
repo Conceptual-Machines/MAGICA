@@ -20,6 +20,8 @@ class SessionView;
 class MixerView;
 class BottomPanel;
 class FooterBar;
+class TracktionEngineWrapper;
+class PlaybackPositionTimer;
 
 class MainWindow : public juce::DocumentWindow {
   public:
@@ -74,6 +76,10 @@ class MainWindow::MainComponent : public juce::Component, public ViewModeListene
     // Current view mode
     ViewMode currentViewMode = ViewMode::Arrange;
 
+    // Audio engine
+    std::unique_ptr<TracktionEngineWrapper> audioEngine_;
+    std::unique_ptr<PlaybackPositionTimer> positionTimer_;
+
     // Main layout panels
     std::unique_ptr<LeftPanel> leftPanel;
     std::unique_ptr<RightPanel> rightPanel;
@@ -95,6 +101,7 @@ class MainWindow::MainComponent : public juce::Component, public ViewModeListene
     // Setup helpers
     void setupResizeHandles();
     void setupViewModeListener();
+    void setupAudioEngine();
 
     // Layout helpers
     void layoutTransportArea(juce::Rectangle<int>& bounds);

@@ -50,6 +50,10 @@ class TracktionEngineWrapper : public TransportInterface,
     void setLoopRegion(double start_seconds, double end_seconds) override;
     bool isLooping() const override;
 
+    // Metronome/click track control
+    void setMetronomeEnabled(bool enabled);
+    bool isMetronomeEnabled() const;
+
     // TrackInterface implementation
     std::string createAudioTrack(const std::string& name) override;
     std::string createMidiTrack(const std::string& name) override;

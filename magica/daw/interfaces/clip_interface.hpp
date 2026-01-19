@@ -3,17 +3,9 @@
 #include <string>
 #include <vector>
 
-/**
- * @brief Represents a MIDI note
- */
-struct MidiNote {
-    int note;         // MIDI note number (0-127)
-    int velocity;     // Velocity (0-127)
-    double start;     // Start time within clip (in beats)
-    double duration;  // Duration (in beats)
+#include "../core/ClipInfo.hpp"  // For MidiNote
 
-    MidiNote(int n, int v, double s, double d) : note(n), velocity(v), start(s), duration(d) {}
-};
+namespace magica {
 
 /**
  * @brief Interface for managing clips (MIDI and audio segments)
@@ -108,3 +100,5 @@ class ClipInterface {
      */
     virtual bool clipExists(const std::string& clip_id) const = 0;
 };
+
+}  // namespace magica

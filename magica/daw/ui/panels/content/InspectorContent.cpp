@@ -1,5 +1,6 @@
 #include "InspectorContent.hpp"
 
+#include "../../state/TimelineController.hpp"
 #include "../../themes/DarkTheme.hpp"
 #include "../../themes/FontManager.hpp"
 #include "../../utils/TimelineUtils.hpp"
@@ -223,6 +224,14 @@ InspectorContent::~InspectorContent() {
     magica::TrackManager::getInstance().removeListener(this);
     magica::ClipManager::getInstance().removeListener(this);
     magica::SelectionManager::getInstance().removeListener(this);
+}
+
+void InspectorContent::setTimelineController(magica::TimelineController* controller) {
+    timelineController_ = controller;
+    // Refresh display with new tempo info if a clip is selected
+    if (currentSelectionType_ == magica::SelectionType::Clip) {
+        updateFromSelectedClip();
+    }
 }
 
 void InspectorContent::paint(juce::Graphics& g) {
@@ -454,18 +463,23 @@ void InspectorContent::updateFromSelectedClip() {
         clipNameValue_.setText(clip->name, juce::dontSendNotification);
         clipTypeValue_.setText(magica::getClipTypeName(clip->type), juce::dontSendNotification);
 
-        // TODO: Get tempo from TimelineController instead of hardcoding
-        constexpr double BPM = 120.0;
-        constexpr int BEATS_PER_BAR = 4;
+        // Get tempo from TimelineController, fallback to 120 BPM if not available
+        double bpm = 120.0;
+        int beatsPerBar = 4;
+        if (timelineController_) {
+            const auto& state = timelineController_->getState();
+            bpm = state.tempo.bpm;
+            beatsPerBar = state.tempo.timeSignatureNumerator;
+        }
 
         // Format start time as bars.beats.ticks
         auto startStr =
-            magica::TimelineUtils::formatTimeAsBarsBeats(clip->startTime, BPM, BEATS_PER_BAR);
+            magica::TimelineUtils::formatTimeAsBarsBeats(clip->startTime, bpm, beatsPerBar);
         clipStartValue_.setText(juce::String(startStr), juce::dontSendNotification);
 
         // Format length as bars and beats
         auto lengthStr =
-            magica::TimelineUtils::formatDurationAsBarsBeats(clip->length, BPM, BEATS_PER_BAR);
+            magica::TimelineUtils::formatDurationAsBarsBeats(clip->length, bpm, beatsPerBar);
         clipLengthValue_.setText(juce::String(lengthStr), juce::dontSendNotification);
 
         clipLoopToggle_.setToggleState(clip->internalLoopEnabled, juce::dontSendNotification);

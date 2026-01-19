@@ -7,12 +7,16 @@
 #include "../panels/LeftPanel.hpp"
 #include "../panels/RightPanel.hpp"
 #include "../panels/TransportPanel.hpp"
+#include "../state/TimelineController.hpp"
+#include "../state/TimelineEvents.hpp"
 #include "../themes/DarkTheme.hpp"
 #include "../views/MainView.hpp"
 #include "../views/MixerView.hpp"
 #include "../views/SessionView.hpp"
 #include "core/Config.hpp"
 #include "core/TrackManager.hpp"
+#include "engine/PlaybackPositionTimer.hpp"
+#include "engine/tracktion_engine_wrapper.hpp"
 
 namespace magica {
 
@@ -142,10 +146,10 @@ MainWindow::MainComponent::MainComponent() {
     mainView->onTimeSelectionChanged = [this](double start, double end, bool hasSelection) {
         transportPanel->setTimeSelection(start, end, hasSelection);
     };
-    transportPanel->onLoop = [this](bool enabled) { mainView->setLoopEnabled(enabled); };
 
     setupResizeHandles();
     setupViewModeListener();
+    setupAudioEngine();
 }
 
 void MainWindow::MainComponent::setupResizeHandles() {
@@ -211,7 +215,60 @@ void MainWindow::MainComponent::setupViewModeListener() {
     switchToView(currentViewMode);
 }
 
+void MainWindow::MainComponent::setupAudioEngine() {
+    // Initialize audio engine
+    audioEngine_ = std::make_unique<TracktionEngineWrapper>();
+    if (!audioEngine_->initialize()) {
+        DBG("Warning: Failed to initialize audio engine");
+    }
+
+    // Create position timer for playhead updates
+    positionTimer_ =
+        std::make_unique<PlaybackPositionTimer>(*audioEngine_, mainView->getTimelineController());
+
+    // Wire transport callbacks to audio engine
+    transportPanel->onPlay = [this]() {
+        audioEngine_->play();
+        positionTimer_->start();
+    };
+
+    transportPanel->onStop = [this]() {
+        audioEngine_->stop();
+        positionTimer_->stop();
+        // Reset playhead to start or keep at current position
+    };
+
+    transportPanel->onPause = [this]() {
+        audioEngine_->pause();
+        positionTimer_->stop();
+    };
+
+    transportPanel->onRecord = [this]() {
+        audioEngine_->record();
+        positionTimer_->start();
+    };
+
+    transportPanel->onLoop = [this](bool enabled) {
+        audioEngine_->setLooping(enabled);
+        mainView->setLoopEnabled(enabled);
+    };
+
+    transportPanel->onTempoChange = [this](double bpm) {
+        audioEngine_->setTempo(bpm);
+        // Dispatch tempo change to TimelineController for UI sync
+        mainView->getTimelineController().dispatch(SetTempoEvent{bpm});
+    };
+
+    transportPanel->onMetronomeToggle = [this](bool enabled) {
+        audioEngine_->setMetronomeEnabled(enabled);
+    };
+}
+
 MainWindow::MainComponent::~MainComponent() {
+    // Stop position timer before destroying
+    if (positionTimer_) {
+        positionTimer_->stop();
+    }
     ViewModeController::getInstance().removeListener(this);
 }
 

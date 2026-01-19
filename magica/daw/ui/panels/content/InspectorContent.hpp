@@ -5,6 +5,10 @@
 #include "core/SelectionManager.hpp"
 #include "core/TrackManager.hpp"
 
+namespace magica {
+class TimelineController;  // Forward declaration
+}
+
 namespace magica::daw::ui {
 
 /**
@@ -35,6 +39,9 @@ class InspectorContent : public PanelContent,
     void onActivated() override;
     void onDeactivated() override;
 
+    // Set the timeline controller reference (for accessing tempo/time signature)
+    void setTimelineController(magica::TimelineController* controller);
+
     // TrackManagerListener
     void tracksChanged() override;
     void trackPropertyChanged(int trackId) override;
@@ -51,6 +58,9 @@ class InspectorContent : public PanelContent,
   private:
     juce::Label titleLabel_;
     juce::Label noSelectionLabel_;
+
+    // Timeline controller reference (for tempo/time signature)
+    magica::TimelineController* timelineController_ = nullptr;
 
     // Current selection state
     magica::SelectionType currentSelectionType_ = magica::SelectionType::None;

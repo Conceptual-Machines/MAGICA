@@ -23,6 +23,7 @@ class TransportPanel : public juce::Component {
     std::function<void()> onPause;
     std::function<void(bool)> onLoop;
     std::function<void(double)> onTempoChange;
+    std::function<void(bool)> onMetronomeToggle;
 
     // Update displays - simplified API
     void setPlayheadPosition(double positionInSeconds);
