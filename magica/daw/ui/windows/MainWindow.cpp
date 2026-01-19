@@ -1,6 +1,7 @@
 #include "MainWindow.hpp"
 
 #include "../dialogs/PreferencesDialog.hpp"
+#include "../dialogs/TrackManagerDialog.hpp"
 #include "../panels/BottomPanel.hpp"
 #include "../panels/FooterBar.hpp"
 #include "../panels/LeftPanel.hpp"
@@ -610,14 +611,7 @@ void MainWindow::setupMenuCallbacks() {
 
     callbacks.onAddGroupTrack = []() { TrackManager::getInstance().createGroupTrack(); };
 
-    callbacks.onToggleTrackVisibility = [](int trackId) {
-        auto currentMode = ViewModeController::getInstance().getViewMode();
-        auto* track = TrackManager::getInstance().getTrack(trackId);
-        if (track) {
-            bool currentlyVisible = track->isVisibleIn(currentMode);
-            TrackManager::getInstance().setTrackVisible(trackId, currentMode, !currentlyVisible);
-        }
-    };
+    callbacks.onShowTrackManager = []() { TrackManagerDialog::show(); };
 
     callbacks.onDeleteTrack = [this]() {
         // Delete the selected track from MixerView

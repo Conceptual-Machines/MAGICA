@@ -88,6 +88,7 @@ set(DAW_UI_SOURCES
     ui/windows/MenuManager.cpp
     # Dialogs
     ui/dialogs/PreferencesDialog.cpp
+    ui/dialogs/TrackManagerDialog.cpp
     # Panels
     ui/panels/TransportPanel.cpp
     ui/panels/TimelineHeaderPanel.cpp
@@ -158,6 +159,7 @@ set(DAW_HEADERS
     ui/windows/MenuManager.hpp
     # Dialogs
     ui/dialogs/PreferencesDialog.hpp
+    ui/dialogs/TrackManagerDialog.hpp
     # Panels
     ui/panels/TransportPanel.hpp
     ui/panels/TimelineHeaderPanel.hpp

@@ -1,8 +1,5 @@
 #include "MenuManager.hpp"
 
-#include "core/TrackManager.hpp"
-#include "core/ViewModeController.hpp"
-
 namespace magica {
 
 MenuManager& MenuManager::getInstance() {
@@ -71,6 +68,8 @@ juce::PopupMenu MenuManager::getMenuForIndex(int topLevelMenuIndex, const juce::
         menu.addItem(ToggleRightPanel, "Show Right Panel", true, rightPanelVisible_);
         menu.addItem(ToggleBottomPanel, "Show Bottom Panel", true, bottomPanelVisible_);
         menu.addSeparator();
+        menu.addItem(ShowTrackManager, "Track Manager...", true, false);
+        menu.addSeparator();
         menu.addItem(ZoomIn, "Zoom In", true, false);
         menu.addItem(ZoomOut, "Zoom Out", true, false);
         menu.addItem(ZoomToFit, "Zoom to Fit", true, false);
@@ -108,20 +107,6 @@ juce::PopupMenu MenuManager::getMenuForIndex(int topLevelMenuIndex, const juce::
         menu.addSeparator();
         menu.addItem(MuteTrack, "Mute Track\tM", true, false);
         menu.addItem(SoloTrack, "Solo Track\tS", true, false);
-
-        // Track visibility submenu
-        menu.addSeparator();
-        juce::PopupMenu visibilityMenu;
-        auto currentMode = ViewModeController::getInstance().getViewMode();
-        const auto& tracks = TrackManager::getInstance().getTracks();
-        for (const auto& track : tracks) {
-            bool isVisible = track.isVisibleIn(currentMode);
-            visibilityMenu.addItem(TrackVisibilityBase + track.id, track.name, true, isVisible);
-        }
-        if (tracks.empty()) {
-            visibilityMenu.addItem(-1, "(No tracks)", false, false);
-        }
-        menu.addSubMenu("Track Visibility", visibilityMenu);
     } else if (menuName == "Window") {
         menu.addItem(Minimize, "Minimize", true, false);
         menu.addItem(Zoom, "Zoom", true, false);
@@ -231,6 +216,10 @@ void MenuManager::menuItemSelected(int menuItemID, int topLevelMenuIndex) {
             if (callbacks_.onToggleFullscreen)
                 callbacks_.onToggleFullscreen();
             break;
+        case ShowTrackManager:
+            if (callbacks_.onShowTrackManager)
+                callbacks_.onShowTrackManager();
+            break;
 
         // Transport menu
         case Play:
@@ -309,12 +298,6 @@ void MenuManager::menuItemSelected(int menuItemID, int topLevelMenuIndex) {
             break;
 
         default:
-            // Check if it's a track visibility toggle (IDs 550+)
-            if (menuItemID >= TrackVisibilityBase && menuItemID < 600) {
-                int trackId = menuItemID - TrackVisibilityBase;
-                if (callbacks_.onToggleTrackVisibility)
-                    callbacks_.onToggleTrackVisibility(trackId);
-            }
             break;
     }
 }

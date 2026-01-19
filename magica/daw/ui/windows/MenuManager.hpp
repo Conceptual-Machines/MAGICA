@@ -53,7 +53,9 @@ class MenuManager : public juce::MenuBarModel {
         std::function<void()> onDuplicateTrack;
         std::function<void()> onMuteTrack;
         std::function<void()> onSoloTrack;
-        std::function<void(int)> onToggleTrackVisibility;  // Toggle visibility for track ID
+
+        // View menu
+        std::function<void()> onShowTrackManager;
 
         // Window menu
         std::function<void()> onMinimize;
@@ -118,6 +120,7 @@ class MenuManager : public juce::MenuBarModel {
         ToggleLeftPanel = 300,
         ToggleRightPanel,
         ToggleBottomPanel,
+        ShowTrackManager = 305,
         ZoomIn = 310,
         ZoomOut,
         ZoomToFit,
@@ -138,8 +141,6 @@ class MenuManager : public juce::MenuBarModel {
         DuplicateTrack,
         MuteTrack = 520,
         SoloTrack,
-        // Track visibility toggles start at 550 (550 + trackId)
-        TrackVisibilityBase = 550,
 
         // Window menu (600-699)
         Minimize = 600,
