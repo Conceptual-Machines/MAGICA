@@ -714,19 +714,25 @@ bool TrackContentPanel::isInUpperTrackZone(int y) const {
 }
 
 void TrackContentPanel::updateCursorForPosition(int x, int y) {
-    // Check if over a clip - clip handles its own cursor
-    if (getClipComponentAt(x, y) != nullptr) {
-        setMouseCursor(juce::MouseCursor::NormalCursor);
-        return;
-    }
+    // Check track zone first
+    bool inUpperZone = isInUpperTrackZone(y);
 
-    // Check track zone
-    if (isInSelectableArea(x, y)) {
-        if (isInUpperTrackZone(y)) {
-            // Upper half - marquee/crosshair cursor (clip operations)
+    if (inUpperZone) {
+        // UPPER ZONE: Clip operations
+        // Check if over a clip - clip handles its own cursor
+        if (getClipComponentAt(x, y) != nullptr) {
+            setMouseCursor(juce::MouseCursor::NormalCursor);
+            return;
+        }
+        // Empty space in upper zone - crosshair for marquee selection
+        if (isInSelectableArea(x, y)) {
             setMouseCursor(juce::MouseCursor::CrosshairCursor);
         } else {
-            // Lower half - time selection operations
+            setMouseCursor(juce::MouseCursor::NormalCursor);
+        }
+    } else {
+        // LOWER ZONE: Time selection operations
+        if (isInSelectableArea(x, y)) {
             if (isOnExistingSelection(x, y)) {
                 // Over existing time selection - show grab cursor
                 setMouseCursor(juce::MouseCursor::DraggingHandCursor);
@@ -734,9 +740,9 @@ void TrackContentPanel::updateCursorForPosition(int x, int y) {
                 // Empty space - I-beam for creating time selection
                 setMouseCursor(juce::MouseCursor::IBeamCursor);
             }
+        } else {
+            setMouseCursor(juce::MouseCursor::NormalCursor);
         }
-    } else {
-        setMouseCursor(juce::MouseCursor::NormalCursor);
     }
 }
 

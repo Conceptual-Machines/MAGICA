@@ -594,10 +594,17 @@ bool ClipComponent::isOnRightEdge(int x) const {
 }
 
 void ClipComponent::updateCursor() {
-    if (hoverLeftEdge_ || hoverRightEdge_) {
+    bool isClipSelected = SelectionManager::getInstance().isClipSelected(clipId_);
+
+    if (isClipSelected && (hoverLeftEdge_ || hoverRightEdge_)) {
+        // Resize cursor only when selected
         setMouseCursor(juce::MouseCursor::LeftRightResizeCursor);
-    } else {
+    } else if (isClipSelected) {
+        // Grab cursor when selected (can drag)
         setMouseCursor(juce::MouseCursor::DraggingHandCursor);
+    } else {
+        // Normal cursor when not selected (need to click to select first)
+        setMouseCursor(juce::MouseCursor::NormalCursor);
     }
 }
 
