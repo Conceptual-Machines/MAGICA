@@ -349,14 +349,8 @@ void MixerView::rebuildChannelStrips() {
     bool masterVisible = master.isVisibleIn(currentViewMode_);
     masterStrip->setVisible(masterVisible);
 
-    // Restore selection if valid
-    if (selectedChannelIndex >= 0 &&
-        selectedChannelIndex < static_cast<int>(channelStrips.size())) {
-        channelStrips[selectedChannelIndex]->setSelected(true);
-    } else if (!channelStrips.empty()) {
-        selectedChannelIndex = 0;
-        channelStrips[0]->setSelected(true);
-    }
+    // Sync selection with TrackManager's current selection
+    trackSelectionChanged(TrackManager::getInstance().getSelectedTrack());
 
     resized();
 }
@@ -437,9 +431,13 @@ void MixerView::selectChannel(int index, bool isMaster) {
         // Master strip selection is visual-only (no setSelected on MasterChannelStrip)
         selectedChannelIndex = -1;
         selectedIsMaster = true;
+        // Master track doesn't have a TrackId, so we clear selection
+        TrackManager::getInstance().setSelectedTrack(INVALID_TRACK_ID);
     } else {
         if (index >= 0 && index < static_cast<int>(channelStrips.size())) {
             channelStrips[index]->setSelected(true);
+            // Notify TrackManager of selection
+            TrackManager::getInstance().setSelectedTrack(channelStrips[index]->getTrackId());
         }
         selectedChannelIndex = index;
         selectedIsMaster = false;
@@ -451,6 +449,29 @@ void MixerView::selectChannel(int index, bool isMaster) {
     }
 
     DBG("Selected channel: " << (isMaster ? "Master" : juce::String(index + 1)));
+}
+
+void MixerView::trackSelectionChanged(TrackId trackId) {
+    // Sync our visual selection with TrackManager's selection
+    // Deselect all first
+    for (auto& strip : channelStrips) {
+        strip->setSelected(false);
+    }
+    selectedIsMaster = false;
+    selectedChannelIndex = -1;
+
+    if (trackId == INVALID_TRACK_ID) {
+        return;
+    }
+
+    // Find and select the matching channel strip
+    for (size_t i = 0; i < channelStrips.size(); ++i) {
+        if (channelStrips[i]->getTrackId() == trackId) {
+            channelStrips[i]->setSelected(true);
+            selectedChannelIndex = static_cast<int>(i);
+            break;
+        }
+    }
 }
 
 }  // namespace magica

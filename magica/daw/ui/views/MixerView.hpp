@@ -38,6 +38,7 @@ class MixerView : public juce::Component,
     void tracksChanged() override;
     void trackPropertyChanged(int trackId) override;
     void masterChannelChanged() override;
+    void trackSelectionChanged(TrackId trackId) override;
 
     // ViewModeListener
     void viewModeChanged(ViewMode mode, const AudioEngineProfile& profile) override;

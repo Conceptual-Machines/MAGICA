@@ -210,9 +210,13 @@ void SessionView::rebuildTracks() {
         header->setColour(juce::TextButton::textColourOffId,
                           DarkTheme::getColour(DarkTheme::TEXT_PRIMARY));
 
-        // Click to toggle collapse for groups
+        // Click handler - select track and toggle collapse for groups
         TrackId trackId = track->id;
         header->onClick = [this, trackId]() {
+            // Always select the track
+            selectTrack(trackId);
+
+            // Additionally toggle collapse for groups
             const auto* t = TrackManager::getInstance().getTrack(trackId);
             if (t && t->isGroup()) {
                 bool collapsed = t->isCollapsedIn(currentViewMode_);
@@ -259,6 +263,7 @@ void SessionView::rebuildTracks() {
     masterStrip->setVisible(masterVisible);
 
     resized();
+    updateHeaderSelectionVisuals();
 }
 
 void SessionView::paint(juce::Graphics& g) {
@@ -389,6 +394,50 @@ void SessionView::onSceneLaunched(int sceneIndex) {
 void SessionView::onStopAllClicked() {
     DBG("Stop all clips");
     // TODO: Stop all clip playback
+}
+
+void SessionView::trackSelectionChanged(TrackId trackId) {
+    juce::ignoreUnused(trackId);
+    updateHeaderSelectionVisuals();
+}
+
+void SessionView::selectTrack(TrackId trackId) {
+    TrackManager::getInstance().setSelectedTrack(trackId);
+}
+
+void SessionView::updateHeaderSelectionVisuals() {
+    auto selectedId = TrackManager::getInstance().getSelectedTrack();
+
+    for (size_t i = 0; i < visibleTrackIds_.size() && i < trackHeaders.size(); ++i) {
+        bool isSelected = visibleTrackIds_[i] == selectedId;
+        auto* header = trackHeaders[i].get();
+
+        // Get track info for proper coloring
+        const auto* track = TrackManager::getInstance().getTrack(visibleTrackIds_[i]);
+        if (!track)
+            continue;
+
+        if (isSelected) {
+            // Selected: blue accent background
+            header->setColour(juce::TextButton::buttonColourId,
+                              DarkTheme::getColour(DarkTheme::ACCENT_BLUE));
+            header->setColour(juce::TextButton::textColourOffId,
+                              DarkTheme::getColour(DarkTheme::BACKGROUND));
+        } else if (track->isGroup()) {
+            // Unselected group: orange tint
+            header->setColour(juce::TextButton::buttonColourId,
+                              DarkTheme::getColour(DarkTheme::ACCENT_ORANGE).withAlpha(0.3f));
+            header->setColour(juce::TextButton::textColourOffId,
+                              DarkTheme::getColour(DarkTheme::TEXT_PRIMARY));
+        } else {
+            // Unselected regular track
+            header->setColour(juce::TextButton::buttonColourId,
+                              DarkTheme::getColour(DarkTheme::PANEL_BACKGROUND));
+            header->setColour(juce::TextButton::textColourOffId,
+                              DarkTheme::getColour(DarkTheme::TEXT_PRIMARY));
+        }
+    }
+    repaint();
 }
 
 }  // namespace magica

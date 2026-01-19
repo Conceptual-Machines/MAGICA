@@ -36,6 +36,7 @@ class SessionView : public juce::Component,
     void tracksChanged() override;
     void trackPropertyChanged(int trackId) override;
     void masterChannelChanged() override;
+    void trackSelectionChanged(TrackId trackId) override;
 
     // ViewModeListener
     void viewModeChanged(ViewMode mode, const AudioEngineProfile& profile) override;
@@ -92,6 +93,10 @@ class SessionView : public juce::Component,
     // View mode state
     ViewMode currentViewMode_ = ViewMode::Live;
     std::vector<TrackId> visibleTrackIds_;
+
+    // Selection
+    void selectTrack(TrackId trackId);
+    void updateHeaderSelectionVisuals();
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(SessionView)
 };
