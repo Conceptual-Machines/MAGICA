@@ -1,5 +1,7 @@
 #include "MenuManager.hpp"
 
+#include "core/UndoManager.hpp"
+
 namespace magica {
 
 MenuManager& MenuManager::getInstance() {
@@ -52,8 +54,31 @@ juce::PopupMenu MenuManager::getMenuForIndex(int topLevelMenuIndex, const juce::
         menu.addItem(Quit, "Quit", true, false);
 #endif
     } else if (menuName == "Edit") {
-        menu.addItem(Undo, "Undo", canUndo_, false);
-        menu.addItem(Redo, "Redo", canRedo_, false);
+        // Get undo/redo state directly from UndoManager for accurate descriptions
+        auto& undoManager = UndoManager::getInstance();
+        bool canUndo = undoManager.canUndo();
+        bool canRedo = undoManager.canRedo();
+
+        // Build undo menu item with description
+        juce::String undoText = "Undo";
+        if (canUndo) {
+            juce::String desc = undoManager.getUndoDescription();
+            if (desc.isNotEmpty()) {
+                undoText = "Undo " + desc;
+            }
+        }
+
+        // Build redo menu item with description
+        juce::String redoText = "Redo";
+        if (canRedo) {
+            juce::String desc = undoManager.getRedoDescription();
+            if (desc.isNotEmpty()) {
+                redoText = "Redo " + desc;
+            }
+        }
+
+        menu.addItem(Undo, undoText, canUndo, false);
+        menu.addItem(Redo, redoText, canRedo, false);
         menu.addSeparator();
         menu.addItem(Cut, "Cut", hasSelection_, false);
         menu.addItem(Copy, "Copy", hasSelection_, false);
