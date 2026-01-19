@@ -91,43 +91,6 @@ void MainView::setupComponents() {
     arrangementLockButton->onClick = [this]() { toggleArrangementLock(); };
     addAndMakeVisible(arrangementLockButton.get());
 
-    // Create time display mode toggle button
-    timeDisplayToggleButton = std::make_unique<juce::TextButton>("TIME");
-    timeDisplayToggleButton->setTooltip("Toggle time display (Seconds/Bars)");
-    timeDisplayToggleButton->setColour(juce::TextButton::buttonColourId,
-                                       DarkTheme::getColour(DarkTheme::SURFACE));
-    timeDisplayToggleButton->setColour(juce::TextButton::textColourOffId,
-                                       DarkTheme::getColour(DarkTheme::TEXT_PRIMARY));
-    timeDisplayToggleButton->onClick = [this]() {
-        auto currentMode = timelineController->getState().display.timeDisplayMode;
-        TimeDisplayMode newMode;
-        bool useBarsBeats;
-
-        if (currentMode == TimeDisplayMode::Seconds) {
-            newMode = TimeDisplayMode::BarsBeats;
-            timeDisplayToggleButton->setButtonText("BARS");
-            useBarsBeats = true;
-        } else {
-            newMode = TimeDisplayMode::Seconds;
-            timeDisplayToggleButton->setButtonText("TIME");
-            useBarsBeats = false;
-        }
-
-        // Dispatch to controller
-        timelineController->dispatch(SetTimeDisplayModeEvent{newMode});
-
-        // Also update child components directly for now
-        timeline->setTimeDisplayMode(newMode);
-        trackContentPanel->setTimeDisplayMode(newMode);
-
-        // Update loop region display with new mode
-        const auto& loop = timelineController->getState().loop;
-        if (onLoopRegionChanged && loop.isValid()) {
-            onLoopRegionChanged(loop.startTime, loop.endTime, loop.enabled);
-        }
-    };
-    addAndMakeVisible(timeDisplayToggleButton.get());
-
     // Create track content viewport
     trackContentViewport = std::make_unique<juce::Viewport>();
     trackContentPanel = std::make_unique<TrackContentPanel>();
@@ -461,9 +424,6 @@ void MainView::resized() {
 
     // Lock button on the left
     arrangementLockButton->setBounds(topRow.removeFromLeft(35).reduced(3));
-
-    // Time display toggle button on the right
-    timeDisplayToggleButton->setBounds(topRow.removeFromRight(50).reduced(3));
 
     // Add padding space for the resize handle
     timelineArea.removeFromLeft(layout.componentSpacing);  // Remove padding from timeline area too

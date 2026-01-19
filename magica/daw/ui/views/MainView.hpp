@@ -109,9 +109,6 @@ class MainView : public juce::Component,
     // Arrangement lock button
     std::unique_ptr<SvgButton> arrangementLockButton;
 
-    // Time display mode toggle button
-    std::unique_ptr<juce::TextButton> timeDisplayToggleButton;
-
     // Track content viewport (both horizontal and vertical scroll)
     std::unique_ptr<juce::Viewport> trackContentViewport;
     std::unique_ptr<TrackContentPanel> trackContentPanel;

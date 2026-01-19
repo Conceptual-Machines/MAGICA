@@ -11,18 +11,6 @@ TimelineHeaderPanel::TimelineHeaderPanel() {
     timeline = std::make_unique<TimelineComponent>();
     addAndMakeVisible(*timeline);
 
-    // Create time display mode toggle
-    timeDisplayToggle = std::make_unique<juce::ToggleButton>("Time/Bars");
-    timeDisplayToggle->setButtonText("Time");
-    timeDisplayToggle->setToggleState(false, juce::dontSendNotification);
-    timeDisplayToggle->onClick = [this]() {
-        setTimeDisplayMode(timeDisplayToggle->getToggleState() ? BarsBeats : Time);
-        if (onTimeDisplayModeChanged) {
-            onTimeDisplayModeChanged(timeDisplayMode);
-        }
-    };
-    addAndMakeVisible(*timeDisplayToggle);
-
     // Set height to match timeline height for visual continuity
     setSize(800, 80);
 }
@@ -88,8 +76,6 @@ void TimelineHeaderPanel::paint(juce::Graphics& g) {
 }
 
 void TimelineHeaderPanel::resized() {
-    auto bounds = getLocalBounds();
-
     // Left section divider
     int leftDivider = leftPanelWidth;
     // Right section divider
@@ -99,13 +85,6 @@ void TimelineHeaderPanel::resized() {
     auto centerBounds =
         juce::Rectangle<int>(leftDivider, 0, rightDivider - leftDivider, getHeight());
     timeline->setBounds(centerBounds);
-
-    // Position the time display toggle in the right section
-    int toggleWidth = 60;
-    int toggleHeight = 20;
-
-    timeDisplayToggle->setBounds(rightDivider + rightPanelWidth - toggleWidth - 8,
-                                 (getHeight() - toggleHeight) / 2, toggleWidth, toggleHeight);
 }
 
 void TimelineHeaderPanel::setLayoutSizes(int leftWidth, int rightWidth) {
@@ -113,24 +92,6 @@ void TimelineHeaderPanel::setLayoutSizes(int leftWidth, int rightWidth) {
     rightPanelWidth = rightWidth;
     resized();
     repaint();
-}
-
-void TimelineHeaderPanel::setTimeDisplayMode(TimeDisplayMode mode) {
-    timeDisplayMode = mode;
-    updateTimeDisplayToggle();
-}
-
-void TimelineHeaderPanel::updateTimeDisplayToggle() {
-    switch (timeDisplayMode) {
-        case Time:
-            timeDisplayToggle->setButtonText("Time");
-            timeDisplayToggle->setToggleState(false, juce::dontSendNotification);
-            break;
-        case BarsBeats:
-            timeDisplayToggle->setButtonText("Bars");
-            timeDisplayToggle->setToggleState(true, juce::dontSendNotification);
-            break;
-    }
 }
 
 }  // namespace magica

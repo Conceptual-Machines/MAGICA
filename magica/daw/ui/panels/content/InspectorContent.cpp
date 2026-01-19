@@ -2,6 +2,7 @@
 
 #include "../../themes/DarkTheme.hpp"
 #include "../../themes/FontManager.hpp"
+#include "../../utils/TimelineUtils.hpp"
 
 namespace magica::daw::ui {
 
@@ -453,12 +454,19 @@ void InspectorContent::updateFromSelectedClip() {
         clipNameValue_.setText(clip->name, juce::dontSendNotification);
         clipTypeValue_.setText(magica::getClipTypeName(clip->type), juce::dontSendNotification);
 
-        // Format start time as seconds
-        clipStartValue_.setText(juce::String(clip->startTime, 2) + " s",
-                                juce::dontSendNotification);
+        // TODO: Get tempo from TimelineController instead of hardcoding
+        constexpr double BPM = 120.0;
+        constexpr int BEATS_PER_BAR = 4;
 
-        // Format length as seconds
-        clipLengthValue_.setText(juce::String(clip->length, 2) + " s", juce::dontSendNotification);
+        // Format start time as bars.beats.ticks
+        auto startStr =
+            magica::TimelineUtils::formatTimeAsBarsBeats(clip->startTime, BPM, BEATS_PER_BAR);
+        clipStartValue_.setText(juce::String(startStr), juce::dontSendNotification);
+
+        // Format length as bars and beats
+        auto lengthStr =
+            magica::TimelineUtils::formatDurationAsBarsBeats(clip->length, BPM, BEATS_PER_BAR);
+        clipLengthValue_.setText(juce::String(lengthStr), juce::dontSendNotification);
 
         clipLoopToggle_.setToggleState(clip->internalLoopEnabled, juce::dontSendNotification);
         clipLoopLengthSlider_.setValue(clip->internalLoopLength, juce::dontSendNotification);

@@ -2,6 +2,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
+#include <string>
 
 namespace magica {
 
@@ -168,6 +170,83 @@ inline int getBeatInBar(double time, double bpm, int beatsPerBar) {
 inline double getBarStartTime(int barNumber, double bpm, int beatsPerBar) {
     double beats = (barNumber - 1) * beatsPerBar;
     return beatsToSeconds(beats, bpm);
+}
+
+/**
+ * Get tick within beat (0-based, for sub-beat precision)
+ * Uses 480 ticks per beat (standard MIDI resolution)
+ * @param time Time in seconds
+ * @param bpm Tempo in beats per minute
+ * @return Tick number within beat (0-479)
+ */
+inline int getTickInBeat(double time, double bpm) {
+    constexpr int TICKS_PER_BEAT = 480;
+    double beats = secondsToBeats(time, bpm);
+    double fractionalBeat = std::fmod(beats, 1.0);
+    return static_cast<int>(fractionalBeat * TICKS_PER_BEAT);
+}
+
+/**
+ * Format time as bars.beats.ticks string (e.g., "1.1.000", "4.3.240")
+ * @param time Time in seconds
+ * @param bpm Tempo in beats per minute
+ * @param beatsPerBar Time signature numerator
+ * @return Formatted string "bar.beat.ticks"
+ */
+inline std::string formatTimeAsBarsBeats(double time, double bpm, int beatsPerBar) {
+    int bar = getBarNumber(time, bpm, beatsPerBar);
+    int beat = getBeatInBar(time, bpm, beatsPerBar);
+    int ticks = getTickInBeat(time, bpm);
+
+    char buffer[32];
+    std::snprintf(buffer, sizeof(buffer), "%d.%d.%03d", bar, beat, ticks);
+    return std::string(buffer);
+}
+
+/**
+ * Format duration as bars:beats string (e.g., "2 bars", "1 bar 2 beats")
+ * @param duration Duration in seconds
+ * @param bpm Tempo in beats per minute
+ * @param beatsPerBar Time signature numerator
+ * @return Formatted string describing duration
+ */
+inline std::string formatDurationAsBarsBeats(double duration, double bpm, int beatsPerBar) {
+    double totalBeats = secondsToBeats(duration, bpm);
+    int wholeBars = static_cast<int>(totalBeats / beatsPerBar);
+    double remainingBeats = std::fmod(totalBeats, beatsPerBar);
+    int wholeBeats = static_cast<int>(remainingBeats);
+
+    char buffer[64];
+    if (wholeBars > 0 && wholeBeats > 0) {
+        std::snprintf(buffer, sizeof(buffer), "%d bar%s %d beat%s", wholeBars,
+                      wholeBars == 1 ? "" : "s", wholeBeats, wholeBeats == 1 ? "" : "s");
+    } else if (wholeBars > 0) {
+        std::snprintf(buffer, sizeof(buffer), "%d bar%s", wholeBars, wholeBars == 1 ? "" : "s");
+    } else if (totalBeats >= 1.0) {
+        std::snprintf(buffer, sizeof(buffer), "%d beat%s", static_cast<int>(totalBeats),
+                      static_cast<int>(totalBeats) == 1 ? "" : "s");
+    } else {
+        // Sub-beat duration - show as fraction
+        std::snprintf(buffer, sizeof(buffer), "%.2f beats", totalBeats);
+    }
+    return std::string(buffer);
+}
+
+/**
+ * Format duration as compact bars.beats string (e.g., "2.0", "1.2")
+ * @param duration Duration in seconds
+ * @param bpm Tempo in beats per minute
+ * @param beatsPerBar Time signature numerator
+ * @return Formatted string "bars.beats"
+ */
+inline std::string formatDurationCompact(double duration, double bpm, int beatsPerBar) {
+    double totalBeats = secondsToBeats(duration, bpm);
+    int wholeBars = static_cast<int>(totalBeats / beatsPerBar);
+    double remainingBeats = std::fmod(totalBeats, beatsPerBar);
+
+    char buffer[32];
+    std::snprintf(buffer, sizeof(buffer), "%d.%.1f", wholeBars, remainingBeats);
+    return std::string(buffer);
 }
 
 }  // namespace TimelineUtils
