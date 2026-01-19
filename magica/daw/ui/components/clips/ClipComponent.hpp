@@ -73,7 +73,8 @@ class ClipComponent : public juce::Component, public ClipManagerListener {
     std::function<void(ClipId, double, bool)> onClipResized;  // clipId, newLength, fromStart
     std::function<void(ClipId)> onClipSelected;
     std::function<void(ClipId)> onClipDoubleClicked;
-    std::function<double(double)> snapTimeToGrid;  // Optional grid snapping
+    std::function<void(ClipId, double)> onClipSplit;  // clipId, splitTime (Alt+click)
+    std::function<double(double)> snapTimeToGrid;     // Optional grid snapping
 
   private:
     ClipId clipId_;
@@ -123,7 +124,7 @@ class ClipComponent : public juce::Component, public ClipManagerListener {
     // Interaction helpers
     bool isOnLeftEdge(int x) const;
     bool isOnRightEdge(int x) const;
-    void updateCursor();
+    void updateCursor(bool isAltDown = false);
 
     // Helper to get current clip info
     const ClipInfo* getClipInfo() const;

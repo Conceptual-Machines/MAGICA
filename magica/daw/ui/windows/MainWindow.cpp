@@ -267,6 +267,12 @@ void MainWindow::MainComponent::setupAudioEngine() {
         // Metronome is audio-engine only, not part of timeline state
         audioEngine_->setMetronomeEnabled(enabled);
     };
+
+    transportPanel->onSnapToggle = [this](bool enabled) {
+        mainView->getTimelineController().dispatch(SetSnapEnabledEvent{enabled});
+        // Sync timeline component's snap state
+        mainView->syncSnapState();
+    };
 }
 
 MainWindow::MainComponent::~MainComponent() {

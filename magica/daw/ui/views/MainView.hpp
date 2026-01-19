@@ -51,6 +51,9 @@ class MainView : public juce::Component,
     // Loop controls
     void setLoopEnabled(bool enabled);
 
+    // Snap controls
+    void syncSnapState();
+
     // Zoom accessors
     double getHorizontalZoom() const {
         return horizontalZoom;

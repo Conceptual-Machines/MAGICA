@@ -187,13 +187,38 @@ void ClipComponent::resized() {
 }
 
 bool ClipComponent::hitTest(int x, int y) {
-    // Only respond to clicks in the upper half of the clip
-    // (which corresponds to the upper zone of the track for clip operations)
-    // Lower half clicks pass through to TrackContentPanel for time selection
-    int midY = getHeight() / 2;
-    if (y >= midY) {
-        return false;  // Let parent handle lower zone clicks
+    // Determine if click is in upper vs lower zone based on TRACK height, not clip height
+    // This ensures zone detection is consistent with TrackContentPanel::isInUpperTrackZone
+
+    if (!parentPanel_) {
+        // Fallback to clip-based detection
+        int midY = getHeight() / 2;
+        return y < midY && x >= 0 && x < getWidth();
     }
+
+    // Convert local y to parent coordinates
+    int parentY = getY() + y;
+
+    // Check if click is in lower half of the track
+    // Using the same logic as TrackContentPanel::isInUpperTrackZone
+    int trackIndex = parentPanel_->getTrackIndexAtY(parentY);
+    if (trackIndex < 0) {
+        // Can't determine track, use clip-based fallback
+        int midY = getHeight() / 2;
+        return y < midY && x >= 0 && x < getWidth();
+    }
+
+    // Calculate track midpoint (same as isInUpperTrackZone)
+    int trackY = parentPanel_->getTrackYPosition(trackIndex);
+    int trackHeight = parentPanel_->getTrackHeight(trackIndex);
+    int trackMidY = trackY + trackHeight / 2;
+
+    // If click is in lower half of the track, let parent handle it
+    if (parentY >= trackMidY) {
+        return false;
+    }
+
+    // Click is in upper zone - check x bounds
     return x >= 0 && x < getWidth() && y >= 0;
 }
 
@@ -231,6 +256,29 @@ void ClipComponent::mouseDown(const juce::MouseEvent& e) {
         // Don't start dragging on Shift+click - it's just for selection
         dragMode_ = DragMode::None;
         repaint();
+        return;
+    }
+
+    // Handle Alt+click for blade/split
+    if (e.mods.isAltDown() && !e.mods.isCommandDown() && !e.mods.isShiftDown()) {
+        // Calculate split time from click position
+        if (parentPanel_) {
+            auto parentPos = e.getEventRelativeTo(parentPanel_).getPosition();
+            double splitTime = parentPanel_->pixelToTime(parentPos.x);
+
+            // Apply snap if available
+            if (snapTimeToGrid) {
+                splitTime = snapTimeToGrid(splitTime);
+            }
+
+            // Verify split time is within clip bounds
+            if (splitTime > clip->startTime && splitTime < clip->startTime + clip->length) {
+                if (onClipSplit) {
+                    onClipSplit(clipId_, splitTime);
+                }
+            }
+        }
+        dragMode_ = DragMode::None;
         return;
     }
 
@@ -544,8 +592,10 @@ void ClipComponent::mouseMove(const juce::MouseEvent& e) {
     hoverLeftEdge_ = isOnLeftEdge(e.x);
     hoverRightEdge_ = isOnRightEdge(e.x);
 
+    // Always update cursor to check for Alt key (blade mode)
+    updateCursor(e.mods.isAltDown());
+
     if (hoverLeftEdge_ != wasHoverLeft || hoverRightEdge_ != wasHoverRight) {
-        updateCursor();
         repaint();
     }
 }
@@ -553,7 +603,7 @@ void ClipComponent::mouseMove(const juce::MouseEvent& e) {
 void ClipComponent::mouseExit(const juce::MouseEvent& /*e*/) {
     hoverLeftEdge_ = false;
     hoverRightEdge_ = false;
-    updateCursor();
+    updateCursor(false);
     repaint();
 }
 
@@ -643,7 +693,13 @@ bool ClipComponent::isOnRightEdge(int x) const {
     return x > getWidth() - RESIZE_HANDLE_WIDTH;
 }
 
-void ClipComponent::updateCursor() {
+void ClipComponent::updateCursor(bool isAltDown) {
+    // Alt key = blade/scissors mode
+    if (isAltDown) {
+        setMouseCursor(juce::MouseCursor::CrosshairCursor);
+        return;
+    }
+
     bool isClipSelected = SelectionManager::getInstance().isClipSelected(clipId_);
 
     if (isClipSelected && (hoverLeftEdge_ || hoverRightEdge_)) {

@@ -118,6 +118,7 @@ void TransportPanel::resized() {
 
     quantizeCombo->setBounds(tempoX + 100, tempoY, 70, 30);
     metronomeButton->setBounds(tempoX + 180, tempoY, 35, 30);
+    snapButton->setBounds(tempoX + 220, tempoY, 50, 30);
 }
 
 juce::Rectangle<int> TransportPanel::getTransportControlsArea() const {
@@ -302,6 +303,24 @@ void TransportPanel::setupTempoAndQuantize() {
             onMetronomeToggle(newState);
     };
     addAndMakeVisible(*metronomeButton);
+
+    // Snap button (text-based toggle)
+    snapButton = std::make_unique<juce::TextButton>("SNAP");
+    snapButton->setColour(juce::TextButton::buttonColourId,
+                          DarkTheme::getColour(DarkTheme::SURFACE).darker(0.2f));
+    snapButton->setColour(juce::TextButton::buttonOnColourId,
+                          DarkTheme::getColour(DarkTheme::ACCENT_PURPLE));
+    snapButton->setColour(juce::TextButton::textColourOffId,
+                          DarkTheme::getColour(DarkTheme::TEXT_SECONDARY));
+    snapButton->setColour(juce::TextButton::textColourOnId, DarkTheme::getTextColour());
+    snapButton->setClickingTogglesState(true);
+    snapButton->setToggleState(isSnapEnabled, juce::dontSendNotification);
+    snapButton->onClick = [this]() {
+        isSnapEnabled = snapButton->getToggleState();
+        if (onSnapToggle)
+            onSnapToggle(isSnapEnabled);
+    };
+    addAndMakeVisible(*snapButton);
 }
 
 void TransportPanel::updateTempoDisplay() {
@@ -518,6 +537,13 @@ void TransportPanel::setTempo(double bpm) {
     setPlayheadPosition(cachedPlayheadPosition);
     setTimeSelection(cachedSelectionStart, cachedSelectionEnd, cachedSelectionActive);
     setLoopRegion(cachedLoopStart, cachedLoopEnd, cachedLoopEnabled);
+}
+
+void TransportPanel::setSnapEnabled(bool enabled) {
+    if (isSnapEnabled != enabled) {
+        isSnapEnabled = enabled;
+        snapButton->setToggleState(enabled, juce::dontSendNotification);
+    }
 }
 
 }  // namespace magica

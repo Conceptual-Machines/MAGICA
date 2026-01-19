@@ -24,6 +24,7 @@ class TransportPanel : public juce::Component {
     std::function<void(bool)> onLoop;
     std::function<void(double)> onTempoChange;
     std::function<void(bool)> onMetronomeToggle;
+    std::function<void(bool)> onSnapToggle;
 
     // Update displays - simplified API
     void setPlayheadPosition(double positionInSeconds);
@@ -31,6 +32,7 @@ class TransportPanel : public juce::Component {
     void setLoopRegion(double startTime, double endTime, bool loopEnabled);
     void setTempo(double bpm);
     void setTimeSignature(int numerator, int denominator);
+    void setSnapEnabled(bool enabled);
 
   private:
     // Transport controls (left section)
@@ -59,6 +61,7 @@ class TransportPanel : public juce::Component {
     std::unique_ptr<SvgButton> tempoIncreaseButton;
     std::unique_ptr<juce::ComboBox> quantizeCombo;
     std::unique_ptr<SvgButton> metronomeButton;
+    std::unique_ptr<juce::TextButton> snapButton;
 
     // Tempo editing
     void updateTempoDisplay();
@@ -89,6 +92,7 @@ class TransportPanel : public juce::Component {
     bool isRecording = false;
     bool isPaused = false;
     bool isLooping = false;
+    bool isSnapEnabled = true;
     double currentTempo = 120.0;
     int timeSignatureNumerator = 4;
     int timeSignatureDenominator = 4;

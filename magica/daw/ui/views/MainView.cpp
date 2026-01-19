@@ -590,6 +590,11 @@ void MainView::setLoopEnabled(bool enabled) {
     timelineController->dispatch(SetLoopEnabledEvent{enabled});
 }
 
+void MainView::syncSnapState() {
+    bool snapEnabled = timelineController->getState().display.snapEnabled;
+    timeline->setSnapEnabled(snapEnabled);
+}
+
 // Add keyboard event handler for zoom reset shortcut
 bool MainView::keyPressed(const juce::KeyPress& key) {
     // Check for Ctrl+0 (or Cmd+0 on Mac) to reset zoom to fit timeline
@@ -612,14 +617,8 @@ bool MainView::keyPressed(const juce::KeyPress& key) {
         return true;
     }
 
-    // Check for 'S' to toggle snap to grid
-    if (key == juce::KeyPress('s') || key == juce::KeyPress('S')) {
-        bool newSnapState = !timelineController->getState().display.snapEnabled;
-        timelineController->dispatch(SetSnapEnabledEvent{newSnapState});
-        timeline->setSnapEnabled(newSnapState);  // Also update timeline directly for now
-        std::cout << "🎯 SNAP: " << (newSnapState ? "enabled" : "disabled") << std::endl;
-        return true;
-    }
+    // Note: 'S' key is now used for split in TrackContentPanel
+    // Snap toggle is available via the toolbar button
 
     // Check for Ctrl+Z / Cmd+Z for undo
     if (key == juce::KeyPress('z', juce::ModifierKeys::commandModifier, 0)) {

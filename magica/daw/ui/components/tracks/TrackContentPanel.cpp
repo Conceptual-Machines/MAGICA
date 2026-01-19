@@ -22,6 +22,7 @@ TrackContentPanel::TrackContentPanel() {
     // Set up the component
     setSize(1000, 200);
     setOpaque(true);
+    setWantsKeyboardFocus(true);
 
     // Register as TrackManager listener
     TrackManager::getInstance().addListener(this);
@@ -430,6 +431,9 @@ bool TrackContentPanel::isOnExistingSelection(int x, int y) const {
 }
 
 void TrackContentPanel::mouseDown(const juce::MouseEvent& event) {
+    // Grab keyboard focus so we can receive key events (like 'B' for blade)
+    grabKeyboardFocus();
+
     // Store initial mouse position for click vs drag detection
     mouseDownX = event.x;
     mouseDownY = event.y;
@@ -879,6 +883,16 @@ void TrackContentPanel::rebuildClipComponents() {
 
         clipComp->onClipDoubleClicked = [](ClipId /*id*/) {
             // Could open clip in editor, etc.
+        };
+
+        clipComp->onClipSplit = [](ClipId id, double splitTime) {
+            ClipId newClipId = ClipManager::getInstance().splitClip(id, splitTime);
+            if (newClipId != INVALID_CLIP_ID) {
+                // Select both the original and new clip
+                auto& selectionManager = SelectionManager::getInstance();
+                std::unordered_set<ClipId> newSelection = {id, newClipId};
+                selectionManager.selectClips(newSelection);
+            }
         };
 
         // Wire up grid snapping
@@ -1542,8 +1556,9 @@ bool TrackContentPanel::keyPressed(const juce::KeyPress& key) {
         }
     }
 
-    // S: Split selected clips at edit cursor position
-    if (key == juce::KeyPress('s')) {
+    // B: Blade - Split clips at edit cursor position
+    // Works on selected clips if they contain the cursor, otherwise splits any clip under cursor
+    if (key == juce::KeyPress('b')) {
         if (!timelineController) {
             return false;
         }
@@ -1556,28 +1571,48 @@ bool TrackContentPanel::keyPressed(const juce::KeyPress& key) {
             return false;
         }
 
-        // Get selected clips
+        // Collect clips to split
+        std::vector<ClipId> clipsToSplit;
         const auto& selectedClips = selectionManager.getSelectedClips();
-        if (selectedClips.empty()) {
-            return false;
-        }
 
-        // Split each selected clip that contains the edit cursor
-        std::vector<ClipId> newClipIds;
+        // First, check if any selected clips contain the edit cursor
         for (ClipId clipId : selectedClips) {
             const auto* clip = ClipManager::getInstance().getClip(clipId);
             if (clip && clip->containsTime(splitTime)) {
-                // Split returns the ID of the new right-hand clip
-                ClipId rightClipId = ClipManager::getInstance().splitClip(clipId, splitTime);
-                if (rightClipId != INVALID_CLIP_ID) {
-                    newClipIds.push_back(rightClipId);
+                clipsToSplit.push_back(clipId);
+            }
+        }
+
+        // If no selected clips at cursor, find ANY clip that contains the cursor
+        if (clipsToSplit.empty()) {
+            const auto& allClips = ClipManager::getInstance().getClips();
+            for (const auto& clip : allClips) {
+                if (clip.containsTime(splitTime)) {
+                    clipsToSplit.push_back(clip.id);
                 }
             }
         }
 
-        // If splits were made, select both original and new clips
+        // Nothing to split
+        if (clipsToSplit.empty()) {
+            return false;
+        }
+
+        // Split each clip
+        std::vector<ClipId> newClipIds;
+        for (ClipId clipId : clipsToSplit) {
+            ClipId rightClipId = ClipManager::getInstance().splitClip(clipId, splitTime);
+            if (rightClipId != INVALID_CLIP_ID) {
+                newClipIds.push_back(rightClipId);
+            }
+        }
+
+        // Select both original and new clips
         if (!newClipIds.empty()) {
-            std::unordered_set<ClipId> newSelection = selectedClips;
+            std::unordered_set<ClipId> newSelection;
+            for (ClipId id : clipsToSplit) {
+                newSelection.insert(id);
+            }
             for (ClipId id : newClipIds) {
                 newSelection.insert(id);
             }
