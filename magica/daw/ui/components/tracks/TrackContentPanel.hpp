@@ -4,10 +4,12 @@
 
 #include <memory>
 #include <set>
+#include <unordered_set>
 #include <vector>
 
 #include "../../state/TimelineController.hpp"
 #include "core/ClipManager.hpp"
+#include "core/ClipTypes.hpp"
 #include "core/TrackManager.hpp"
 #include "core/ViewModeController.hpp"
 
@@ -106,6 +108,11 @@ class TrackContentPanel : public juce::Component,
     std::function<double(double)>
         snapTimeToGrid;  // Callback to snap time to grid (provided by MainView)
 
+    // Multi-clip drag methods (public for ClipComponent access)
+    void startMultiClipDrag(ClipId anchorClipId, const juce::Point<int>& startPos);
+    void updateMultiClipDrag(const juce::Point<int>& currentPos);
+    void finishMultiClipDrag();
+
   private:
     // Controller reference (not owned)
     TimelineController* timelineController = nullptr;
@@ -186,6 +193,53 @@ class TrackContentPanel : public juce::Component,
     void updateClipComponentPositions();
     void createClipFromTimeSelection();  // Called on double-click with selection
     ClipComponent* getClipComponentAt(int x, int y) const;
+
+    // ========================================================================
+    // Marquee Selection State
+    // ========================================================================
+    enum class DragType { None, TimeSelection, Marquee, MoveSelection };
+    DragType currentDragType_ = DragType::None;
+    bool isMarqueeActive_ = false;
+    juce::Rectangle<int> marqueeRect_;
+    juce::Point<int> marqueeStartPoint_;
+    std::unordered_set<ClipId> marqueePreviewClips_;  // Clips highlighted during marquee
+    static constexpr int DRAG_START_THRESHOLD = 3;    // Pixels before drag starts
+
+    // Track zone detection - upper half = marquee, lower half = time selection
+    bool isInUpperTrackZone(int y) const;
+    void updateCursorForPosition(int x, int y);
+
+    // Marquee methods
+    void startMarqueeSelection(const juce::Point<int>& startPoint);
+    void updateMarqueeSelection(const juce::Point<int>& currentPoint);
+    void finishMarqueeSelection(bool addToSelection);
+    std::unordered_set<ClipId> getClipsInRect(const juce::Rectangle<int>& rect) const;
+    void paintMarqueeRect(juce::Graphics& g);
+    void updateMarqueeHighlights();
+    bool checkIfMarqueeNeeded(const juce::Point<int>& currentPoint) const;
+
+    // ========================================================================
+    // Multi-Clip Drag State
+    // ========================================================================
+    bool isMovingMultipleClips_ = false;
+    ClipId anchorClipId_ = INVALID_CLIP_ID;
+    struct ClipDragInfo {
+        ClipId clipId = INVALID_CLIP_ID;
+        double originalStartTime = 0.0;
+        TrackId originalTrackId = INVALID_TRACK_ID;
+        int originalTrackIndex = -1;
+    };
+    std::vector<ClipDragInfo> multiClipDragInfos_;
+    juce::Point<int> multiClipDragStartPos_;
+    double multiClipDragStartTime_ = 0.0;
+
+    // Multi-clip drag methods (private helper)
+    void cancelMultiClipDrag();
+
+    // ========================================================================
+    // Keyboard handling
+    // ========================================================================
+    bool keyPressed(const juce::KeyPress& key) override;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(TrackContentPanel)
 };

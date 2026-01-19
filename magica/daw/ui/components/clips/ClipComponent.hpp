@@ -52,6 +52,15 @@ class ClipComponent : public juce::Component, public ClipManagerListener {
     }
     void setSelected(bool selected);
 
+    // Marquee highlight state (visual hint during marquee drag)
+    bool isMarqueeHighlighted() const {
+        return isMarqueeHighlighted_;
+    }
+    void setMarqueeHighlighted(bool highlighted);
+
+    // Check if this clip is part of a multi-selection
+    bool isPartOfMultiSelection() const;
+
     // Drag state (for parent to check)
     bool isCurrentlyDragging() const {
         return isDragging_;
@@ -69,6 +78,7 @@ class ClipComponent : public juce::Component, public ClipManagerListener {
     ClipId clipId_;
     TrackContentPanel* parentPanel_;
     bool isSelected_ = false;
+    bool isMarqueeHighlighted_ = false;
 
     // Interaction state
     enum class DragMode { None, Move, ResizeLeft, ResizeRight };

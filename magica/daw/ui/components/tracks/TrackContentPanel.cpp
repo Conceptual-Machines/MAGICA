@@ -155,6 +155,9 @@ void TrackContentPanel::paint(juce::Graphics& g) {
                            static_cast<int>(i));
         }
     }
+
+    // Draw marquee selection rectangle
+    paintMarqueeRect(g);
 }
 
 void TrackContentPanel::resized() {
@@ -369,6 +372,9 @@ void TrackContentPanel::mouseDown(const juce::MouseEvent& event) {
     isShiftHeld = event.mods.isShiftDown();
     selectionStartTrackIndex = getTrackIndexAtY(event.y);
 
+    // Reset drag type
+    currentDragType_ = DragType::None;
+
     // Select track based on click position
     for (size_t i = 0; i < trackLanes.size(); ++i) {
         if (getTrackLaneArea(static_cast<int>(i)).contains(event.getPosition())) {
@@ -377,11 +383,12 @@ void TrackContentPanel::mouseDown(const juce::MouseEvent& event) {
         }
     }
 
-    // Check if clicking on an existing selection (to move it)
+    // Check if clicking on an existing time selection (to move it)
     if (isOnExistingSelection(event.x, event.y)) {
         const auto& selection = timelineController->getState().selection;
         isMovingSelection = true;
         isCreatingSelection = false;
+        currentDragType_ = DragType::MoveSelection;
         moveDragStartTime = pixelToTime(event.x);
         moveSelectionOriginalStart = selection.startTime;
         moveSelectionOriginalEnd = selection.endTime;
@@ -389,8 +396,9 @@ void TrackContentPanel::mouseDown(const juce::MouseEvent& event) {
         return;
     }
 
-    // Start time selection tracking if in selectable area
-    if (isInSelectableArea(event.x, event.y)) {
+    // Start time/marquee selection tracking if in selectable area (not on a clip)
+    // Clips handle their own mouse events
+    if (isInSelectableArea(event.x, event.y) && getClipComponentAt(event.x, event.y) == nullptr) {
         isCreatingSelection = true;
         isMovingSelection = false;
         selectionStartTime = juce::jmax(0.0, pixelToTime(event.x));
@@ -437,8 +445,30 @@ void TrackContentPanel::mouseDrag(const juce::MouseEvent& event) {
         if (onTimeSelectionChanged) {
             onTimeSelectionChanged(newStart, newEnd, moveSelectionOriginalTracks);
         }
+    } else if (isMarqueeActive_) {
+        // Already in marquee mode - continue updating
+        updateMarqueeSelection(event.getPosition());
     } else if (isCreatingSelection) {
-        // Update selection end time
+        int deltaX = std::abs(event.x - mouseDownX);
+        int deltaY = std::abs(event.y - mouseDownY);
+        int dragDistance = juce::jmax(deltaX, deltaY);
+
+        // Determine mode based on where the drag STARTED (upper vs lower track zone)
+        if (currentDragType_ == DragType::None && dragDistance > DRAG_START_THRESHOLD) {
+            // Upper half of track = marquee selection, lower half = time selection
+            if (isInUpperTrackZone(mouseDownY)) {
+                // Start marquee selection
+                isCreatingSelection = false;
+                startMarqueeSelection(juce::Point<int>(mouseDownX, mouseDownY));
+                updateMarqueeSelection(event.getPosition());
+                return;
+            } else {
+                // Start time selection
+                currentDragType_ = DragType::TimeSelection;
+            }
+        }
+
+        // Update time selection end time
         selectionEndTime = juce::jmax(0.0, juce::jmin(timelineLength, pixelToTime(event.x)));
 
         // Apply snap to grid if callback is set
@@ -489,6 +519,14 @@ void TrackContentPanel::mouseUp(const juce::MouseEvent& event) {
         moveSelectionOriginalStart = -1.0;
         moveSelectionOriginalEnd = -1.0;
         moveSelectionOriginalTracks.clear();
+        currentDragType_ = DragType::None;
+        return;
+    }
+
+    // Handle marquee selection completion
+    if (isMarqueeActive_) {
+        finishMarqueeSelection(event.mods.isShiftDown());
+        currentDragType_ = DragType::None;
         return;
     }
 
@@ -513,7 +551,7 @@ void TrackContentPanel::mouseUp(const juce::MouseEvent& event) {
             pendingPlayheadTime = clickTime;
             startTimer(DOUBLE_CLICK_DELAY_MS);
         } else {
-            // It was a drag - finalize selection
+            // It was a drag - finalize time selection
             selectionEndTime = juce::jmax(0.0, juce::jmin(timelineLength, pixelToTime(event.x)));
 
             // Apply snap to grid if callback is set
@@ -561,6 +599,7 @@ void TrackContentPanel::mouseUp(const juce::MouseEvent& event) {
         selectionStartTrackIndex = -1;
         selectionEndTrackIndex = -1;
         isShiftHeld = false;
+        currentDragType_ = DragType::None;
     }
 }
 
@@ -595,12 +634,43 @@ void TrackContentPanel::timerCallback() {
 }
 
 void TrackContentPanel::mouseMove(const juce::MouseEvent& event) {
-    // Update cursor based on area
-    if (isOnExistingSelection(event.x, event.y)) {
-        // Show grab cursor when over an existing selection
+    updateCursorForPosition(event.x, event.y);
+}
+
+bool TrackContentPanel::isInUpperTrackZone(int y) const {
+    int trackIndex = getTrackIndexAtY(y);
+    if (trackIndex < 0) {
+        return false;
+    }
+
+    auto trackArea = getTrackLaneArea(trackIndex);
+    int trackMidY = trackArea.getY() + trackArea.getHeight() / 2;
+
+    return y < trackMidY;
+}
+
+void TrackContentPanel::updateCursorForPosition(int x, int y) {
+    // Check if over a clip - clip handles its own cursor
+    if (getClipComponentAt(x, y) != nullptr) {
+        setMouseCursor(juce::MouseCursor::NormalCursor);
+        return;
+    }
+
+    // Check if over an existing time selection
+    if (isOnExistingSelection(x, y)) {
         setMouseCursor(juce::MouseCursor::DraggingHandCursor);
-    } else if (isInSelectableArea(event.x, event.y)) {
-        setMouseCursor(juce::MouseCursor::IBeamCursor);
+        return;
+    }
+
+    // Check track zone
+    if (isInSelectableArea(x, y)) {
+        if (isInUpperTrackZone(y)) {
+            // Upper half - marquee/crosshair cursor
+            setMouseCursor(juce::MouseCursor::CrosshairCursor);
+        } else {
+            // Lower half - time selection/I-beam cursor
+            setMouseCursor(juce::MouseCursor::IBeamCursor);
+        }
     } else {
         setMouseCursor(juce::MouseCursor::NormalCursor);
     }
@@ -765,6 +835,333 @@ ClipComponent* TrackContentPanel::getClipComponentAt(int x, int y) const {
         }
     }
     return nullptr;
+}
+
+// ============================================================================
+// Marquee Selection
+// ============================================================================
+
+void TrackContentPanel::startMarqueeSelection(const juce::Point<int>& startPoint) {
+    isMarqueeActive_ = true;
+    marqueeStartPoint_ = startPoint;
+    marqueeRect_ = juce::Rectangle<int>(startPoint.x, startPoint.y, 0, 0);
+    marqueePreviewClips_.clear();
+    currentDragType_ = DragType::Marquee;
+}
+
+void TrackContentPanel::updateMarqueeSelection(const juce::Point<int>& currentPoint) {
+    if (!isMarqueeActive_) {
+        return;
+    }
+
+    // Calculate marquee rectangle from start and current point
+    int x1 = juce::jmin(marqueeStartPoint_.x, currentPoint.x);
+    int y1 = juce::jmin(marqueeStartPoint_.y, currentPoint.y);
+    int x2 = juce::jmax(marqueeStartPoint_.x, currentPoint.x);
+    int y2 = juce::jmax(marqueeStartPoint_.y, currentPoint.y);
+
+    marqueeRect_ = juce::Rectangle<int>(x1, y1, x2 - x1, y2 - y1);
+
+    // Update highlighted clips
+    updateMarqueeHighlights();
+    repaint();
+}
+
+void TrackContentPanel::finishMarqueeSelection(bool addToSelection) {
+    if (!isMarqueeActive_) {
+        return;
+    }
+
+    isMarqueeActive_ = false;
+
+    // Get all clips in the marquee rectangle
+    auto clipsInRect = getClipsInRect(marqueeRect_);
+
+    if (addToSelection) {
+        // Add to existing selection (Shift key held)
+        for (ClipId clipId : clipsInRect) {
+            SelectionManager::getInstance().addClipToSelection(clipId);
+        }
+    } else {
+        // Replace selection
+        SelectionManager::getInstance().selectClips(clipsInRect);
+    }
+
+    // Clear marquee preview highlights
+    for (auto& clipComp : clipComponents_) {
+        clipComp->setMarqueeHighlighted(false);
+    }
+    marqueePreviewClips_.clear();
+    marqueeRect_ = juce::Rectangle<int>();
+
+    repaint();
+}
+
+std::unordered_set<ClipId> TrackContentPanel::getClipsInRect(
+    const juce::Rectangle<int>& rect) const {
+    std::unordered_set<ClipId> result;
+
+    for (const auto& clipComp : clipComponents_) {
+        if (clipComp->getBounds().intersects(rect)) {
+            result.insert(clipComp->getClipId());
+        }
+    }
+
+    return result;
+}
+
+void TrackContentPanel::paintMarqueeRect(juce::Graphics& g) {
+    if (!isMarqueeActive_ || marqueeRect_.isEmpty()) {
+        return;
+    }
+
+    // Semi-transparent white fill
+    g.setColour(juce::Colours::white.withAlpha(0.15f));
+    g.fillRect(marqueeRect_);
+
+    // White border
+    g.setColour(juce::Colours::white.withAlpha(0.8f));
+    g.drawRect(marqueeRect_, 1);
+}
+
+void TrackContentPanel::updateMarqueeHighlights() {
+    auto clipsInRect = getClipsInRect(marqueeRect_);
+
+    // Update clip components
+    for (auto& clipComp : clipComponents_) {
+        bool inMarquee = clipsInRect.find(clipComp->getClipId()) != clipsInRect.end();
+        clipComp->setMarqueeHighlighted(inMarquee);
+    }
+
+    marqueePreviewClips_ = clipsInRect;
+}
+
+bool TrackContentPanel::checkIfMarqueeNeeded(const juce::Point<int>& currentPoint) const {
+    // Create a rectangle from drag start to current point
+    int x1 = juce::jmin(mouseDownX, currentPoint.x);
+    int y1 = juce::jmin(mouseDownY, currentPoint.y);
+    int x2 = juce::jmax(mouseDownX, currentPoint.x);
+    int y2 = juce::jmax(mouseDownY, currentPoint.y);
+
+    // Ensure minimum dimensions for intersection check
+    // (a zero-height rect won't intersect anything)
+    int width = juce::jmax(1, x2 - x1);
+    int height = juce::jmax(1, y2 - y1);
+
+    // Expand vertically to cover the track the user clicked in
+    // This ensures horizontal drags still detect clips
+    int trackIndex = getTrackIndexAtY(mouseDownY);
+    if (trackIndex >= 0) {
+        auto trackArea = getTrackLaneArea(trackIndex);
+        y1 = trackArea.getY();
+        height = trackArea.getHeight();
+    }
+
+    juce::Rectangle<int> dragRect(x1, y1, width, height);
+
+    // Check if any clips are intersected by the drag rectangle
+    for (const auto& clipComp : clipComponents_) {
+        if (clipComp->getBounds().intersects(dragRect)) {
+            return true;  // Marquee selection needed
+        }
+    }
+
+    return false;  // Time selection (no clips crossed)
+}
+
+// ============================================================================
+// Multi-Clip Drag
+// ============================================================================
+
+void TrackContentPanel::startMultiClipDrag(ClipId anchorClipId, const juce::Point<int>& startPos) {
+    auto& selectionManager = SelectionManager::getInstance();
+    const auto& selectedClips = selectionManager.getSelectedClips();
+
+    if (selectedClips.empty()) {
+        return;
+    }
+
+    isMovingMultipleClips_ = true;
+    anchorClipId_ = anchorClipId;
+    multiClipDragStartPos_ = startPos;
+
+    // Get the anchor clip's start time
+    const auto* anchorClip = ClipManager::getInstance().getClip(anchorClipId);
+    if (anchorClip) {
+        multiClipDragStartTime_ = anchorClip->startTime;
+    }
+
+    // Store original positions of all selected clips
+    multiClipDragInfos_.clear();
+    for (ClipId clipId : selectedClips) {
+        const auto* clip = ClipManager::getInstance().getClip(clipId);
+        if (clip) {
+            ClipDragInfo info;
+            info.clipId = clipId;
+            info.originalStartTime = clip->startTime;
+            info.originalTrackId = clip->trackId;
+
+            // Find track index
+            auto it = std::find(visibleTrackIds_.begin(), visibleTrackIds_.end(), clip->trackId);
+            if (it != visibleTrackIds_.end()) {
+                info.originalTrackIndex =
+                    static_cast<int>(std::distance(visibleTrackIds_.begin(), it));
+            }
+
+            multiClipDragInfos_.push_back(info);
+        }
+    }
+}
+
+void TrackContentPanel::updateMultiClipDrag(const juce::Point<int>& currentPos) {
+    if (!isMovingMultipleClips_ || multiClipDragInfos_.empty()) {
+        return;
+    }
+
+    double pixelsPerSecond = currentZoom;
+    if (pixelsPerSecond <= 0) {
+        return;
+    }
+
+    int deltaX = currentPos.x - multiClipDragStartPos_.x;
+    double deltaTime = deltaX / pixelsPerSecond;
+
+    // Calculate new anchor time with snapping
+    double newAnchorTime = juce::jmax(0.0, multiClipDragStartTime_ + deltaTime);
+    if (snapTimeToGrid) {
+        double snappedTime = snapTimeToGrid(newAnchorTime);
+        // Magnetic snap threshold
+        double snapDeltaPixels = std::abs((snappedTime - newAnchorTime) * pixelsPerSecond);
+        if (snapDeltaPixels <= 15) {  // SNAP_THRESHOLD_PIXELS
+            newAnchorTime = snappedTime;
+        }
+    }
+
+    double actualDeltaTime = newAnchorTime - multiClipDragStartTime_;
+
+    // Update all clip components visually (don't commit to ClipManager yet)
+    for (const auto& dragInfo : multiClipDragInfos_) {
+        double newStartTime = juce::jmax(0.0, dragInfo.originalStartTime + actualDeltaTime);
+
+        // Find the clip component
+        for (auto& clipComp : clipComponents_) {
+            if (clipComp->getClipId() == dragInfo.clipId) {
+                const auto* clip = ClipManager::getInstance().getClip(dragInfo.clipId);
+                if (clip) {
+                    int newX = timeToPixel(newStartTime);
+                    int clipWidth = static_cast<int>(clip->length * pixelsPerSecond);
+                    clipComp->setBounds(newX, clipComp->getY(), juce::jmax(10, clipWidth),
+                                        clipComp->getHeight());
+                }
+                break;
+            }
+        }
+    }
+}
+
+void TrackContentPanel::finishMultiClipDrag() {
+    if (!isMovingMultipleClips_ || multiClipDragInfos_.empty()) {
+        isMovingMultipleClips_ = false;
+        return;
+    }
+
+    // Get the final anchor position
+    ClipComponent* anchorComp = nullptr;
+    for (auto& clipComp : clipComponents_) {
+        if (clipComp->getClipId() == anchorClipId_) {
+            anchorComp = clipComp.get();
+            break;
+        }
+    }
+
+    if (anchorComp) {
+        // Calculate final delta from anchor's visual position
+        double finalAnchorTime = pixelToTime(anchorComp->getX());
+        if (snapTimeToGrid) {
+            finalAnchorTime = snapTimeToGrid(finalAnchorTime);
+        }
+        finalAnchorTime = juce::jmax(0.0, finalAnchorTime);
+
+        double actualDeltaTime = finalAnchorTime - multiClipDragStartTime_;
+
+        // Apply the move to all selected clips
+        for (const auto& dragInfo : multiClipDragInfos_) {
+            double newStartTime = juce::jmax(0.0, dragInfo.originalStartTime + actualDeltaTime);
+            ClipManager::getInstance().moveClip(dragInfo.clipId, newStartTime);
+        }
+    }
+
+    // Clean up
+    isMovingMultipleClips_ = false;
+    anchorClipId_ = INVALID_CLIP_ID;
+    multiClipDragInfos_.clear();
+
+    // Refresh positions from ClipManager
+    updateClipComponentPositions();
+}
+
+void TrackContentPanel::cancelMultiClipDrag() {
+    if (!isMovingMultipleClips_) {
+        return;
+    }
+
+    // Restore original visual positions
+    updateClipComponentPositions();
+
+    isMovingMultipleClips_ = false;
+    anchorClipId_ = INVALID_CLIP_ID;
+    multiClipDragInfos_.clear();
+}
+
+// ============================================================================
+// Keyboard Handling
+// ============================================================================
+
+bool TrackContentPanel::keyPressed(const juce::KeyPress& key) {
+    auto& selectionManager = SelectionManager::getInstance();
+
+    // Cmd/Ctrl+A: Select all clips
+    if (key == juce::KeyPress('a', juce::ModifierKeys::commandModifier, 0)) {
+        std::unordered_set<ClipId> allClips;
+        for (const auto& clipComp : clipComponents_) {
+            allClips.insert(clipComp->getClipId());
+        }
+        selectionManager.selectClips(allClips);
+        return true;
+    }
+
+    // Escape: Clear selection
+    if (key == juce::KeyPress::escapeKey) {
+        selectionManager.clearSelection();
+        if (isMarqueeActive_) {
+            isMarqueeActive_ = false;
+            marqueePreviewClips_.clear();
+            for (auto& clipComp : clipComponents_) {
+                clipComp->setMarqueeHighlighted(false);
+            }
+            repaint();
+        }
+        if (isMovingMultipleClips_) {
+            cancelMultiClipDrag();
+        }
+        return true;
+    }
+
+    // Delete/Backspace: Delete selected clips
+    if (key == juce::KeyPress::deleteKey || key == juce::KeyPress::backspaceKey) {
+        const auto& selectedClips = selectionManager.getSelectedClips();
+        if (!selectedClips.empty()) {
+            // Copy to vector since we're modifying during iteration
+            std::vector<ClipId> clipsToDelete(selectedClips.begin(), selectedClips.end());
+            for (ClipId clipId : clipsToDelete) {
+                ClipManager::getInstance().deleteClip(clipId);
+            }
+            selectionManager.clearSelection();
+            return true;
+        }
+    }
+
+    return false;  // Key not handled
 }
 
 }  // namespace magica

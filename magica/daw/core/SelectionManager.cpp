@@ -55,10 +55,16 @@ void SelectionManager::selectClip(ClipId clipId) {
 
     // Clear other selection types
     selectedTrackId_ = INVALID_TRACK_ID;
+    selectedClipIds_.clear();
     timeRangeSelection_ = TimeRangeSelection{};
 
     selectionType_ = SelectionType::Clip;
     selectedClipId_ = clipId;
+
+    // Also add to the set for consistency
+    if (clipId != INVALID_CLIP_ID) {
+        selectedClipIds_.insert(clipId);
+    }
 
     // Sync with ClipManager
     ClipManager::getInstance().setSelectedClip(clipId);
@@ -72,6 +78,111 @@ void SelectionManager::selectClip(ClipId clipId) {
     if (clipChanged) {
         notifyClipSelectionChanged(clipId);
     }
+}
+
+// ============================================================================
+// Multi-Clip Selection
+// ============================================================================
+
+void SelectionManager::selectClips(const std::unordered_set<ClipId>& clipIds) {
+    if (clipIds.empty()) {
+        clearSelection();
+        return;
+    }
+
+    if (clipIds.size() == 1) {
+        // Single clip - use regular selectClip for backward compat
+        selectClip(*clipIds.begin());
+        return;
+    }
+
+    bool typeChanged = selectionType_ != SelectionType::MultiClip;
+
+    // Clear other selection types
+    selectedTrackId_ = INVALID_TRACK_ID;
+    selectedClipId_ = INVALID_CLIP_ID;
+    timeRangeSelection_ = TimeRangeSelection{};
+
+    selectionType_ = SelectionType::MultiClip;
+    selectedClipIds_ = clipIds;
+
+    // Sync with managers (clear single-clip selection)
+    ClipManager::getInstance().clearClipSelection();
+    TrackManager::getInstance().setSelectedTrack(INVALID_TRACK_ID);
+
+    if (typeChanged) {
+        notifySelectionTypeChanged(SelectionType::MultiClip);
+    }
+    notifyMultiClipSelectionChanged(selectedClipIds_);
+}
+
+void SelectionManager::addClipToSelection(ClipId clipId) {
+    if (clipId == INVALID_CLIP_ID) {
+        return;
+    }
+
+    // If currently single-clip selection, convert to multi-clip
+    if (selectionType_ == SelectionType::Clip && selectedClipId_ != INVALID_CLIP_ID) {
+        selectedClipIds_.insert(selectedClipId_);
+    }
+
+    // Add the new clip
+    selectedClipIds_.insert(clipId);
+
+    if (selectedClipIds_.size() == 1) {
+        // Still just one clip - use single selection mode
+        selectClip(clipId);
+    } else {
+        // Multiple clips - switch to multi-clip mode
+        bool typeChanged = selectionType_ != SelectionType::MultiClip;
+
+        selectedTrackId_ = INVALID_TRACK_ID;
+        selectedClipId_ = INVALID_CLIP_ID;
+        timeRangeSelection_ = TimeRangeSelection{};
+
+        selectionType_ = SelectionType::MultiClip;
+
+        // Sync with managers
+        ClipManager::getInstance().clearClipSelection();
+        TrackManager::getInstance().setSelectedTrack(INVALID_TRACK_ID);
+
+        if (typeChanged) {
+            notifySelectionTypeChanged(SelectionType::MultiClip);
+        }
+        notifyMultiClipSelectionChanged(selectedClipIds_);
+    }
+}
+
+void SelectionManager::removeClipFromSelection(ClipId clipId) {
+    selectedClipIds_.erase(clipId);
+
+    if (selectedClipIds_.empty()) {
+        clearSelection();
+    } else if (selectedClipIds_.size() == 1) {
+        // Back to single selection
+        selectClip(*selectedClipIds_.begin());
+    } else {
+        // Still multi-clip
+        notifyMultiClipSelectionChanged(selectedClipIds_);
+    }
+}
+
+void SelectionManager::toggleClipSelection(ClipId clipId) {
+    if (isClipSelected(clipId)) {
+        removeClipFromSelection(clipId);
+    } else {
+        addClipToSelection(clipId);
+    }
+}
+
+bool SelectionManager::isClipSelected(ClipId clipId) const {
+    if (selectionType_ == SelectionType::Clip) {
+        return selectedClipId_ == clipId;
+    }
+    if (selectionType_ == SelectionType::MultiClip) {
+        return selectedClipIds_.find(clipId) != selectedClipIds_.end();
+    }
+    return false;
 }
 
 // ============================================================================
@@ -113,6 +224,7 @@ void SelectionManager::clearSelection() {
     selectionType_ = SelectionType::None;
     selectedTrackId_ = INVALID_TRACK_ID;
     selectedClipId_ = INVALID_CLIP_ID;
+    selectedClipIds_.clear();
     timeRangeSelection_ = TimeRangeSelection{};
 
     // Sync with managers
@@ -155,6 +267,12 @@ void SelectionManager::notifyTrackSelectionChanged(TrackId trackId) {
 void SelectionManager::notifyClipSelectionChanged(ClipId clipId) {
     for (auto* listener : listeners_) {
         listener->clipSelectionChanged(clipId);
+    }
+}
+
+void SelectionManager::notifyMultiClipSelectionChanged(const std::unordered_set<ClipId>& clipIds) {
+    for (auto* listener : listeners_) {
+        listener->multiClipSelectionChanged(clipIds);
     }
 }
 

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <unordered_set>
 #include <vector>
 
 #include "ClipTypes.hpp"
@@ -11,10 +12,11 @@ namespace magica {
  * @brief Selection types in the DAW
  */
 enum class SelectionType {
-    None,      // Nothing selected
-    Track,     // Track selected (for mixer/inspector)
-    Clip,      // Clip selected (for inspector/editing)
-    TimeRange  // Time range selected (for operations)
+    None,       // Nothing selected
+    Track,      // Track selected (for mixer/inspector)
+    Clip,       // Single clip selected (backward compat)
+    MultiClip,  // Multiple clips selected
+    TimeRange   // Time range selected (for operations)
 };
 
 /**
@@ -44,6 +46,8 @@ class SelectionManagerListener {
     virtual void selectionTypeChanged(SelectionType newType) = 0;
     virtual void trackSelectionChanged([[maybe_unused]] TrackId trackId) {}
     virtual void clipSelectionChanged([[maybe_unused]] ClipId clipId) {}
+    virtual void multiClipSelectionChanged(
+        [[maybe_unused]] const std::unordered_set<ClipId>& clipIds) {}
     virtual void timeRangeSelectionChanged([[maybe_unused]] const TimeRangeSelection& selection) {}
 };
 
@@ -91,16 +95,60 @@ class SelectionManager {
     // ========================================================================
 
     /**
-     * @brief Select a clip (clears track and range selection)
+     * @brief Select a single clip (clears track and range selection)
      */
     void selectClip(ClipId clipId);
 
     /**
-     * @brief Get the currently selected clip
-     * @return INVALID_CLIP_ID if no clip selected
+     * @brief Get the currently selected clip (backward compat)
+     * @return INVALID_CLIP_ID if no clip selected or multiple clips selected
      */
     ClipId getSelectedClip() const {
         return selectedClipId_;
+    }
+
+    // ========================================================================
+    // Multi-Clip Selection
+    // ========================================================================
+
+    /**
+     * @brief Select multiple clips (clears other selection types)
+     */
+    void selectClips(const std::unordered_set<ClipId>& clipIds);
+
+    /**
+     * @brief Add a clip to the current selection
+     * If not already in multi-clip mode, converts current selection to multi-clip
+     */
+    void addClipToSelection(ClipId clipId);
+
+    /**
+     * @brief Remove a clip from the current selection
+     */
+    void removeClipFromSelection(ClipId clipId);
+
+    /**
+     * @brief Toggle a clip's selection state (add if not selected, remove if selected)
+     */
+    void toggleClipSelection(ClipId clipId);
+
+    /**
+     * @brief Get all selected clips
+     */
+    const std::unordered_set<ClipId>& getSelectedClips() const {
+        return selectedClipIds_;
+    }
+
+    /**
+     * @brief Check if a specific clip is selected
+     */
+    bool isClipSelected(ClipId clipId) const;
+
+    /**
+     * @brief Get the number of selected clips
+     */
+    size_t getSelectedClipCount() const {
+        return selectedClipIds_.size();
     }
 
     // ========================================================================
@@ -149,6 +197,7 @@ class SelectionManager {
     SelectionType selectionType_ = SelectionType::None;
     TrackId selectedTrackId_ = INVALID_TRACK_ID;
     ClipId selectedClipId_ = INVALID_CLIP_ID;
+    std::unordered_set<ClipId> selectedClipIds_;  // For multi-clip selection
     TimeRangeSelection timeRangeSelection_;
 
     std::vector<SelectionManagerListener*> listeners_;
@@ -156,6 +205,7 @@ class SelectionManager {
     void notifySelectionTypeChanged(SelectionType type);
     void notifyTrackSelectionChanged(TrackId trackId);
     void notifyClipSelectionChanged(ClipId clipId);
+    void notifyMultiClipSelectionChanged(const std::unordered_set<ClipId>& clipIds);
     void notifyTimeRangeSelectionChanged(const TimeRangeSelection& selection);
 };
 

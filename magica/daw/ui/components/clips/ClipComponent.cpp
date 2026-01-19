@@ -45,8 +45,14 @@ void ClipComponent::paint(juce::Graphics& g) {
         paintResizeHandles(g, bounds);
     }
 
-    // Selection border
-    if (isSelected_) {
+    // Marquee highlight overlay (during marquee drag)
+    if (isMarqueeHighlighted_) {
+        g.setColour(juce::Colours::white.withAlpha(0.2f));
+        g.fillRoundedRectangle(bounds.toFloat(), CORNER_RADIUS);
+    }
+
+    // Selection border - show for both single selection and multi-selection
+    if (isSelected_ || SelectionManager::getInstance().isClipSelected(clipId_)) {
         g.setColour(juce::Colours::white);
         g.drawRect(bounds, 2);
     }
@@ -190,9 +196,31 @@ void ClipComponent::mouseDown(const juce::MouseEvent& e) {
         return;
     }
 
-    // Select this clip
-    setSelected(true);
-    SelectionManager::getInstance().selectClip(clipId_);
+    auto& selectionManager = SelectionManager::getInstance();
+    bool isAlreadySelected = selectionManager.isClipSelected(clipId_);
+
+    // Handle Cmd/Ctrl+click for toggle selection
+    if (e.mods.isCommandDown()) {
+        selectionManager.toggleClipSelection(clipId_);
+        // Update local state
+        isSelected_ = selectionManager.isClipSelected(clipId_);
+
+        // Don't start dragging on Cmd+click - it's just for selection
+        dragMode_ = DragMode::None;
+        repaint();
+        return;
+    }
+
+    // If clicking on a clip that's already part of a multi-selection,
+    // keep the selection and prepare for potential multi-drag
+    if (isAlreadySelected && selectionManager.getSelectedClipCount() > 1) {
+        // Keep existing multi-selection, prepare for multi-drag
+        isSelected_ = true;
+    } else {
+        // Single click on unselected clip - select only this one
+        selectionManager.selectClip(clipId_);
+        isSelected_ = true;
+    }
 
     if (onClipSelected) {
         onClipSelected(clipId_);
@@ -223,6 +251,8 @@ void ClipComponent::mouseDown(const juce::MouseEvent& e) {
     } else {
         dragMode_ = DragMode::Move;
     }
+
+    repaint();
 }
 
 void ClipComponent::mouseDrag(const juce::MouseEvent& e) {
@@ -235,6 +265,26 @@ void ClipComponent::mouseDrag(const juce::MouseEvent& e) {
         return;
     }
 
+    // Check if this is a multi-clip drag
+    auto& selectionManager = SelectionManager::getInstance();
+    bool isMultiDrag = dragMode_ == DragMode::Move && selectionManager.getSelectedClipCount() > 1 &&
+                       selectionManager.isClipSelected(clipId_);
+
+    if (isMultiDrag) {
+        // Delegate to parent for coordinated multi-clip movement
+        if (!isDragging_) {
+            // First drag event - start multi-clip drag
+            parentPanel_->startMultiClipDrag(clipId_,
+                                             e.getEventRelativeTo(parentPanel_).getPosition());
+            isDragging_ = true;
+        } else {
+            // Continue multi-clip drag
+            parentPanel_->updateMultiClipDrag(e.getEventRelativeTo(parentPanel_).getPosition());
+        }
+        return;
+    }
+
+    // Single clip drag logic
     isDragging_ = true;
 
     // Convert pixel delta to time delta
@@ -333,6 +383,17 @@ void ClipComponent::mouseDrag(const juce::MouseEvent& e) {
 }
 
 void ClipComponent::mouseUp(const juce::MouseEvent& e) {
+    // Check if we were doing a multi-clip drag
+    auto& selectionManager = SelectionManager::getInstance();
+    if (isDragging_ && parentPanel_ && selectionManager.getSelectedClipCount() > 1 &&
+        selectionManager.isClipSelected(clipId_) && dragMode_ == DragMode::Move) {
+        // Finish multi-clip drag via parent
+        parentPanel_->finishMultiClipDrag();
+        dragMode_ = DragMode::None;
+        isDragging_ = false;
+        return;
+    }
+
     if (isDragging_ && dragMode_ != DragMode::None) {
         // Now apply snapping and commit to ClipManager
         switch (dragMode_) {
@@ -478,7 +539,8 @@ void ClipComponent::clipSelectionChanged(ClipId clipId) {
     }
 
     bool wasSelected = isSelected_;
-    isSelected_ = (clipId == clipId_);
+    // Check both single clip selection and multi-clip selection
+    isSelected_ = (clipId == clipId_) || SelectionManager::getInstance().isClipSelected(clipId_);
 
     if (wasSelected != isSelected_) {
         repaint();
@@ -494,6 +556,18 @@ void ClipComponent::setSelected(bool selected) {
         isSelected_ = selected;
         repaint();
     }
+}
+
+void ClipComponent::setMarqueeHighlighted(bool highlighted) {
+    if (isMarqueeHighlighted_ != highlighted) {
+        isMarqueeHighlighted_ = highlighted;
+        repaint();
+    }
+}
+
+bool ClipComponent::isPartOfMultiSelection() const {
+    auto& selectionManager = SelectionManager::getInstance();
+    return selectionManager.getSelectedClipCount() > 1 && selectionManager.isClipSelected(clipId_);
 }
 
 // ============================================================================

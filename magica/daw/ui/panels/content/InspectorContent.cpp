@@ -419,6 +419,14 @@ void InspectorContent::updateSelectionDisplay() {
             noSelectionLabel_.setVisible(false);
             updateFromSelectedClip();
             break;
+
+        case magica::SelectionType::MultiClip:
+            // For multi-clip selection, show "Multiple clips selected" or similar
+            showTrackControls(false);
+            showClipControls(false);
+            noSelectionLabel_.setText("Multiple clips selected", juce::dontSendNotification);
+            noSelectionLabel_.setVisible(true);
+            break;
     }
 
     resized();
