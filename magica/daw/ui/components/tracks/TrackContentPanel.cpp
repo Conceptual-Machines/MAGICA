@@ -6,7 +6,9 @@
 #include "../../layout/LayoutConfig.hpp"
 #include "../../themes/DarkTheme.hpp"
 #include "../../themes/FontManager.hpp"
+#include "../clips/ClipComponent.hpp"
 #include "Config.hpp"
+#include "core/SelectionManager.hpp"
 
 namespace magica {
 
@@ -22,17 +24,26 @@ TrackContentPanel::TrackContentPanel() {
     // Register as TrackManager listener
     TrackManager::getInstance().addListener(this);
 
+    // Register as ClipManager listener
+    ClipManager::getInstance().addListener(this);
+
     // Register as ViewModeController listener
     ViewModeController::getInstance().addListener(this);
     currentViewMode_ = ViewModeController::getInstance().getViewMode();
 
     // Build tracks from TrackManager
     tracksChanged();
+
+    // Build clips from ClipManager
+    rebuildClipComponents();
 }
 
 TrackContentPanel::~TrackContentPanel() {
     // Unregister from TrackManager
     TrackManager::getInstance().removeListener(this);
+
+    // Unregister from ClipManager
+    ClipManager::getInstance().removeListener(this);
 
     // Unregister from ViewModeController
     ViewModeController::getInstance().removeListener(this);
@@ -558,10 +569,16 @@ void TrackContentPanel::mouseDoubleClick(const juce::MouseEvent& event) {
     stopTimer();
     pendingPlayheadTime = -1.0;
 
-    // Double-click on empty area clears selection
-    if (!isOnExistingSelection(event.x, event.y)) {
+    // Check if double-clicking on an existing selection -> create clip
+    if (isOnExistingSelection(event.x, event.y)) {
+        createClipFromTimeSelection();
+        // Clear selection after creating clip
         if (onTimeSelectionChanged) {
-            // Clear selection by sending invalid values
+            onTimeSelectionChanged(-1.0, -1.0, {});
+        }
+    } else {
+        // Double-click on empty area clears selection
+        if (onTimeSelectionChanged) {
             onTimeSelectionChanged(-1.0, -1.0, {});
         }
     }
@@ -587,6 +604,151 @@ void TrackContentPanel::mouseMove(const juce::MouseEvent& event) {
     } else {
         setMouseCursor(juce::MouseCursor::NormalCursor);
     }
+}
+
+// ============================================================================
+// ClipManagerListener Implementation
+// ============================================================================
+
+void TrackContentPanel::clipsChanged() {
+    rebuildClipComponents();
+}
+
+void TrackContentPanel::clipPropertyChanged(ClipId clipId) {
+    // Find the clip component and update its position/size
+    for (auto& clipComp : clipComponents_) {
+        if (clipComp->getClipId() == clipId) {
+            updateClipComponentPositions();
+            break;
+        }
+    }
+}
+
+void TrackContentPanel::clipSelectionChanged(ClipId /*clipId*/) {
+    // Repaint to update selection visuals
+    repaint();
+}
+
+// ============================================================================
+// Clip Management
+// ============================================================================
+
+void TrackContentPanel::rebuildClipComponents() {
+    // Remove all existing clip components
+    clipComponents_.clear();
+
+    // Get all clips
+    const auto& clips = ClipManager::getInstance().getClips();
+
+    // Create a component for each clip that belongs to a visible track
+    for (const auto& clip : clips) {
+        // Check if clip's track is visible
+        auto it = std::find(visibleTrackIds_.begin(), visibleTrackIds_.end(), clip.trackId);
+        if (it == visibleTrackIds_.end()) {
+            continue;  // Track not visible
+        }
+
+        auto clipComp = std::make_unique<ClipComponent>(clip.id, this);
+
+        // Set up callbacks
+        clipComp->onClipMoved = [](ClipId id, double newStartTime) {
+            ClipManager::getInstance().moveClip(id, newStartTime);
+        };
+
+        clipComp->onClipMovedToTrack = [](ClipId id, TrackId newTrackId) {
+            ClipManager::getInstance().moveClipToTrack(id, newTrackId);
+        };
+
+        clipComp->onClipResized = [](ClipId id, double newLength, bool fromStart) {
+            ClipManager::getInstance().resizeClip(id, newLength, fromStart);
+        };
+
+        clipComp->onClipSelected = [](ClipId id) {
+            SelectionManager::getInstance().selectClip(id);
+        };
+
+        clipComp->onClipDoubleClicked = [](ClipId /*id*/) {
+            // Could open clip in editor, etc.
+        };
+
+        // Wire up grid snapping
+        clipComp->snapTimeToGrid = snapTimeToGrid;
+
+        addAndMakeVisible(clipComp.get());
+        clipComponents_.push_back(std::move(clipComp));
+    }
+
+    updateClipComponentPositions();
+}
+
+void TrackContentPanel::updateClipComponentPositions() {
+    for (auto& clipComp : clipComponents_) {
+        const auto* clip = ClipManager::getInstance().getClip(clipComp->getClipId());
+        if (!clip) {
+            continue;
+        }
+
+        // Find the track index
+        auto it = std::find(visibleTrackIds_.begin(), visibleTrackIds_.end(), clip->trackId);
+        if (it == visibleTrackIds_.end()) {
+            clipComp->setVisible(false);
+            continue;
+        }
+
+        int trackIndex = static_cast<int>(std::distance(visibleTrackIds_.begin(), it));
+        auto trackArea = getTrackLaneArea(trackIndex);
+
+        // Calculate clip bounds
+        int clipX = timeToPixel(clip->startTime);
+        int clipWidth = static_cast<int>(clip->length * currentZoom);
+
+        // Inset from track edges
+        int clipY = trackArea.getY() + 2;
+        int clipHeight = trackArea.getHeight() - 4;
+
+        clipComp->setBounds(clipX, clipY, juce::jmax(10, clipWidth), clipHeight);
+        clipComp->setVisible(true);
+    }
+}
+
+void TrackContentPanel::createClipFromTimeSelection() {
+    if (!timelineController) {
+        return;
+    }
+
+    const auto& selection = timelineController->getState().selection;
+    if (!selection.isActive()) {
+        return;
+    }
+
+    // Create a clip for each track in the selection
+    for (int trackIndex : selection.trackIndices) {
+        if (trackIndex >= 0 && trackIndex < static_cast<int>(visibleTrackIds_.size())) {
+            TrackId trackId = visibleTrackIds_[trackIndex];
+            const auto* track = TrackManager::getInstance().getTrack(trackId);
+
+            if (track) {
+                double length = selection.endTime - selection.startTime;
+
+                // Determine clip type based on track type
+                if (canContainMIDI(track->type)) {
+                    ClipManager::getInstance().createMidiClip(trackId, selection.startTime, length);
+                } else if (canContainAudio(track->type)) {
+                    ClipManager::getInstance().createAudioClip(trackId, selection.startTime, length,
+                                                               "");
+                }
+            }
+        }
+    }
+}
+
+ClipComponent* TrackContentPanel::getClipComponentAt(int x, int y) const {
+    for (const auto& clipComp : clipComponents_) {
+        if (clipComp->getBounds().contains(x, y)) {
+            return clipComp.get();
+        }
+    }
+    return nullptr;
 }
 
 }  // namespace magica

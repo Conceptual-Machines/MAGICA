@@ -1,6 +1,8 @@
 #pragma once
 
 #include "PanelContent.hpp"
+#include "core/ClipManager.hpp"
+#include "core/SelectionManager.hpp"
 #include "core/TrackManager.hpp"
 
 namespace magica::daw::ui {
@@ -8,9 +10,13 @@ namespace magica::daw::ui {
 /**
  * @brief Inspector panel content
  *
- * Displays properties of the currently selected track.
+ * Displays properties of the currently selected track or clip.
+ * Dynamically switches between track and clip properties based on selection.
  */
-class InspectorContent : public PanelContent, public magica::TrackManagerListener {
+class InspectorContent : public PanelContent,
+                         public magica::TrackManagerListener,
+                         public magica::ClipManagerListener,
+                         public magica::SelectionManagerListener {
   public:
     InspectorContent();
     ~InspectorContent() override;
@@ -34,9 +40,22 @@ class InspectorContent : public PanelContent, public magica::TrackManagerListene
     void trackPropertyChanged(int trackId) override;
     void trackSelectionChanged(magica::TrackId trackId) override;
 
+    // ClipManagerListener
+    void clipsChanged() override;
+    void clipPropertyChanged(magica::ClipId clipId) override;
+    void clipSelectionChanged(magica::ClipId clipId) override;
+
+    // SelectionManagerListener
+    void selectionTypeChanged(magica::SelectionType newType) override;
+
   private:
     juce::Label titleLabel_;
     juce::Label noSelectionLabel_;
+
+    // Current selection state
+    magica::SelectionType currentSelectionType_ = magica::SelectionType::None;
+    magica::TrackId selectedTrackId_ = magica::INVALID_TRACK_ID;
+    magica::ClipId selectedClipId_ = magica::INVALID_CLIP_ID;
 
     // Track properties section
     juce::Label trackNameLabel_;
@@ -48,10 +67,24 @@ class InspectorContent : public PanelContent, public magica::TrackManagerListene
     juce::Slider panSlider_;
     juce::Label panLabel_;
 
-    magica::TrackId selectedTrackId_ = magica::INVALID_TRACK_ID;
+    // Clip properties section
+    juce::Label clipNameLabel_;
+    juce::Label clipNameValue_;
+    juce::Label clipStartLabel_;
+    juce::Label clipStartValue_;
+    juce::Label clipLengthLabel_;
+    juce::Label clipLengthValue_;
+    juce::ToggleButton clipLoopToggle_;
+    juce::Label clipLoopLengthLabel_;
+    juce::Slider clipLoopLengthSlider_;
+    juce::Label clipTypeLabel_;
+    juce::Label clipTypeValue_;
 
     void updateFromSelectedTrack();
+    void updateFromSelectedClip();
     void showTrackControls(bool show);
+    void showClipControls(bool show);
+    void updateSelectionDisplay();
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(InspectorContent)
 };

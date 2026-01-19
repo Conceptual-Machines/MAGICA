@@ -7,17 +7,20 @@
 #include <vector>
 
 #include "../../state/TimelineController.hpp"
+#include "core/ClipManager.hpp"
 #include "core/TrackManager.hpp"
 #include "core/ViewModeController.hpp"
 
 namespace magica {
 
-// Forward declaration
+// Forward declarations
 class TimelineController;
+class ClipComponent;
 
 class TrackContentPanel : public juce::Component,
                           public TimelineStateListener,
                           public TrackManagerListener,
+                          public ClipManagerListener,
                           public ViewModeListener,
                           private juce::Timer {
   public:
@@ -37,6 +40,11 @@ class TrackContentPanel : public juce::Component,
 
     // TrackManagerListener implementation
     void tracksChanged() override;
+
+    // ClipManagerListener implementation
+    void clipsChanged() override;
+    void clipPropertyChanged(ClipId clipId) override;
+    void clipSelectionChanged(ClipId clipId) override;
 
     // ViewModeListener implementation
     void viewModeChanged(ViewMode mode, const AudioEngineProfile& profile) override;
@@ -81,6 +89,9 @@ class TrackContentPanel : public juce::Component,
 
     // Get track Y position
     int getTrackYPosition(int trackIndex) const;
+
+    // Get track index at Y position (for drag-drop)
+    int getTrackIndexAtY(int y) const;
 
     // Callbacks
     std::function<void(int)> onTrackSelected;
@@ -165,8 +176,14 @@ class TrackContentPanel : public juce::Component,
     bool isInSelectableArea(int x, int y) const;
     double pixelToTime(int pixel) const;
     int timeToPixel(double time) const;
-    int getTrackIndexAtY(int y) const;
     bool isOnExistingSelection(int x, int y) const;
+
+    // Clip management
+    std::vector<std::unique_ptr<ClipComponent>> clipComponents_;
+    void rebuildClipComponents();
+    void updateClipComponentPositions();
+    void createClipFromTimeSelection();  // Called on double-click with selection
+    ClipComponent* getClipComponentAt(int x, int y) const;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(TrackContentPanel)
 };

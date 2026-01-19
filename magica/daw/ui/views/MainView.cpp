@@ -8,6 +8,8 @@
 #include "../themes/DarkTheme.hpp"
 #include "../themes/FontManager.hpp"
 #include "Config.hpp"
+#include "core/ClipManager.hpp"
+#include "core/SelectionManager.hpp"
 #include "core/TrackManager.hpp"
 
 namespace magica {
@@ -677,10 +679,55 @@ bool MainView::keyPressed(const juce::KeyPress& key) {
         return true;
     }
 
-    // Check for Escape to clear time selection
+    // Check for Escape to clear time selection and clip selection
     if (key == juce::KeyPress::escapeKey) {
         timelineController->dispatch(ClearTimeSelectionEvent{});
+        SelectionManager::getInstance().clearSelection();
         return true;
+    }
+
+    // ===== Clip Shortcuts =====
+
+    // Delete/Backspace: Delete selected clip
+    if (key == juce::KeyPress::deleteKey || key == juce::KeyPress::backspaceKey) {
+        ClipId selectedClip = ClipManager::getInstance().getSelectedClip();
+        if (selectedClip != INVALID_CLIP_ID) {
+            ClipManager::getInstance().deleteClip(selectedClip);
+            std::cout << "🎵 CLIP: Deleted clip " << selectedClip << std::endl;
+            return true;
+        }
+    }
+
+    // Cmd+D: Duplicate selected clip
+    if (key == juce::KeyPress('d', juce::ModifierKeys::commandModifier, 0)) {
+        ClipId selectedClip = ClipManager::getInstance().getSelectedClip();
+        if (selectedClip != INVALID_CLIP_ID) {
+            ClipId newClipId = ClipManager::getInstance().duplicateClip(selectedClip);
+            if (newClipId != INVALID_CLIP_ID) {
+                // Select the new clip
+                ClipManager::getInstance().setSelectedClip(newClipId);
+                std::cout << "🎵 CLIP: Duplicated clip " << selectedClip << " -> " << newClipId
+                          << std::endl;
+            }
+            return true;
+        }
+    }
+
+    // X: Split clip at playhead
+    if (key == juce::KeyPress('x') || key == juce::KeyPress('X')) {
+        ClipId selectedClip = ClipManager::getInstance().getSelectedClip();
+        if (selectedClip != INVALID_CLIP_ID) {
+            double splitTime = playheadPosition;
+            const auto* clip = ClipManager::getInstance().getClip(selectedClip);
+            if (clip && splitTime > clip->startTime && splitTime < clip->startTime + clip->length) {
+                ClipId newClipId = ClipManager::getInstance().splitClip(selectedClip, splitTime);
+                if (newClipId != INVALID_CLIP_ID) {
+                    std::cout << "🎵 CLIP: Split clip " << selectedClip << " at " << splitTime
+                              << "s, created clip " << newClipId << std::endl;
+                }
+                return true;
+            }
+        }
     }
 
     return false;

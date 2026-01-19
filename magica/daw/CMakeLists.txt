@@ -69,6 +69,8 @@ set(DAW_CORE_SOURCES
     core/Config.cpp
     core/ViewModeController.cpp
     core/TrackManager.cpp
+    core/ClipManager.cpp
+    core/SelectionManager.cpp
     engine/tracktion_engine_wrapper.cpp
     # UI components needed by tests
     ui/components/timeline/TimelineComponent.cpp
@@ -109,6 +111,8 @@ set(DAW_UI_SOURCES
     ui/panels/content/AIChatConsoleContent.cpp
     ui/panels/content/ScriptingConsoleContent.cpp
     ui/panels/content/TrackChainContent.cpp
+    ui/panels/content/PianoRollContent.cpp
+    ui/panels/content/WaveformEditorContent.cpp
     # Audio
     audio/AudioEngineOptimizer.cpp
     # Views
@@ -128,6 +132,8 @@ set(DAW_UI_SOURCES
     # Components - Tracks
     ui/components/tracks/TrackHeadersPanel.cpp
     ui/components/tracks/TrackContentPanel.cpp
+    # Components - Clips
+    ui/components/clips/ClipComponent.cpp
     # Components - Mixer
     ui/components/mixer/MasterChannelStrip.cpp
 )
@@ -144,6 +150,10 @@ set(DAW_HEADERS
     core/TrackManager.hpp
     core/TrackTypes.hpp
     core/TrackViewSettings.hpp
+    core/ClipTypes.hpp
+    core/ClipInfo.hpp
+    core/ClipManager.hpp
+    core/SelectionManager.hpp
     engine/tracktion_engine_wrapper.hpp
     # Interfaces
     interfaces/clip_interface.hpp
@@ -184,6 +194,8 @@ set(DAW_HEADERS
     ui/panels/content/AIChatConsoleContent.hpp
     ui/panels/content/ScriptingConsoleContent.hpp
     ui/panels/content/TrackChainContent.hpp
+    ui/panels/content/PianoRollContent.hpp
+    ui/panels/content/WaveformEditorContent.hpp
     # Audio
     audio/AudioEngineOptimizer.hpp
     # Views
@@ -212,6 +224,8 @@ set(DAW_HEADERS
     # Components - Tracks
     ui/components/tracks/TrackHeadersPanel.hpp
     ui/components/tracks/TrackContentPanel.hpp
+    # Components - Clips
+    ui/components/clips/ClipComponent.hpp
     # Components - Mixer
     ui/components/mixer/MasterChannelStrip.hpp
 )
@@ -283,6 +297,7 @@ target_include_directories(magica_daw_app
     ${CMAKE_CURRENT_SOURCE_DIR}/ui/components/common
     ${CMAKE_CURRENT_SOURCE_DIR}/ui/components/timeline
     ${CMAKE_CURRENT_SOURCE_DIR}/ui/components/tracks
+    ${CMAKE_CURRENT_SOURCE_DIR}/ui/components/clips
     ${CMAKE_SOURCE_DIR}
 )
 

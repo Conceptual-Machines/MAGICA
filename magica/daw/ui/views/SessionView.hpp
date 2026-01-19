@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "../components/mixer/MasterChannelStrip.hpp"
+#include "core/ClipManager.hpp"
 #include "core/TrackManager.hpp"
 #include "core/ViewModeController.hpp"
 
@@ -24,6 +25,7 @@ namespace magica {
 class SessionView : public juce::Component,
                     private juce::ScrollBar::Listener,
                     public TrackManagerListener,
+                    public ClipManagerListener,
                     public ViewModeListener {
   public:
     SessionView();
@@ -37,6 +39,11 @@ class SessionView : public juce::Component,
     void trackPropertyChanged(int trackId) override;
     void masterChannelChanged() override;
     void trackSelectionChanged(TrackId trackId) override;
+
+    // ClipManagerListener
+    void clipsChanged() override;
+    void clipPropertyChanged(ClipId clipId) override;
+    void clipPlaybackStateChanged(ClipId clipId) override;
 
     // ViewModeListener
     void viewModeChanged(ViewMode mode, const AudioEngineProfile& profile) override;
@@ -97,6 +104,10 @@ class SessionView : public juce::Component,
     // Selection
     void selectTrack(TrackId trackId);
     void updateHeaderSelectionVisuals();
+
+    // Clip slot display
+    void updateClipSlotAppearance(int trackIndex, int sceneIndex);
+    void updateAllClipSlots();
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(SessionView)
 };

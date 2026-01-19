@@ -90,6 +90,9 @@ SessionView::SessionView() {
     // Register as TrackManager listener
     TrackManager::getInstance().addListener(this);
 
+    // Register as ClipManager listener
+    ClipManager::getInstance().addListener(this);
+
     // Register as ViewModeController listener
     ViewModeController::getInstance().addListener(this);
 
@@ -99,6 +102,7 @@ SessionView::SessionView() {
 
 SessionView::~SessionView() {
     TrackManager::getInstance().removeListener(this);
+    ClipManager::getInstance().removeListener(this);
     ViewModeController::getInstance().removeListener(this);
     gridViewport->getHorizontalScrollBar().removeListener(this);
     gridViewport->getVerticalScrollBar().removeListener(this);
@@ -382,18 +386,40 @@ void SessionView::setupSceneButtons() {
 }
 
 void SessionView::onClipSlotClicked(int trackIndex, int sceneIndex) {
-    DBG("Clip slot clicked: Track " << trackIndex << ", Scene " << sceneIndex);
-    // TODO: Trigger/stop clip playback
+    if (trackIndex < 0 || trackIndex >= static_cast<int>(visibleTrackIds_.size())) {
+        return;
+    }
+
+    TrackId trackId = visibleTrackIds_[trackIndex];
+    ClipId clipId = ClipManager::getInstance().getClipInSlot(trackId, sceneIndex);
+
+    if (clipId != INVALID_CLIP_ID) {
+        // Toggle playback
+        const auto* clip = ClipManager::getInstance().getClip(clipId);
+        if (clip && clip->isPlaying) {
+            ClipManager::getInstance().stopClip(clipId);
+        } else {
+            ClipManager::getInstance().triggerClip(clipId);
+        }
+    } else {
+        // Empty slot - could create new clip here
+        DBG("Empty clip slot clicked: Track " << trackIndex << ", Scene " << sceneIndex);
+    }
 }
 
 void SessionView::onSceneLaunched(int sceneIndex) {
-    DBG("Scene launched: " << sceneIndex);
-    // TODO: Launch all clips in scene
+    // Trigger all clips in this scene
+    for (size_t i = 0; i < visibleTrackIds_.size(); ++i) {
+        TrackId trackId = visibleTrackIds_[i];
+        ClipId clipId = ClipManager::getInstance().getClipInSlot(trackId, sceneIndex);
+        if (clipId != INVALID_CLIP_ID) {
+            ClipManager::getInstance().triggerClip(clipId);
+        }
+    }
 }
 
 void SessionView::onStopAllClicked() {
-    DBG("Stop all clips");
-    // TODO: Stop all clip playback
+    ClipManager::getInstance().stopAllClips();
 }
 
 void SessionView::trackSelectionChanged(TrackId trackId) {
@@ -438,6 +464,105 @@ void SessionView::updateHeaderSelectionVisuals() {
         }
     }
     repaint();
+}
+
+// ============================================================================
+// ClipManagerListener
+// ============================================================================
+
+void SessionView::clipsChanged() {
+    updateAllClipSlots();
+}
+
+void SessionView::clipPropertyChanged(ClipId clipId) {
+    // Find clip and update its slot
+    const auto* clip = ClipManager::getInstance().getClip(clipId);
+    if (!clip || clip->sceneIndex < 0)
+        return;
+
+    // Find track index
+    int trackIndex = -1;
+    for (size_t i = 0; i < visibleTrackIds_.size(); ++i) {
+        if (visibleTrackIds_[i] == clip->trackId) {
+            trackIndex = static_cast<int>(i);
+            break;
+        }
+    }
+
+    if (trackIndex >= 0) {
+        updateClipSlotAppearance(trackIndex, clip->sceneIndex);
+    }
+}
+
+void SessionView::clipPlaybackStateChanged(ClipId clipId) {
+    // Update slot appearance when playback state changes
+    const auto* clip = ClipManager::getInstance().getClip(clipId);
+    if (!clip || clip->sceneIndex < 0)
+        return;
+
+    // Find track index
+    int trackIndex = -1;
+    for (size_t i = 0; i < visibleTrackIds_.size(); ++i) {
+        if (visibleTrackIds_[i] == clip->trackId) {
+            trackIndex = static_cast<int>(i);
+            break;
+        }
+    }
+
+    if (trackIndex >= 0) {
+        updateClipSlotAppearance(trackIndex, clip->sceneIndex);
+    }
+}
+
+void SessionView::updateClipSlotAppearance(int trackIndex, int sceneIndex) {
+    if (trackIndex < 0 || trackIndex >= static_cast<int>(clipSlots.size()))
+        return;
+    if (sceneIndex < 0 || sceneIndex >= NUM_SCENES)
+        return;
+
+    auto* slot = clipSlots[trackIndex][sceneIndex].get();
+    if (!slot)
+        return;
+
+    TrackId trackId = visibleTrackIds_[trackIndex];
+    ClipId clipId = ClipManager::getInstance().getClipInSlot(trackId, sceneIndex);
+
+    if (clipId != INVALID_CLIP_ID) {
+        const auto* clip = ClipManager::getInstance().getClip(clipId);
+        if (clip) {
+            // Show clip name
+            slot->setButtonText(clip->name);
+
+            // Set color based on clip state
+            if (clip->isPlaying) {
+                // Playing: bright green
+                slot->setColour(juce::TextButton::buttonColourId,
+                                DarkTheme::getColour(DarkTheme::STATUS_SUCCESS));
+                slot->setColour(juce::TextButton::textColourOffId,
+                                DarkTheme::getColour(DarkTheme::BACKGROUND));
+            } else {
+                // Has clip but not playing: clip color
+                slot->setColour(juce::TextButton::buttonColourId, clip->colour.withAlpha(0.7f));
+                slot->setColour(juce::TextButton::textColourOffId,
+                                DarkTheme::getColour(DarkTheme::TEXT_PRIMARY));
+            }
+        }
+    } else {
+        // Empty slot
+        slot->setButtonText("");
+        slot->setColour(juce::TextButton::buttonColourId, DarkTheme::getColour(DarkTheme::SURFACE));
+        slot->setColour(juce::TextButton::textColourOffId,
+                        DarkTheme::getColour(DarkTheme::TEXT_PRIMARY));
+    }
+}
+
+void SessionView::updateAllClipSlots() {
+    int numTracks = static_cast<int>(visibleTrackIds_.size());
+    for (int trackIndex = 0; trackIndex < numTracks; ++trackIndex) {
+        for (int sceneIndex = 0; sceneIndex < NUM_SCENES; ++sceneIndex) {
+            updateClipSlotAppearance(trackIndex, sceneIndex);
+        }
+    }
 }
 
 }  // namespace magica

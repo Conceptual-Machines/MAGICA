@@ -14,7 +14,9 @@ enum class PanelContentType {
     Inspector,
     AIChatConsole,
     ScriptingConsole,
-    TrackChain
+    TrackChain,
+    PianoRoll,
+    WaveformEditor
 };
 
 /**
@@ -84,6 +86,10 @@ inline juce::String getContentTypeName(PanelContentType type) {
             return "Script";
         case PanelContentType::TrackChain:
             return "Track Chain";
+        case PanelContentType::PianoRoll:
+            return "Piano Roll";
+        case PanelContentType::WaveformEditor:
+            return "Waveform";
     }
     return "Unknown";
 }
@@ -107,6 +113,10 @@ inline juce::String getContentTypeIcon(PanelContentType type) {
             return "Script";
         case PanelContentType::TrackChain:
             return "Chain";
+        case PanelContentType::PianoRoll:
+            return "PianoRoll";
+        case PanelContentType::WaveformEditor:
+            return "Waveform";
     }
     return "Unknown";
 }

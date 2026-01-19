@@ -3,11 +3,13 @@
 // Include all content implementations for registration
 #include "AIChatConsoleContent.hpp"
 #include "InspectorContent.hpp"
+#include "PianoRollContent.hpp"
 #include "PluginBrowserContent.hpp"
 #include "PresetBrowserContent.hpp"
 #include "SampleBrowserContent.hpp"
 #include "ScriptingConsoleContent.hpp"
 #include "TrackChainContent.hpp"
+#include "WaveformEditorContent.hpp"
 
 namespace magica::daw::ui {
 
@@ -42,6 +44,12 @@ void PanelContentFactory::registerBuiltinTypes() {
 
     registerContentType(PanelContentType::TrackChain,
                         []() { return std::make_unique<TrackChainContent>(); });
+
+    registerContentType(PanelContentType::PianoRoll,
+                        []() { return std::make_unique<PianoRollContent>(); });
+
+    registerContentType(PanelContentType::WaveformEditor,
+                        []() { return std::make_unique<WaveformEditorContent>(); });
 }
 
 void PanelContentFactory::registerContentType(PanelContentType type, ContentCreator creator) {
