@@ -68,7 +68,8 @@ class MixerView::ChannelStrip::LevelMeter : public juce::Component {
     LevelMeter() = default;
 
     void setLevel(float newLevel) {
-        level = juce::jlimit(0.0f, 1.0f, newLevel);
+        // Allow up to 2.0 gain (+6 dB)
+        level = juce::jlimit(0.0f, 2.0f, newLevel);
         repaint();
     }
 
@@ -93,16 +94,27 @@ class MixerView::ChannelStrip::LevelMeter : public juce::Component {
         auto fillBounds = effectiveBounds;
         fillBounds = fillBounds.removeFromBottom(meterHeight);
 
-        // Gradient from green to yellow to red based on dB
-        // Red only above 0 dB (clipping), yellow at 0 dB and above -12 dB
+        // Smooth gradient from green to yellow to red based on dB
         float dbLevel = gainToDb(level);
+        juce::Colour green(0xFF55AA55);
+        juce::Colour yellow(0xFFAAAA55);
+        juce::Colour red(0xFFAA5555);
+
+        juce::Colour meterColour;
         if (dbLevel < -12.0f) {
-            g.setColour(juce::Colour(0xFF55AA55));  // Green
-        } else if (dbLevel <= 0.0f) {
-            g.setColour(juce::Colour(0xFFAAAA55));  // Yellow
+            meterColour = green;
+        } else if (dbLevel < 0.0f) {
+            // Interpolate green to yellow between -12 dB and 0 dB
+            float t = (dbLevel + 12.0f) / 12.0f;
+            meterColour = green.interpolatedWith(yellow, t);
+        } else if (dbLevel < 3.0f) {
+            // Interpolate yellow to red between 0 dB and 3 dB
+            float t = dbLevel / 3.0f;
+            meterColour = yellow.interpolatedWith(red, t);
         } else {
-            g.setColour(juce::Colour(0xFFAA5555));  // Red (above 0 dB)
+            meterColour = red;
         }
+        g.setColour(meterColour);
         g.fillRoundedRectangle(fillBounds, 2.0f);
     }
 
@@ -251,6 +263,10 @@ void MixerView::ChannelStrip::setupControls() {
                 dbText = juce::String(db, 1) + " dB";
             }
             faderValueLabel->setText(dbText, juce::dontSendNotification);
+        }
+        // DEBUG: Link fader to meter for alignment testing
+        if (levelMeter) {
+            levelMeter->setLevel(gain);
         }
     };
     // Apply custom look and feel for fader styling
@@ -706,22 +722,8 @@ void MixerView::resized() {
 }
 
 void MixerView::timerCallback() {
-    // Mock signal levels for testing meter alignment with tick marks
-    // Each channel gets a fixed dB level to verify visual alignment
-    const std::vector<float> testDbLevels = {6.0f,   3.0f,   0.0f,   -3.0f,  -6.0f, -12.0f,
-                                             -18.0f, -24.0f, -36.0f, -48.0f, -60.0f};
-
-    for (size_t i = 0; i < channelStrips.size(); ++i) {
-        // Cycle through test levels
-        float db = testDbLevels[i % testDbLevels.size()];
-        float gain = dbToGain(db);
-        channelStrips[i]->setMeterLevel(gain);
-    }
-
-    // Master strip at 0 dB (unity)
-    if (masterStrip) {
-        masterStrip->setMeterLevel(dbToGain(0.0f));
-    }
+    // DEBUG: Meters are now linked to faders for alignment testing
+    // Timer not needed when faders drive meters directly
 }
 
 bool MixerView::keyPressed(const juce::KeyPress& /*key*/) {

@@ -57,7 +57,8 @@ float faderPosToDb(float pos) {
 class MasterChannelStrip::LevelMeter : public juce::Component {
   public:
     void setLevel(float newLevel) {
-        level = juce::jlimit(0.0f, 1.0f, newLevel);
+        // Allow up to 2.0 gain (+6 dB)
+        level = juce::jlimit(0.0f, 2.0f, newLevel);
         repaint();
     }
 
@@ -82,16 +83,27 @@ class MasterChannelStrip::LevelMeter : public juce::Component {
         auto fillBounds = effectiveBounds;
         fillBounds = fillBounds.removeFromBottom(meterHeight);
 
-        // Gradient from green to yellow to red based on dB
-        // Red only above 0 dB (clipping), yellow at 0 dB and above -12 dB
+        // Smooth gradient from green to yellow to red based on dB
         float dbLevel = gainToDb(level);
+        juce::Colour green(0xFF55AA55);
+        juce::Colour yellow(0xFFAAAA55);
+        juce::Colour red(0xFFAA5555);
+
+        juce::Colour meterColour;
         if (dbLevel < -12.0f) {
-            g.setColour(juce::Colour(0xFF55AA55));  // Green
-        } else if (dbLevel <= 0.0f) {
-            g.setColour(juce::Colour(0xFFAAAA55));  // Yellow
+            meterColour = green;
+        } else if (dbLevel < 0.0f) {
+            // Interpolate green to yellow between -12 dB and 0 dB
+            float t = (dbLevel + 12.0f) / 12.0f;
+            meterColour = green.interpolatedWith(yellow, t);
+        } else if (dbLevel < 3.0f) {
+            // Interpolate yellow to red between 0 dB and 3 dB
+            float t = dbLevel / 3.0f;
+            meterColour = yellow.interpolatedWith(red, t);
         } else {
-            g.setColour(juce::Colour(0xFFAA5555));  // Red (above 0 dB)
+            meterColour = red;
         }
+        g.setColour(meterColour);
         g.fillRoundedRectangle(fillBounds, 2.0f);
     }
 
@@ -165,6 +177,10 @@ void MasterChannelStrip::setupControls() {
                 dbText = juce::String(db, 1) + " dB";
             }
             volumeValueLabel->setText(dbText, juce::dontSendNotification);
+        }
+        // DEBUG: Link fader to meter for alignment testing
+        if (levelMeter) {
+            levelMeter->setLevel(gain);
         }
     };
     addAndMakeVisible(*volumeSlider);
