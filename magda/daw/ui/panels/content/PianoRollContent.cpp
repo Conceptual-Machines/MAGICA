@@ -89,8 +89,8 @@ PianoRollContent::PianoRollContent() {
     addAndMakeVisible(timeModeButton_.get());
 
     // Create chord row toggle button
-    chordRowToggle_ = std::make_unique<magda::SvgButton>("ChordToggle", BinaryData::chords_svg,
-                                                         BinaryData::chords_svgSize);
+    chordRowToggle_ = std::make_unique<magda::SvgButton>("ChordToggle", BinaryData::Chords2_svg,
+                                                         BinaryData::Chords2_svgSize);
     chordRowToggle_->setTooltip("Toggle chord detection row visibility");
     chordRowToggle_->setActive(showChordRow_);
     chordRowToggle_->onClick = [this]() { setChordRowVisible(!showChordRow_); };
