@@ -3,21 +3,37 @@
 #include <functional>
 
 #include "TabbedPanel.hpp"
+#include "core/ClipManager.hpp"
+#include "core/TrackManager.hpp"
 
 namespace magda {
 
 /**
- * @brief Bottom panel with tabbed content
+ * @brief Bottom panel with automatic content switching based on selection
  *
- * Default tabs: AI Chat Console, Scripting Console
+ * Automatically shows:
+ * - Empty content when nothing is selected
+ * - TrackChain when a track is selected (no clip)
+ * - PianoRoll when a MIDI clip is selected
+ * - WaveformEditor when an audio clip is selected
  */
-class BottomPanel : public daw::ui::TabbedPanel {
+class BottomPanel : public daw::ui::TabbedPanel,
+                    public ClipManagerListener,
+                    public TrackManagerListener {
   public:
     BottomPanel();
-    ~BottomPanel() override = default;
+    ~BottomPanel() override;
 
     // Legacy API for compatibility
     void setCollapsed(bool collapsed);
+
+    // ClipManagerListener
+    void clipsChanged() override;
+    void clipSelectionChanged(ClipId clipId) override;
+
+    // TrackManagerListener
+    void tracksChanged() override;
+    void trackSelectionChanged(TrackId trackId) override;
 
   protected:
     juce::Rectangle<int> getCollapseButtonBounds() override;
@@ -25,6 +41,8 @@ class BottomPanel : public daw::ui::TabbedPanel {
     juce::Rectangle<int> getContentBounds() override;
 
   private:
+    void updateContentBasedOnSelection();
+
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(BottomPanel)
 };
 

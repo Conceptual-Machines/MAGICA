@@ -122,6 +122,7 @@ set(DAW_UI_SOURCES
     ui/panels/content/PluginBrowserContent.cpp
     ui/panels/content/SampleBrowserContent.cpp
     ui/panels/content/PresetBrowserContent.cpp
+    ui/panels/content/EmptyContent.cpp
     ui/panels/content/InspectorContent.cpp
     ui/panels/content/AIChatConsoleContent.cpp
     ui/panels/content/ScriptingConsoleContent.cpp
@@ -220,6 +221,7 @@ set(DAW_HEADERS
     ui/panels/content/PluginBrowserContent.hpp
     ui/panels/content/SampleBrowserContent.hpp
     ui/panels/content/PresetBrowserContent.hpp
+    ui/panels/content/EmptyContent.hpp
     ui/panels/content/InspectorContent.hpp
     ui/panels/content/AIChatConsoleContent.hpp
     ui/panels/content/ScriptingConsoleContent.hpp

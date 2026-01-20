@@ -2,6 +2,7 @@
 
 // Include all content implementations for registration
 #include "AIChatConsoleContent.hpp"
+#include "EmptyContent.hpp"
 #include "InspectorContent.hpp"
 #include "PianoRollContent.hpp"
 #include "PluginBrowserContent.hpp"
@@ -24,6 +25,8 @@ PanelContentFactory::PanelContentFactory() {
 
 void PanelContentFactory::registerBuiltinTypes() {
     // Register all built-in content types
+    registerContentType(PanelContentType::Empty, []() { return std::make_unique<EmptyContent>(); });
+
     registerContentType(PanelContentType::PluginBrowser,
                         []() { return std::make_unique<PluginBrowserContent>(); });
 
