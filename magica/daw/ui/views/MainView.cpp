@@ -2,6 +2,7 @@
 
 #include <BinaryData.h>
 
+#include <cmath>
 #include <iostream>
 #include <set>
 
@@ -13,6 +14,63 @@
 #include "core/TrackManager.hpp"
 
 namespace magica {
+
+// dB conversion helpers for volume fader
+namespace {
+constexpr float MIN_DB = -60.0f;
+constexpr float MAX_DB = 6.0f;
+constexpr float UNITY_DB = 0.0f;
+
+float gainToDb(float gain) {
+    if (gain <= 0.0f)
+        return MIN_DB;
+    return 20.0f * std::log10(gain);
+}
+
+float dbToGain(float db) {
+    if (db <= MIN_DB)
+        return 0.0f;
+    return std::pow(10.0f, db / 20.0f);
+}
+
+// Convert dB to normalized fader position (0-1) with unity (0dB) at 0.75
+float dbToFaderPos(float db) {
+    if (db <= MIN_DB)
+        return 0.0f;
+    if (db >= MAX_DB)
+        return 1.0f;
+
+    if (db < UNITY_DB) {
+        return 0.75f * (db - MIN_DB) / (UNITY_DB - MIN_DB);
+    } else {
+        return 0.75f + 0.25f * (db - UNITY_DB) / (MAX_DB - UNITY_DB);
+    }
+}
+
+// Convert fader position to dB
+float faderPosToDb(float pos) {
+    if (pos <= 0.0f)
+        return MIN_DB;
+    if (pos >= 1.0f)
+        return MAX_DB;
+
+    if (pos < 0.75f) {
+        return MIN_DB + (pos / 0.75f) * (UNITY_DB - MIN_DB);
+    } else {
+        return UNITY_DB + ((pos - 0.75f) / 0.25f) * (MAX_DB - UNITY_DB);
+    }
+}
+
+// Convert linear gain to fader position
+float gainToFaderPos(float gain) {
+    return dbToFaderPos(gainToDb(gain));
+}
+
+// Convert fader position to linear gain
+float faderPosToGain(float pos) {
+    return dbToGain(faderPosToDb(pos));
+}
+}  // namespace
 
 MainView::MainView() : playheadPosition(0.0), horizontalZoom(20.0), initialZoomSet(false) {
     // Load configuration
@@ -1461,12 +1519,14 @@ void MainView::MasterHeaderPanel::setupControls() {
     volumeSlider =
         std::make_unique<juce::Slider>(juce::Slider::LinearHorizontal, juce::Slider::NoTextBox);
     volumeSlider->setRange(0.0, 1.0);
-    volumeSlider->setValue(1.0);
+    volumeSlider->setValue(0.75);  // Unity gain (0 dB) at 75%
     volumeSlider->setColour(juce::Slider::trackColourId, DarkTheme::getColour(DarkTheme::SURFACE));
     volumeSlider->setColour(juce::Slider::thumbColourId,
                             DarkTheme::getColour(DarkTheme::ACCENT_BLUE));
     volumeSlider->onValueChange = [this]() {
-        TrackManager::getInstance().setMasterVolume(static_cast<float>(volumeSlider->getValue()));
+        // Convert fader position to linear gain
+        float gain = faderPosToGain(static_cast<float>(volumeSlider->getValue()));
+        TrackManager::getInstance().setMasterVolume(gain);
     };
     addAndMakeVisible(*volumeSlider);
 
@@ -1521,7 +1581,8 @@ void MainView::MasterHeaderPanel::masterChannelChanged() {
 
     muteButton->setToggleState(master.muted, juce::dontSendNotification);
     soloButton->setToggleState(master.soloed, juce::dontSendNotification);
-    volumeSlider->setValue(master.volume, juce::dontSendNotification);
+    // Convert linear gain to fader position
+    volumeSlider->setValue(gainToFaderPos(master.volume), juce::dontSendNotification);
     panSlider->setValue(master.pan, juce::dontSendNotification);
 
     repaint();

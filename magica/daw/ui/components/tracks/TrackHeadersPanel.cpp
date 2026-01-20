@@ -1,6 +1,7 @@
 #include "TrackHeadersPanel.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <functional>
 
 #include "../../themes/DarkTheme.hpp"
@@ -9,6 +10,63 @@
 #include "core/UndoManager.hpp"
 
 namespace magica {
+
+// dB conversion helpers for volume fader
+namespace {
+constexpr float MIN_DB = -60.0f;
+constexpr float MAX_DB = 6.0f;
+constexpr float UNITY_DB = 0.0f;
+
+float gainToDb(float gain) {
+    if (gain <= 0.0f)
+        return MIN_DB;
+    return 20.0f * std::log10(gain);
+}
+
+float dbToGain(float db) {
+    if (db <= MIN_DB)
+        return 0.0f;
+    return std::pow(10.0f, db / 20.0f);
+}
+
+// Convert dB to normalized fader position (0-1) with unity (0dB) at 0.75
+float dbToFaderPos(float db) {
+    if (db <= MIN_DB)
+        return 0.0f;
+    if (db >= MAX_DB)
+        return 1.0f;
+
+    if (db < UNITY_DB) {
+        return 0.75f * (db - MIN_DB) / (UNITY_DB - MIN_DB);
+    } else {
+        return 0.75f + 0.25f * (db - UNITY_DB) / (MAX_DB - UNITY_DB);
+    }
+}
+
+// Convert fader position to dB
+float faderPosToDb(float pos) {
+    if (pos <= 0.0f)
+        return MIN_DB;
+    if (pos >= 1.0f)
+        return MAX_DB;
+
+    if (pos < 0.75f) {
+        return MIN_DB + (pos / 0.75f) * (UNITY_DB - MIN_DB);
+    } else {
+        return UNITY_DB + ((pos - 0.75f) / 0.25f) * (MAX_DB - UNITY_DB);
+    }
+}
+
+// Convert linear gain to fader position
+float gainToFaderPos(float gain) {
+    return dbToFaderPos(gainToDb(gain));
+}
+
+// Convert fader position to linear gain
+float faderPosToGain(float pos) {
+    return dbToGain(faderPosToDb(pos));
+}
+}  // namespace
 
 TrackHeadersPanel::TrackHeader::TrackHeader(const juce::String& trackName) : name(trackName) {
     // Create UI components
@@ -47,7 +105,7 @@ TrackHeadersPanel::TrackHeader::TrackHeader(const juce::String& trackName) : nam
     volumeSlider =
         std::make_unique<juce::Slider>(juce::Slider::LinearHorizontal, juce::Slider::NoTextBox);
     volumeSlider->setRange(0.0, 1.0);
-    volumeSlider->setValue(volume);
+    volumeSlider->setValue(gainToFaderPos(volume));  // Convert linear gain to fader position
 
     panSlider =
         std::make_unique<juce::Slider>(juce::Slider::LinearHorizontal, juce::Slider::NoTextBox);
@@ -159,7 +217,7 @@ void TrackHeadersPanel::tracksChanged() {
         // Update UI state
         header->muteButton->setToggleState(track->muted, juce::dontSendNotification);
         header->soloButton->setToggleState(track->soloed, juce::dontSendNotification);
-        header->volumeSlider->setValue(track->volume, juce::dontSendNotification);
+        header->volumeSlider->setValue(gainToFaderPos(track->volume), juce::dontSendNotification);
         header->panSlider->setValue(track->pan, juce::dontSendNotification);
 
         trackHeaders.push_back(std::move(header));
@@ -211,7 +269,7 @@ void TrackHeadersPanel::trackPropertyChanged(int trackId) {
         header.nameLabel->setText(track->name, juce::dontSendNotification);
         header.muteButton->setToggleState(track->muted, juce::dontSendNotification);
         header.soloButton->setToggleState(track->soloed, juce::dontSendNotification);
-        header.volumeSlider->setValue(track->volume, juce::dontSendNotification);
+        header.volumeSlider->setValue(gainToFaderPos(track->volume), juce::dontSendNotification);
         header.panSlider->setValue(track->pan, juce::dontSendNotification);
 
         updateTrackHeaderLayout();
@@ -391,7 +449,8 @@ void TrackHeadersPanel::setupTrackHeader(TrackHeader& header, int trackIndex) {
     header.volumeSlider->onValueChange = [this, trackIndex]() {
         if (trackIndex < trackHeaders.size()) {
             auto& header = *trackHeaders[trackIndex];
-            header.volume = static_cast<float>(header.volumeSlider->getValue());
+            // Convert fader position back to linear gain
+            header.volume = faderPosToGain(static_cast<float>(header.volumeSlider->getValue()));
 
             if (onTrackVolumeChanged) {
                 onTrackVolumeChanged(trackIndex, header.volume);
@@ -448,7 +507,8 @@ void TrackHeadersPanel::setupTrackHeaderWithId(TrackHeader& header, int trackId)
         int index = TrackManager::getInstance().getTrackIndex(trackId);
         if (index >= 0 && index < static_cast<int>(trackHeaders.size())) {
             auto& header = *trackHeaders[index];
-            header.volume = static_cast<float>(header.volumeSlider->getValue());
+            // Convert fader position back to linear gain
+            header.volume = faderPosToGain(static_cast<float>(header.volumeSlider->getValue()));
             TrackManager::getInstance().setTrackVolume(trackId, header.volume);
         }
     };
@@ -718,7 +778,9 @@ void TrackHeadersPanel::setTrackSolo(int trackIndex, bool solo) {
 void TrackHeadersPanel::setTrackVolume(int trackIndex, float volume) {
     if (trackIndex >= 0 && trackIndex < trackHeaders.size()) {
         trackHeaders[trackIndex]->volume = volume;
-        trackHeaders[trackIndex]->volumeSlider->setValue(volume, juce::dontSendNotification);
+        // Convert linear gain to fader position
+        trackHeaders[trackIndex]->volumeSlider->setValue(gainToFaderPos(volume),
+                                                         juce::dontSendNotification);
     }
 }
 
