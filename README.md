@@ -10,8 +10,7 @@
 </p>
 
 <p align="center">
-  <strong>AI-native Digital Audio Workstation</strong><br>
-  Built from the ground up for human-AI collaboration in music production.
+  An AI-native Digital Audio Workstation built to automate workflows, not replace creativity.
 </p>
 
 ---
