@@ -2,8 +2,10 @@
 
 #include "../../state/TimelineController.hpp"
 #include "../../themes/DarkTheme.hpp"
+#include "BinaryData.h"
 #include "core/MidiNoteCommands.hpp"
 #include "core/UndoManager.hpp"
+#include "ui/components/common/SvgButton.hpp"
 #include "ui/components/pianoroll/PianoRollGridComponent.hpp"
 #include "ui/components/pianoroll/PianoRollKeyboard.hpp"
 #include "ui/components/timeline/TimeRuler.hpp"
@@ -67,14 +69,11 @@ PianoRollContent::PianoRollContent() {
     addAndMakeVisible(timeModeButton_.get());
 
     // Create chord row toggle button
-    chordRowToggle_ = std::make_unique<juce::TextButton>("C");
+    chordRowToggle_ = std::make_unique<magda::SvgButton>("ChordToggle", BinaryData::chords_svg,
+                                                         BinaryData::chords_svgSize);
     chordRowToggle_->setTooltip("Toggle chord detection row visibility");
-    chordRowToggle_->setClickingTogglesState(true);
-    chordRowToggle_->setToggleState(showChordRow_, juce::dontSendNotification);
-    chordRowToggle_->setConnectedEdges(
-        juce::Button::ConnectedOnLeft | juce::Button::ConnectedOnRight |
-        juce::Button::ConnectedOnTop | juce::Button::ConnectedOnBottom);
-    chordRowToggle_->onClick = [this]() { setChordRowVisible(chordRowToggle_->getToggleState()); };
+    chordRowToggle_->setActive(showChordRow_);
+    chordRowToggle_->onClick = [this]() { setChordRowVisible(!showChordRow_); };
     addAndMakeVisible(chordRowToggle_.get());
 
     // Create keyboard component
@@ -496,7 +495,7 @@ void PianoRollContent::setRelativeTimeMode(bool relative) {
 void PianoRollContent::setChordRowVisible(bool visible) {
     if (showChordRow_ != visible) {
         showChordRow_ = visible;
-        chordRowToggle_->setToggleState(visible, juce::dontSendNotification);
+        chordRowToggle_->setActive(visible);
         resized();
         repaint();
     }
