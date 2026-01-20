@@ -34,6 +34,9 @@ class MasterChannelStrip : public juce::Component, public TrackManagerListener {
     void setPeakLevels(float leftPeak, float rightPeak);
     void setVuLevels(float leftVu, float rightVu);
 
+    // Show/hide VU meter (peak meter is always visible)
+    void setShowVuMeter(bool show);
+
   private:
     Orientation orientation_;
 
@@ -51,6 +54,7 @@ class MasterChannelStrip : public juce::Component, public TrackManagerListener {
     std::unique_ptr<juce::Label> vuValueLabel;
     float peakValue_ = 0.0f;
     float vuPeakValue_ = 0.0f;
+    bool showVuMeter_ = true;
 
     // Custom look and feel for faders
     MixerLookAndFeel mixerLookAndFeel_;

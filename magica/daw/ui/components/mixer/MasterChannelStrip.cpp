@@ -305,10 +305,12 @@ void MasterChannelStrip::resized() {
         int labelTextWidth = static_cast<int>(metrics.labelTextWidth);
         int meterGapBetween = 2;  // Gap between peak and VU meters
 
-        // Calculate total width needed for the fader layout (now with two meters)
+        // Calculate total width needed for the fader layout
         int totalLayoutWidth = faderWidth + gap + tickWidth + tickToLabelGap + labelTextWidth +
-                               tickToLabelGap + tickWidth + meterGapVal + meterWidthVal +
-                               meterGapBetween + meterWidthVal;
+                               tickToLabelGap + tickWidth + meterGapVal + meterWidthVal;
+        if (showVuMeter_) {
+            totalLayoutWidth += meterGapBetween + meterWidthVal;  // Add VU meter width
+        }
 
         // Center the layout within bounds
         int leftMargin = (bounds.getWidth() - totalLayoutWidth) / 2;
@@ -322,11 +324,19 @@ void MasterChannelStrip::resized() {
         auto valueLabelArea =
             juce::Rectangle<int>(faderRegion_.getX(), faderRegion_.getY() - labelHeight,
                                  faderRegion_.getWidth(), labelHeight);
-        // Split label area: volume on left, peak in middle, VU on right
-        int labelThird = valueLabelArea.getWidth() / 3;
-        volumeValueLabel->setBounds(valueLabelArea.removeFromLeft(labelThird));
-        peakValueLabel->setBounds(valueLabelArea.removeFromLeft(labelThird));
-        vuValueLabel->setBounds(valueLabelArea);
+        if (showVuMeter_) {
+            // Split label area: volume on left, peak in middle, VU on right
+            int labelThird = valueLabelArea.getWidth() / 3;
+            volumeValueLabel->setBounds(valueLabelArea.removeFromLeft(labelThird));
+            peakValueLabel->setBounds(valueLabelArea.removeFromLeft(labelThird));
+            vuValueLabel->setBounds(valueLabelArea);
+        } else {
+            // Split label area: volume on left, peak on right
+            int labelHalf = valueLabelArea.getWidth() / 2;
+            volumeValueLabel->setBounds(valueLabelArea.removeFromLeft(labelHalf));
+            peakValueLabel->setBounds(valueLabelArea);
+            vuValueLabel->setBounds(juce::Rectangle<int>());  // Hidden
+        }
 
         // Add vertical padding inside the border
         const int borderPadding = 6;
@@ -339,14 +349,19 @@ void MasterChannelStrip::resized() {
         faderArea_ = layoutArea.removeFromLeft(faderWidth);
         volumeSlider->setBounds(faderArea_);
 
-        // VU meter on far right
-        vuMeterArea_ = layoutArea.removeFromRight(meterWidthVal);
-        vuMeter->setBounds(vuMeterArea_);
+        if (showVuMeter_) {
+            // VU meter on far right
+            vuMeterArea_ = layoutArea.removeFromRight(meterWidthVal);
+            vuMeter->setBounds(vuMeterArea_);
 
-        // Gap between meters
-        layoutArea.removeFromRight(meterGapBetween);
+            // Gap between meters
+            layoutArea.removeFromRight(meterGapBetween);
+        } else {
+            vuMeterArea_ = juce::Rectangle<int>();
+            vuMeter->setBounds(juce::Rectangle<int>());
+        }
 
-        // Peak meter next to VU
+        // Peak meter (always visible)
         peakMeterArea_ = layoutArea.removeFromRight(meterWidthVal);
         peakMeter->setBounds(peakMeterArea_);
 
@@ -465,6 +480,19 @@ void MasterChannelStrip::setVuLevels(float leftVu, float rightVu) {
             }
             vuValueLabel->setText(vuText, juce::dontSendNotification);
         }
+    }
+}
+
+void MasterChannelStrip::setShowVuMeter(bool show) {
+    if (showVuMeter_ != show) {
+        showVuMeter_ = show;
+        if (vuMeter) {
+            vuMeter->setVisible(show);
+        }
+        if (vuValueLabel) {
+            vuValueLabel->setVisible(show);
+        }
+        resized();
     }
 }
 

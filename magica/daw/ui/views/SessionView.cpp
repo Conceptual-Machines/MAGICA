@@ -84,7 +84,9 @@ SessionView::SessionView() {
     setupSceneButtons();
 
     // Create master channel strip (vertical orientation for Session view)
+    // Hide VU meter to keep it compact - only show peak meter
     masterStrip = std::make_unique<MasterChannelStrip>(MasterChannelStrip::Orientation::Vertical);
+    masterStrip->setShowVuMeter(false);
     addAndMakeVisible(*masterStrip);
 
     // Register as TrackManager listener
@@ -284,7 +286,7 @@ void SessionView::resized() {
     int sceneRowHeight = CLIP_SLOT_SIZE + CLIP_SLOT_MARGIN;
 
     // Master channel strip on the far right (only if visible)
-    static constexpr int MASTER_STRIP_WIDTH = 80;
+    static constexpr int MASTER_STRIP_WIDTH = 120;  // Larger for better fader/meter visibility
     if (masterStrip->isVisible()) {
         masterStrip->setBounds(bounds.removeFromRight(MASTER_STRIP_WIDTH));
     }
