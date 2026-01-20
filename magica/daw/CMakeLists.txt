@@ -136,6 +136,7 @@ set(DAW_UI_SOURCES
     ui/components/common/SvgButton.cpp
     ui/components/common/ZoomControls.cpp
     ui/components/common/LayoutDebugPanel.cpp
+    ui/components/common/MixerDebugPanel.cpp
     ui/components/common/GridOverlayComponent.cpp
     # Components - Timeline
     ui/components/timeline/TimelineComponent.cpp
@@ -235,6 +236,7 @@ set(DAW_HEADERS
     ui/components/common/ZoomControls.hpp
     ui/components/common/ModeSwitcher.hpp
     ui/components/common/LayoutDebugPanel.hpp
+    ui/components/common/MixerDebugPanel.hpp
     ui/components/common/GridOverlayComponent.hpp
     # Components - Timeline
     ui/components/timeline/TimelineComponent.hpp

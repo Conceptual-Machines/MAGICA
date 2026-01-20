@@ -424,21 +424,21 @@ void MixerView::ChannelStrip::resized() {
     levelMeter->setBounds(meterArea_);
     layoutArea.removeFromRight(gap);
 
-    // Remaining space is: [leftTicks] [gap] [labels] [gap] [rightTicks]
-    // Tick areas on each side with gaps to labels
-    int tickToLabelGap = metrics.tickToLabelGap;
+    // Position tick areas adjacent to fader and meter
+    // Left ticks: right edge touches fader area
+    leftTickArea_ = juce::Rectangle<int>(faderArea_.getRight(), layoutArea.getY(), tickWidth,
+                                         layoutArea.getHeight());
 
-    // Label area with fixed width in the center
-    int labelWidth = static_cast<int>(std::ceil(metrics.labelTextWidth));
-    int centerX = layoutArea.getCentreX();
-    labelArea_ = juce::Rectangle<int>(centerX - labelWidth / 2, layoutArea.getY(), labelWidth,
-                                      layoutArea.getHeight());
-
-    // Tick areas positioned relative to label area
-    leftTickArea_ = juce::Rectangle<int>(labelArea_.getX() - tickToLabelGap - tickWidth,
-                                         layoutArea.getY(), tickWidth, layoutArea.getHeight());
-    rightTickArea_ = juce::Rectangle<int>(labelArea_.getRight() + tickToLabelGap, layoutArea.getY(),
+    // Right ticks: left edge touches meter area
+    rightTickArea_ = juce::Rectangle<int>(meterArea_.getX() - tickWidth, layoutArea.getY(),
                                           tickWidth, layoutArea.getHeight());
+
+    // Label area between ticks
+    int tickToLabelGap = metrics.tickToLabelGap;
+    int labelLeft = leftTickArea_.getRight() + tickToLabelGap;
+    int labelRight = rightTickArea_.getX() - tickToLabelGap;
+    labelArea_ = juce::Rectangle<int>(labelLeft, layoutArea.getY(), labelRight - labelLeft,
+                                      layoutArea.getHeight());
 }
 
 void MixerView::ChannelStrip::setMeterLevel(float level) {
@@ -479,6 +479,19 @@ MixerView::MixerView() {
     masterStrip = std::make_unique<MasterChannelStrip>(MasterChannelStrip::Orientation::Vertical);
     addAndMakeVisible(*masterStrip);
 
+    // Create channel resize handle
+    channelResizeHandle_ = std::make_unique<ChannelResizeHandle>();
+    channelResizeHandle_->onResize = [this](int deltaX) {
+        auto& metrics = MixerMetrics::getInstance();
+        int newWidth =
+            juce::jlimit(minChannelWidth_, maxChannelWidth_, metrics.channelWidth + deltaX);
+        if (metrics.channelWidth != newWidth) {
+            metrics.channelWidth = newWidth;
+            resized();
+        }
+    };
+    addAndMakeVisible(*channelResizeHandle_);
+
     // Register as TrackManager listener
     TrackManager::getInstance().addListener(this);
 
@@ -487,6 +500,18 @@ MixerView::MixerView() {
 
     // Build channel strips from TrackManager
     rebuildChannelStrips();
+
+    // Create debug panel (hidden by default)
+    debugPanel_ = std::make_unique<MixerDebugPanel>();
+    debugPanel_->setVisible(false);
+    debugPanel_->onMetricsChanged = [this]() {
+        // Rebuild all channel strips to pick up new metrics
+        rebuildChannelStrips();
+    };
+    addAndMakeVisible(*debugPanel_);
+
+    // Enable keyboard focus for F12 toggle
+    setWantsKeyboardFocus(true);
 }
 
 MixerView::~MixerView() {
@@ -574,8 +599,10 @@ void MixerView::resized() {
     // Master strip on the right (only if visible)
     if (masterStrip->isVisible()) {
         masterStrip->setBounds(bounds.removeFromRight(metrics.masterWidth));
-        // Separator between channels and master
-        bounds.removeFromRight(2);
+
+        // Resize handle between channels and master
+        const int handleWidth = 8;
+        channelResizeHandle_->setBounds(bounds.removeFromRight(handleWidth));
     }
 
     // Channel viewport takes remaining space
@@ -592,10 +619,93 @@ void MixerView::resized() {
         channelStrips[i]->setBounds(i * metrics.channelWidth, 0, metrics.channelWidth,
                                     containerHeight);
     }
+
+    // Debug panel manages its own position after initial placement
 }
 
 void MixerView::timerCallback() {
     // Timer callback - meters will be driven by actual audio engine in future
+}
+
+bool MixerView::keyPressed(const juce::KeyPress& key) {
+    if (key == juce::KeyPress::F12Key) {
+        bool willBeVisible = !debugPanel_->isVisible();
+        debugPanel_->setVisible(willBeVisible);
+
+        // Position in top-right when first shown
+        if (willBeVisible && debugPanel_->getX() == 0) {
+            int panelX = getWidth() - debugPanel_->getWidth() - 10;
+            int panelY = 10;
+            debugPanel_->setTopLeftPosition(panelX, panelY);
+        }
+        return true;
+    }
+    return false;
+}
+
+bool MixerView::isInChannelResizeZone(const juce::Point<int>& /*pos*/) const {
+    // Not used anymore - resize handle component handles this
+    return false;
+}
+
+void MixerView::mouseMove(const juce::MouseEvent& /*event*/) {
+    // Resize handled by ChannelResizeHandle
+}
+
+void MixerView::mouseDown(const juce::MouseEvent& /*event*/) {
+    // Resize handled by ChannelResizeHandle
+}
+
+void MixerView::mouseDrag(const juce::MouseEvent& /*event*/) {
+    // Resize handled by ChannelResizeHandle
+}
+
+void MixerView::mouseUp(const juce::MouseEvent& /*event*/) {
+    // Resize handled by ChannelResizeHandle
+}
+
+// ChannelResizeHandle implementation
+MixerView::ChannelResizeHandle::ChannelResizeHandle() {
+    setMouseCursor(juce::MouseCursor::LeftRightResizeCursor);
+}
+
+void MixerView::ChannelResizeHandle::paint(juce::Graphics& g) {
+    // Draw a subtle line, more visible when hovering
+    float alpha = (isHovering_ || isDragging_) ? 0.8f : 0.3f;
+    g.setColour(DarkTheme::getColour(DarkTheme::ACCENT_PURPLE).withAlpha(alpha));
+    g.fillRect(getWidth() / 2 - 1, 0, 2, getHeight());
+}
+
+void MixerView::ChannelResizeHandle::mouseEnter(const juce::MouseEvent& /*event*/) {
+    isHovering_ = true;
+    repaint();
+}
+
+void MixerView::ChannelResizeHandle::mouseExit(const juce::MouseEvent& /*event*/) {
+    isHovering_ = false;
+    repaint();
+}
+
+void MixerView::ChannelResizeHandle::mouseDown(const juce::MouseEvent& event) {
+    isDragging_ = true;
+    dragStartX_ = event.getScreenX();
+    repaint();
+}
+
+void MixerView::ChannelResizeHandle::mouseDrag(const juce::MouseEvent& event) {
+    if (isDragging_ && onResize) {
+        int deltaX = event.getScreenX() - dragStartX_;
+        onResize(deltaX);
+        dragStartX_ = event.getScreenX();  // Incremental updates
+    }
+}
+
+void MixerView::ChannelResizeHandle::mouseUp(const juce::MouseEvent& /*event*/) {
+    isDragging_ = false;
+    if (onResizeEnd) {
+        onResizeEnd();
+    }
+    repaint();
 }
 
 void MixerView::selectChannel(int index, bool isMaster) {

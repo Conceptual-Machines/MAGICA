@@ -6,6 +6,7 @@
 #include <memory>
 #include <vector>
 
+#include "../components/common/MixerDebugPanel.hpp"
 #include "../components/mixer/MasterChannelStrip.hpp"
 #include "../themes/MixerLookAndFeel.hpp"
 #include "../themes/MixerMetrics.hpp"
@@ -32,6 +33,11 @@ class MixerView : public juce::Component,
 
     void paint(juce::Graphics& g) override;
     void resized() override;
+    bool keyPressed(const juce::KeyPress& key) override;
+    void mouseMove(const juce::MouseEvent& event) override;
+    void mouseDown(const juce::MouseEvent& event) override;
+    void mouseDrag(const juce::MouseEvent& event) override;
+    void mouseUp(const juce::MouseEvent& event) override;
 
     // Timer callback for meter animation
     void timerCallback() override;
@@ -134,6 +140,27 @@ class MixerView : public juce::Component,
     std::unique_ptr<juce::Viewport> channelViewport;
     std::unique_ptr<juce::Component> channelContainer;
 
+    // Resize handle for channel width
+    class ChannelResizeHandle : public juce::Component {
+      public:
+        ChannelResizeHandle();
+        void paint(juce::Graphics& g) override;
+        void mouseEnter(const juce::MouseEvent& event) override;
+        void mouseExit(const juce::MouseEvent& event) override;
+        void mouseDown(const juce::MouseEvent& event) override;
+        void mouseDrag(const juce::MouseEvent& event) override;
+        void mouseUp(const juce::MouseEvent& event) override;
+
+        std::function<void(int deltaX)> onResize;
+        std::function<void()> onResizeEnd;
+
+      private:
+        bool isHovering_ = false;
+        bool isDragging_ = false;
+        int dragStartX_ = 0;
+    };
+    std::unique_ptr<ChannelResizeHandle> channelResizeHandle_;
+
     void rebuildChannelStrips();
 
     // Selection state
@@ -145,6 +172,19 @@ class MixerView : public juce::Component,
 
     // Custom look and feel for faders
     MixerLookAndFeel mixerLookAndFeel_;
+
+    // Debug panel for tweaking metrics
+    std::unique_ptr<MixerDebugPanel> debugPanel_;
+
+    // Channel resize state
+    static constexpr int resizeZoneWidth_ = 6;
+    static constexpr int minChannelWidth_ = 80;
+    static constexpr int maxChannelWidth_ = 200;
+    bool isResizingChannel_ = false;
+    int resizeStartX_ = 0;
+    int resizeStartWidth_ = 0;
+
+    bool isInChannelResizeZone(const juce::Point<int>& pos) const;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(MixerView)
 };

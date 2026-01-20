@@ -10,11 +10,11 @@ namespace magica {
  */
 struct MixerMetrics {
     // === Base values (tune these) ===
-    float thumbHeight = 12.0f;
-    float thumbWidthMultiplier = 3.0f;     // thumbWidth = thumbHeight * this (36px)
-    float trackWidthMultiplier = 0.42f;    // trackWidth = thumbHeight * this (5px)
-    float tickWidthMultiplier = 0.667f;    // tickWidth = thumbHeight * this (8px)
-    float trackPaddingMultiplier = 0.25f;  // trackPadding = thumbHeight * this (3px)
+    float thumbHeight = 14.0f;
+    float thumbWidthMultiplier = 3.0f;     // thumbWidth = thumbHeight * this (42px)
+    float trackWidthMultiplier = 0.50f;    // trackWidth = thumbHeight * this (7px)
+    float tickWidthMultiplier = 0.98f;     // tickWidth = thumbHeight * this (~14px)
+    float trackPaddingMultiplier = 0.25f;  // trackPadding = thumbHeight * this (3.5px)
 
     // === Derived fader values ===
     float thumbWidth() const {
@@ -37,17 +37,17 @@ struct MixerMetrics {
     }
 
     // === Label dimensions ===
-    float labelTextWidth = 14.0f;
+    float labelTextWidth = 12.0f;
     float labelTextHeight = 10.0f;
     float labelFontSize = 10.0f;
 
     // === Channel strip dimensions ===
-    int channelWidth = 120;
+    int channelWidth = 100;
     int masterWidth = 140;
     int channelPadding = 4;
 
     // === Fader dimensions ===
-    int faderWidth = 40;
+    int faderWidth = 36;
     int faderHeightRatio = 60;  // percentage of available height
 
     // === Meter dimensions ===
@@ -60,7 +60,7 @@ struct MixerMetrics {
 
     // === Spacing ===
     int controlSpacing = 4;
-    int tickToFaderGap = 1;
+    int tickToFaderGap = 0;
     int tickToLabelGap = 1;
     int tickToMeterGap = 2;
 
