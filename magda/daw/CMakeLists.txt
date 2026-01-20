@@ -265,6 +265,7 @@ juce_add_gui_app(magda_daw_app
     VERSION "0.1.0"
     COMPANY_NAME "MAGDA"
     PRODUCT_NAME "MAGDA"
+    ICON_BIG "${CMAKE_CURRENT_SOURCE_DIR}/../../assets/AppIcon.png"
 )
 
 # Add UI sources to the JUCE app target
