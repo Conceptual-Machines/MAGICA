@@ -5,6 +5,7 @@
 #include <memory>
 #include <vector>
 
+#include "../../themes/MixerLookAndFeel.hpp"
 #include "core/TrackManager.hpp"
 #include "core/ViewModeController.hpp"
 
@@ -99,6 +100,7 @@ class TrackHeadersPanel : public juce::Component,
     int selectedTrackIndex = -1;
     double verticalZoom = 1.0;  // Track height multiplier
     ViewMode currentViewMode_ = ViewMode::Arrange;
+    MixerLookAndFeel sliderLookAndFeel_;  // Custom look and feel for sliders
 
     // Resize functionality
     bool isResizing = false;

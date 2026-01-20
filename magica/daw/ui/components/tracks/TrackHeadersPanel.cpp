@@ -19,6 +19,8 @@ TrackHeadersPanel::TrackHeader::TrackHeader(const juce::String& trackName) : nam
     nameLabel->setFont(FontManager::getInstance().getUIFont(12.0f));
 
     muteButton = std::make_unique<juce::TextButton>("M");
+    muteButton->setConnectedEdges(juce::Button::ConnectedOnLeft | juce::Button::ConnectedOnRight |
+                                  juce::Button::ConnectedOnTop | juce::Button::ConnectedOnBottom);
     muteButton->setColour(juce::TextButton::buttonColourId,
                           DarkTheme::getColour(DarkTheme::SURFACE));
     muteButton->setColour(juce::TextButton::buttonOnColourId,
@@ -30,6 +32,8 @@ TrackHeadersPanel::TrackHeader::TrackHeader(const juce::String& trackName) : nam
     muteButton->setClickingTogglesState(true);
 
     soloButton = std::make_unique<juce::TextButton>("S");
+    soloButton->setConnectedEdges(juce::Button::ConnectedOnLeft | juce::Button::ConnectedOnRight |
+                                  juce::Button::ConnectedOnTop | juce::Button::ConnectedOnBottom);
     soloButton->setColour(juce::TextButton::buttonColourId,
                           DarkTheme::getColour(DarkTheme::SURFACE));
     soloButton->setColour(juce::TextButton::buttonOnColourId,
@@ -44,16 +48,11 @@ TrackHeadersPanel::TrackHeader::TrackHeader(const juce::String& trackName) : nam
         std::make_unique<juce::Slider>(juce::Slider::LinearHorizontal, juce::Slider::NoTextBox);
     volumeSlider->setRange(0.0, 1.0);
     volumeSlider->setValue(volume);
-    volumeSlider->setColour(juce::Slider::trackColourId, DarkTheme::getColour(DarkTheme::SURFACE));
-    volumeSlider->setColour(juce::Slider::thumbColourId,
-                            DarkTheme::getColour(DarkTheme::ACCENT_BLUE));
 
     panSlider =
         std::make_unique<juce::Slider>(juce::Slider::LinearHorizontal, juce::Slider::NoTextBox);
     panSlider->setRange(-1.0, 1.0);
     panSlider->setValue(pan);
-    panSlider->setColour(juce::Slider::trackColourId, DarkTheme::getColour(DarkTheme::SURFACE));
-    panSlider->setColour(juce::Slider::thumbColourId, DarkTheme::getColour(DarkTheme::ACCENT_BLUE));
 
     // Collapse button for groups (triangle indicator)
     collapseButton = std::make_unique<juce::TextButton>();
@@ -78,6 +77,12 @@ TrackHeadersPanel::TrackHeadersPanel() {
 }
 
 TrackHeadersPanel::~TrackHeadersPanel() {
+    // Clear look and feel from sliders before destruction
+    for (auto& header : trackHeaders) {
+        header->volumeSlider->setLookAndFeel(nullptr);
+        header->panSlider->setLookAndFeel(nullptr);
+    }
+
     TrackManager::getInstance().removeListener(this);
     ViewModeController::getInstance().removeListener(this);
 }
@@ -90,6 +95,10 @@ void TrackHeadersPanel::viewModeChanged(ViewMode mode, const AudioEngineProfile&
 void TrackHeadersPanel::tracksChanged() {
     // Clear existing track headers
     for (auto& header : trackHeaders) {
+        // Clear look and feel before removing
+        header->volumeSlider->setLookAndFeel(nullptr);
+        header->panSlider->setLookAndFeel(nullptr);
+
         removeChildComponent(header->nameLabel.get());
         removeChildComponent(header->muteButton.get());
         removeChildComponent(header->soloButton.get());
@@ -135,6 +144,10 @@ void TrackHeadersPanel::tracksChanged() {
         addAndMakeVisible(*header->soloButton);
         addAndMakeVisible(*header->volumeSlider);
         addAndMakeVisible(*header->panSlider);
+
+        // Apply custom look and feel to sliders
+        header->volumeSlider->setLookAndFeel(&sliderLookAndFeel_);
+        header->panSlider->setLookAndFeel(&sliderLookAndFeel_);
 
         // Add collapse button for groups
         if (header->isGroup) {
@@ -190,8 +203,10 @@ void TrackHeadersPanel::trackPropertyChanged(int trackId) {
         header.volume = track->volume;
         header.pan = track->pan;
 
-        // Update height from view settings
-        header.height = track->viewSettings.getHeight(currentViewMode_);
+        // Note: Don't update height here - height should only change via:
+        // 1. tracksChanged() (initial load)
+        // 2. setTrackHeight() (user resize)
+        // Updating height on every property change would reset user's resize
 
         header.nameLabel->setText(track->name, juce::dontSendNotification);
         header.muteButton->setToggleState(track->muted, juce::dontSendNotification);
@@ -246,6 +261,10 @@ void TrackHeadersPanel::addTrack() {
     addAndMakeVisible(*header->soloButton);
     addAndMakeVisible(*header->volumeSlider);
     addAndMakeVisible(*header->panSlider);
+
+    // Apply custom look and feel to sliders
+    header->volumeSlider->setLookAndFeel(&sliderLookAndFeel_);
+    header->panSlider->setLookAndFeel(&sliderLookAndFeel_);
 
     trackHeaders.push_back(std::move(header));
 

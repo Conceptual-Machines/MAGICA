@@ -155,7 +155,7 @@ class MainView : public juce::Component,
     // Synchronization guards to prevent infinite recursion
     bool isUpdatingTrackSelection = false;
     bool isUpdatingLoopRegion = false;
-    // Note: Zoom/scroll race conditions are prevented by temporarily removing scroll bar listeners
+    bool isUpdatingFromVerticalZoomScrollBar = false;
 
     // Initial zoom setup flag
     bool initialZoomSet = false;

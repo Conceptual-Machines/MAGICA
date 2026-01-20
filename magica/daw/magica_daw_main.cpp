@@ -5,6 +5,7 @@
 #include <iostream>
 #include <memory>
 
+#include "core/ClipManager.hpp"
 #include "engine/TracktionEngineWrapper.hpp"
 #include "ui/themes/DarkTheme.hpp"
 #include "ui/themes/FontManager.hpp"
@@ -49,6 +50,9 @@ class MagicaDAWApplication : public JUCEApplication {
 
         // 4. Create main window with full UI
         mainWindow_ = std::make_unique<magica::MainWindow>();
+
+        // 5. Create test clips for development (after singletons are initialized)
+        magica::ClipManager::getInstance().createTestClips();
 
         std::cout << "🎵 Magica DAW is ready!" << std::endl;
     }

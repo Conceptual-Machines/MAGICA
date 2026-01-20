@@ -212,6 +212,11 @@ class ClipManager {
 
     void clearAllClips();
 
+    /**
+     * @brief Create random test clips for development
+     */
+    void createTestClips();
+
   private:
     ClipManager();
     ~ClipManager() = default;

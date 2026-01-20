@@ -54,7 +54,7 @@ struct MixerMetrics {
     int meterWidth = 16;  // Stereo L/R bars (7.5px each with 1px gap)
 
     // === Control dimensions ===
-    int buttonSize = 24;
+    int buttonSize = 18;  // Compact M/S/R buttons
     int knobSize = 32;
     int headerHeight = 30;
 

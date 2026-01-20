@@ -145,16 +145,14 @@ void MainView::setupComponents() {
     // Create vertical zoom scroll bar (on left)
     verticalZoomScrollBar = std::make_unique<ZoomScrollBar>(ZoomScrollBar::Orientation::Vertical);
     verticalZoomScrollBar->onRangeChanged = [this](double start, double end) {
-        // Convert range to vertical zoom and scroll
         double rangeHeight = end - start;
         if (rangeHeight > 0) {
-            // Calculate vertical zoom: smaller range = higher zoom (taller tracks)
-            // rangeHeight of 1.0 = seeing all tracks = zoom 1.0
-            // rangeHeight of 0.5 = seeing half tracks = zoom 2.0
-            double newVerticalZoom = 1.0 / rangeHeight;
-            newVerticalZoom = juce::jlimit(0.5, 3.0, newVerticalZoom);
+            // Guard to prevent feedback loop: setViewPosition triggers scrollBarMoved
+            // which would call updateVerticalZoomScrollBar and fight the user's drag
+            isUpdatingFromVerticalZoomScrollBar = true;
 
-            // Apply vertical zoom
+            // Calculate vertical zoom: smaller range = higher zoom (taller tracks)
+            double newVerticalZoom = juce::jlimit(0.5, 3.0, 1.0 / rangeHeight);
             verticalZoom = newVerticalZoom;
 
             // Calculate scroll position based on start position
@@ -162,10 +160,20 @@ void MainView::setupComponents() {
             int scaledHeight = static_cast<int>(totalContentHeight * verticalZoom);
             int scrollY = static_cast<int>(start * scaledHeight);
 
-            // Update track heights and viewport
-            updateContentSizes();
+            // Update track heights and viewport position directly
+            trackContentPanel->setVerticalZoom(verticalZoom);
+            trackHeadersPanel->setVerticalZoom(verticalZoom);
+
+            int contentWidth = trackContentPanel->getWidth();
+            trackContentPanel->setSize(contentWidth, scaledHeight);
+            trackHeadersPanel->setSize(trackHeaderWidth,
+                                       juce::jmax(scaledHeight, trackContentViewport->getHeight()));
+
             trackContentViewport->setViewPosition(trackContentViewport->getViewPositionX(),
                                                   scrollY);
+            playheadComponent->repaint();
+
+            isUpdatingFromVerticalZoomScrollBar = false;
         }
     };
     addAndMakeVisible(*verticalZoomScrollBar);
@@ -744,7 +752,9 @@ void MainView::scrollBarMoved(juce::ScrollBar* scrollBarThatHasMoved, double new
     }
 
     // Update vertical zoom scroll bar when track content viewport scrolls vertically
-    if (scrollBarThatHasMoved == &trackContentViewport->getVerticalScrollBar()) {
+    // Skip if we're already handling a ZoomScrollBar change to prevent feedback loop
+    if (scrollBarThatHasMoved == &trackContentViewport->getVerticalScrollBar() &&
+        !isUpdatingFromVerticalZoomScrollBar) {
         updateVerticalZoomScrollBar();
     }
 }

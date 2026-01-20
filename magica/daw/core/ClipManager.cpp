@@ -2,6 +2,8 @@
 
 #include <algorithm>
 
+#include "TrackManager.hpp"
+
 namespace magica {
 
 ClipManager& ClipManager::getInstance() {
@@ -442,6 +444,39 @@ void ClipManager::clearAllClips() {
     selectedClipId_ = INVALID_CLIP_ID;
     nextClipId_ = 1;
     notifyClipsChanged();
+}
+
+void ClipManager::createTestClips() {
+    // Create random test clips on existing tracks for development
+    auto& trackManager = TrackManager::getInstance();
+    const auto& tracks = trackManager.getTracks();
+
+    if (tracks.empty()) {
+        DBG("No tracks available for test clips");
+        return;
+    }
+
+    // Random number generator
+    juce::Random random;
+
+    for (const auto& track : tracks) {
+        // Create 1-4 clips per track
+        int numClips = random.nextInt({1, 4});
+        double currentTime = random.nextFloat() * 2.0;  // Start within first 2 seconds
+
+        for (int i = 0; i < numClips; ++i) {
+            // Random clip length between 1 and 8 seconds
+            double length = 1.0 + random.nextFloat() * 7.0;
+
+            // Create MIDI clip (works on all track types for testing)
+            createMidiClip(track.id, currentTime, length);
+
+            // Gap between clips (0 to 2 seconds)
+            currentTime += length + random.nextFloat() * 2.0;
+        }
+    }
+
+    DBG("Created test clips on " << tracks.size() << " tracks");
 }
 
 // ============================================================================

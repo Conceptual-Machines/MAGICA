@@ -307,8 +307,10 @@ void MixerView::ChannelStrip::setupControls() {
     faderValueLabel->setFont(juce::FontOptions(9.0f));
     addAndMakeVisible(*faderValueLabel);
 
-    // Mute button
+    // Mute button (square corners, compact)
     muteButton = std::make_unique<juce::TextButton>("M");
+    muteButton->setConnectedEdges(juce::Button::ConnectedOnLeft | juce::Button::ConnectedOnRight |
+                                  juce::Button::ConnectedOnTop | juce::Button::ConnectedOnBottom);
     muteButton->setColour(juce::TextButton::buttonColourId,
                           DarkTheme::getColour(DarkTheme::BUTTON_NORMAL));
     muteButton->setColour(juce::TextButton::buttonOnColourId,
@@ -323,8 +325,10 @@ void MixerView::ChannelStrip::setupControls() {
     };
     addAndMakeVisible(*muteButton);
 
-    // Solo button
+    // Solo button (square corners, compact)
     soloButton = std::make_unique<juce::TextButton>("S");
+    soloButton->setConnectedEdges(juce::Button::ConnectedOnLeft | juce::Button::ConnectedOnRight |
+                                  juce::Button::ConnectedOnTop | juce::Button::ConnectedOnBottom);
     soloButton->setColour(juce::TextButton::buttonColourId,
                           DarkTheme::getColour(DarkTheme::BUTTON_NORMAL));
     soloButton->setColour(juce::TextButton::buttonOnColourId,
@@ -342,6 +346,9 @@ void MixerView::ChannelStrip::setupControls() {
     // Record arm button (not on master)
     if (!isMaster_) {
         recordButton = std::make_unique<juce::TextButton>("R");
+        recordButton->setConnectedEdges(
+            juce::Button::ConnectedOnLeft | juce::Button::ConnectedOnRight |
+            juce::Button::ConnectedOnTop | juce::Button::ConnectedOnBottom);
         recordButton->setColour(juce::TextButton::buttonColourId,
                                 DarkTheme::getColour(DarkTheme::BUTTON_NORMAL));
         recordButton->setColour(juce::TextButton::buttonOnColourId,
