@@ -237,13 +237,24 @@ void MasterChannelStrip::resized() {
         bounds.setHeight(faderHeight);
 
         // Layout: [fader] [gap] [leftTicks] [labels] [rightTicks] [gap] [meter]
+        // Use same widths as channel strip for consistency
         int faderWidth = metrics.faderWidth;
         int meterWidthVal = metrics.meterWidth;
         int tickWidth = static_cast<int>(std::ceil(metrics.tickWidth()));
         int gap = metrics.tickToFaderGap;
+        int tickToLabelGap = metrics.tickToLabelGap;
+        int labelTextWidth = static_cast<int>(metrics.labelTextWidth);
 
-        // Store the entire fader region for border drawing
-        faderRegion_ = bounds;
+        // Calculate total width needed for the fader layout
+        int totalLayoutWidth = faderWidth + gap + tickWidth + tickToLabelGap + labelTextWidth +
+                               tickToLabelGap + tickWidth + gap + meterWidthVal;
+
+        // Center the layout within bounds
+        int leftMargin = (bounds.getWidth() - totalLayoutWidth) / 2;
+        auto centeredBounds = bounds.withTrimmedLeft(leftMargin).withWidth(totalLayoutWidth);
+
+        // Store the entire fader region for border drawing (use centered bounds)
+        faderRegion_ = centeredBounds;
 
         // Position value labels right above the fader region top border
         const int labelHeight = 12;
@@ -255,10 +266,10 @@ void MasterChannelStrip::resized() {
 
         // Add vertical padding inside the border
         const int borderPadding = 6;
-        bounds.removeFromTop(borderPadding);
-        bounds.removeFromBottom(borderPadding);
+        centeredBounds.removeFromTop(borderPadding);
+        centeredBounds.removeFromBottom(borderPadding);
 
-        auto layoutArea = bounds;
+        auto layoutArea = centeredBounds;
 
         // Fader on left
         faderArea_ = layoutArea.removeFromLeft(faderWidth);
@@ -276,7 +287,6 @@ void MasterChannelStrip::resized() {
                                               layoutArea.getY(), tickWidth, layoutArea.getHeight());
 
         // Label area between ticks
-        int tickToLabelGap = metrics.tickToLabelGap;
         int labelLeft = leftTickArea_.getRight() + tickToLabelGap;
         int labelRight = rightTickArea_.getX() - tickToLabelGap;
         labelArea_ = juce::Rectangle<int>(labelLeft, layoutArea.getY(), labelRight - labelLeft,

@@ -37,7 +37,7 @@ struct MixerMetrics {
     }
 
     // === Label dimensions ===
-    float labelTextWidth = 12.0f;
+    float labelTextWidth = 22.0f;  // Wide enough for "-inf"
     float labelTextHeight = 10.0f;
     float labelFontSize = 10.0f;
 
