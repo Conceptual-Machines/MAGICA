@@ -1,6 +1,22 @@
-# MAGDA
+<p align="center">
+  <img src="assets/banner.png" alt="MAGDA" width="200">
+</p>
 
-**MAGDA** is an experimental AI-native Digital Audio Workstation. Built from the ground up for human-AI collaboration in music production.
+<h1 align="center">MAGDA</h1>
+
+<p align="center">
+  <a href="https://github.com/Conceptual-Machines/MAGDA/actions"><img src="https://github.com/Conceptual-Machines/MAGDA/workflows/CI/badge.svg" alt="CI"></a>
+  <a href="https://github.com/Conceptual-Machines/MAGDA/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0-blue.svg" alt="License"></a>
+  <img src="https://img.shields.io/badge/platform-macOS-lightgrey.svg" alt="Platform">
+  <img src="https://img.shields.io/badge/C%2B%2B-20-blue.svg" alt="C++20">
+</p>
+
+<p align="center">
+  <strong>AI-native Digital Audio Workstation</strong><br>
+  Built from the ground up for human-AI collaboration in music production.
+</p>
+
+---
 
 ## Status
 
