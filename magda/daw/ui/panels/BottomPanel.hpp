@@ -1,6 +1,7 @@
 #pragma once
 
 #include <functional>
+#include <memory>
 
 #include "TabbedPanel.hpp"
 #include "core/ClipManager.hpp"
@@ -24,6 +25,9 @@ class BottomPanel : public daw::ui::TabbedPanel,
     BottomPanel();
     ~BottomPanel() override;
 
+    void paint(juce::Graphics& g) override;
+    void resized() override;
+
     // Legacy API for compatibility
     void setCollapsed(bool collapsed);
 
@@ -42,6 +46,11 @@ class BottomPanel : public daw::ui::TabbedPanel,
 
   private:
     void updateContentBasedOnSelection();
+
+    // Sidebar icons
+    std::unique_ptr<juce::TextButton> sidebarIcon1_;
+    std::unique_ptr<juce::TextButton> sidebarIcon2_;
+    static constexpr int SIDEBAR_WIDTH = 32;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(BottomPanel)
 };

@@ -1,5 +1,6 @@
 #include "BottomPanel.hpp"
 
+#include "../themes/DarkTheme.hpp"
 #include "PanelTabBar.hpp"
 #include "state/PanelController.hpp"
 
@@ -7,6 +8,17 @@ namespace magda {
 
 BottomPanel::BottomPanel() : TabbedPanel(daw::ui::PanelLocation::Bottom) {
     setName("Bottom Panel");
+
+    // Create sidebar icons (no-op placeholders for now)
+    sidebarIcon1_ = std::make_unique<juce::TextButton>("1");
+    sidebarIcon1_->setColour(juce::TextButton::buttonColourId, juce::Colours::transparentBlack);
+    sidebarIcon1_->setColour(juce::TextButton::textColourOffId, juce::Colours::grey);
+    addAndMakeVisible(sidebarIcon1_.get());
+
+    sidebarIcon2_ = std::make_unique<juce::TextButton>("2");
+    sidebarIcon2_->setColour(juce::TextButton::buttonColourId, juce::Colours::transparentBlack);
+    sidebarIcon2_->setColour(juce::TextButton::textColourOffId, juce::Colours::grey);
+    addAndMakeVisible(sidebarIcon2_.get());
 
     // Register as listener for selection changes
     ClipManager::getInstance().addListener(this);
@@ -23,6 +35,30 @@ BottomPanel::~BottomPanel() {
 
 void BottomPanel::setCollapsed(bool collapsed) {
     daw::ui::PanelController::getInstance().setCollapsed(daw::ui::PanelLocation::Bottom, collapsed);
+}
+
+void BottomPanel::paint(juce::Graphics& g) {
+    TabbedPanel::paint(g);
+
+    // Draw sidebar background
+    auto sidebarBounds = getLocalBounds().removeFromLeft(SIDEBAR_WIDTH);
+    g.setColour(DarkTheme::getColour(DarkTheme::BACKGROUND_ALT));
+    g.fillRect(sidebarBounds);
+
+    // Draw separator line
+    g.setColour(DarkTheme::getColour(DarkTheme::BORDER));
+    g.drawVerticalLine(SIDEBAR_WIDTH - 1, 0.0f, static_cast<float>(getHeight()));
+}
+
+void BottomPanel::resized() {
+    TabbedPanel::resized();
+
+    // Position sidebar icons at the top of the sidebar
+    int iconSize = 24;
+    int padding = (SIDEBAR_WIDTH - iconSize) / 2;
+
+    sidebarIcon1_->setBounds(padding, padding, iconSize, iconSize);
+    sidebarIcon2_->setBounds(padding, padding + iconSize + 4, iconSize, iconSize);
 }
 
 void BottomPanel::clipsChanged() {
@@ -81,13 +117,15 @@ juce::Rectangle<int> BottomPanel::getCollapseButtonBounds() {
 }
 
 juce::Rectangle<int> BottomPanel::getTabBarBounds() {
-    // Tab bar at the top as a header
+    // Tab bar at the top as a header, to the right of sidebar
     auto bounds = getLocalBounds();
+    bounds.removeFromLeft(SIDEBAR_WIDTH);  // Skip sidebar
     return bounds.removeFromTop(28);
 }
 
 juce::Rectangle<int> BottomPanel::getContentBounds() {
     auto bounds = getLocalBounds();
+    bounds.removeFromLeft(SIDEBAR_WIDTH);  // Skip sidebar
     // Content below the tab bar header
     return bounds.withTrimmedTop(28);
 }
