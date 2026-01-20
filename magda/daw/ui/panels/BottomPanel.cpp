@@ -118,6 +118,13 @@ void BottomPanel::updateContentBasedOnSelection() {
     // Switch to the appropriate content via PanelController
     daw::ui::PanelController::getInstance().setActiveTabByType(daw::ui::PanelLocation::Bottom,
                                                                targetContent);
+
+    // Sync chord toggle state with piano roll (after a short delay to let content switch)
+    juce::MessageManager::callAsync([this]() {
+        if (auto* pianoRoll = dynamic_cast<daw::ui::PianoRollContent*>(getActiveContent())) {
+            chordToggle_->setActive(pianoRoll->isChordRowVisible());
+        }
+    });
 }
 
 juce::Rectangle<int> BottomPanel::getCollapseButtonBounds() {
