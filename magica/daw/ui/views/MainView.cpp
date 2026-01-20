@@ -80,9 +80,13 @@ void MainView::setupComponents() {
     timelineViewport->setScrollBarsShown(false, false);
     addAndMakeVisible(*timelineViewport);
 
-    // Create track headers panel
+    // Create track headers viewport and panel (vertical scroll synced with content viewport)
+    trackHeadersViewport = std::make_unique<juce::Viewport>();
+    trackHeadersViewport->setScrollBarsShown(false, false);  // No scrollbars - synced externally
     trackHeadersPanel = std::make_unique<TrackHeadersPanel>();
-    addAndMakeVisible(trackHeadersPanel.get());
+    trackHeadersViewport->setViewedComponent(trackHeadersPanel.get(),
+                                             false);  // false = don't delete
+    addAndMakeVisible(*trackHeadersViewport);
 
     // Create arrangement lock button
     arrangementLockButton = std::make_unique<SvgButton>("ArrangementLock", BinaryData::lock_svg,
@@ -151,8 +155,9 @@ void MainView::setupComponents() {
             // which would call updateVerticalZoomScrollBar and fight the user's drag
             isUpdatingFromVerticalZoomScrollBar = true;
 
-            // Calculate vertical zoom: smaller range = higher zoom (taller tracks)
-            double newVerticalZoom = juce::jlimit(0.5, 3.0, 1.0 / rangeHeight);
+            // Calculate vertical zoom: bigger range = higher zoom (taller tracks)
+            // rangeHeight 0->1 maps to zoom 0.5->3.0
+            double newVerticalZoom = juce::jlimit(0.5, 3.0, 0.5 + rangeHeight * 2.5);
             verticalZoom = newVerticalZoom;
 
             // Calculate scroll position based on start position
@@ -165,12 +170,13 @@ void MainView::setupComponents() {
             trackHeadersPanel->setVerticalZoom(verticalZoom);
 
             int contentWidth = trackContentPanel->getWidth();
-            trackContentPanel->setSize(contentWidth, scaledHeight);
-            trackHeadersPanel->setSize(trackHeaderWidth,
-                                       juce::jmax(scaledHeight, trackContentViewport->getHeight()));
+            int contentHeight = juce::jmax(scaledHeight, trackContentViewport->getHeight());
+            trackContentPanel->setSize(contentWidth, contentHeight);
+            trackHeadersPanel->setSize(trackHeaderWidth, contentHeight);
 
             trackContentViewport->setViewPosition(trackContentViewport->getViewPositionX(),
                                                   scrollY);
+            trackHeadersViewport->setViewPosition(0, scrollY);
             playheadComponent->repaint();
 
             isUpdatingFromVerticalZoomScrollBar = false;
@@ -439,9 +445,9 @@ void MainView::resized() {
     // Timeline takes the remaining width
     timelineViewport->setBounds(timelineArea);
 
-    // Track headers panel on the left (variable width)
+    // Track headers viewport on the left (variable width)
     auto trackHeadersArea = bounds.removeFromLeft(trackHeaderWidth);
-    trackHeadersPanel->setBounds(trackHeadersArea);
+    trackHeadersViewport->setBounds(trackHeadersArea);
 
     // Remove padding space between headers and content
     bounds.removeFromLeft(layout.componentSpacing);
@@ -529,6 +535,7 @@ void MainView::scrollToTrack(int trackIndex) {
     if (trackIndex >= 0 && trackIndex < trackHeadersPanel->getNumTracks()) {
         int yPosition = trackHeadersPanel->getTrackYPosition(trackIndex);
         trackContentViewport->setViewPosition(trackContentViewport->getViewPositionX(), yPosition);
+        trackHeadersViewport->setViewPosition(0, yPosition);
     }
 }
 
@@ -714,13 +721,11 @@ void MainView::updateContentSizes() {
     // Update timeline size with enhanced content width
     timeline->setSize(contentWidth, getTimelineHeight());
 
-    // Update track content size with enhanced content width and vertical zoom
-    trackContentPanel->setSize(contentWidth, scaledTrackHeight);
+    // Update track content and headers with same height
+    int contentHeight = juce::jmax(scaledTrackHeight, trackContentViewport->getHeight());
+    trackContentPanel->setSize(contentWidth, contentHeight);
     trackContentPanel->setVerticalZoom(verticalZoom);
-
-    // Update track headers panel height to match content (with vertical zoom)
-    trackHeadersPanel->setSize(trackHeaderWidth,
-                               juce::jmax(scaledTrackHeight, trackContentViewport->getHeight()));
+    trackHeadersPanel->setSize(trackHeaderWidth, contentHeight);
     trackHeadersPanel->setVerticalZoom(verticalZoom);
 
     // Repaint playhead after content size changes
@@ -751,11 +756,17 @@ void MainView::scrollBarMoved(juce::ScrollBar* scrollBarThatHasMoved, double new
         selectionOverlay->repaint();
     }
 
-    // Update vertical zoom scroll bar when track content viewport scrolls vertically
-    // Skip if we're already handling a ZoomScrollBar change to prevent feedback loop
-    if (scrollBarThatHasMoved == &trackContentViewport->getVerticalScrollBar() &&
-        !isUpdatingFromVerticalZoomScrollBar) {
-        updateVerticalZoomScrollBar();
+    // Sync track headers viewport and update zoom scroll bar when scrolling vertically
+    if (scrollBarThatHasMoved == &trackContentViewport->getVerticalScrollBar()) {
+        // Sync track headers viewport to same vertical position
+        int scrollY = trackContentViewport->getViewPositionY();
+        DBG("Vertical scroll: scrollY=" + juce::String(scrollY));
+        trackHeadersViewport->setViewPosition(0, scrollY);
+
+        // Update zoom scroll bar (skip if we're handling a ZoomScrollBar change)
+        if (!isUpdatingFromVerticalZoomScrollBar) {
+            updateVerticalZoomScrollBar();
+        }
     }
 }
 
@@ -826,14 +837,27 @@ void MainView::updateVerticalZoomScrollBar() {
     int viewportHeight = trackContentViewport->getHeight();
     int scrollY = trackContentViewport->getViewPositionY();
 
-    // Apply vertical zoom to get scaled content height
+    // Calculate rangeHeight from zoom using inverse of: zoom = 0.5 + rangeHeight * 2.5
+    // rangeHeight = (zoom - 0.5) / 2.5
+    double rangeHeight = (verticalZoom - 0.5) / 2.5;
+    rangeHeight = juce::jlimit(0.01, 1.0, rangeHeight);
+
+    // Calculate scaled content height for scroll position
     int scaledContentHeight = static_cast<int>(totalContentHeight * verticalZoom);
     if (scaledContentHeight <= 0)
-        return;
+        scaledContentHeight = viewportHeight;
 
-    // Calculate visible range as fraction of total (scaled) content
-    double visibleStart = static_cast<double>(scrollY) / scaledContentHeight;
-    double visibleEnd = static_cast<double>(scrollY + viewportHeight) / scaledContentHeight;
+    // Calculate scroll position as fraction
+    double scrollFraction =
+        (scaledContentHeight > viewportHeight)
+            ? static_cast<double>(scrollY) / (scaledContentHeight - viewportHeight)
+            : 0.0;
+    scrollFraction = juce::jlimit(0.0, 1.0, scrollFraction);
+
+    // Position the thumb based on scroll position, keeping rangeHeight constant
+    double maxStart = 1.0 - rangeHeight;
+    double visibleStart = scrollFraction * maxStart;
+    double visibleEnd = visibleStart + rangeHeight;
 
     // Clamp to valid range
     visibleStart = juce::jlimit(0.0, 1.0, visibleStart);

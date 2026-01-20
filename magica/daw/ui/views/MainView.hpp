@@ -106,7 +106,8 @@ class MainView : public juce::Component,
     std::unique_ptr<juce::Viewport> timelineViewport;
     std::unique_ptr<TimelineComponent> timeline;
 
-    // Track headers panel (fixed, no scrolling)
+    // Track headers viewport (vertical scroll synced with track content)
+    std::unique_ptr<juce::Viewport> trackHeadersViewport;
     std::unique_ptr<TrackHeadersPanel> trackHeadersPanel;
 
     // Arrangement lock button

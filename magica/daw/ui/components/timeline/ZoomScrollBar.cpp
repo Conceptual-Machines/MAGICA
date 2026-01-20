@@ -173,7 +173,6 @@ void ZoomScrollBar::mouseDrag(const juce::MouseEvent& event) {
         }
 
         case DragMode::ResizeStart: {
-            // Move the start edge (zoom from start)
             double newStart = dragStartVisibleStart + delta;
             newStart = juce::jlimit(0.0, visibleEnd - 0.01, newStart);
             visibleStart = newStart;
@@ -181,7 +180,6 @@ void ZoomScrollBar::mouseDrag(const juce::MouseEvent& event) {
         }
 
         case DragMode::ResizeEnd: {
-            // Move the end edge (zoom from end)
             double newEnd = dragStartVisibleEnd + delta;
             newEnd = juce::jlimit(visibleStart + 0.01, 1.0, newEnd);
             visibleEnd = newEnd;
@@ -209,6 +207,10 @@ void ZoomScrollBar::mouseMove(const juce::MouseEvent& event) {
 }
 
 void ZoomScrollBar::setVisibleRange(double start, double end) {
+    // Ignore external updates while user is dragging to prevent feedback loops
+    if (dragMode != DragMode::None)
+        return;
+
     visibleStart = juce::jlimit(0.0, 1.0, start);
     visibleEnd = juce::jlimit(0.0, 1.0, end);
 
