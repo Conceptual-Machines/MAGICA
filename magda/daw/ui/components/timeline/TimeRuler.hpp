@@ -67,11 +67,14 @@ class TimeRuler : public juce::Component, private juce::Timer {
     // Get preferred height (from LayoutConfig)
     int getPreferredHeight() const;
 
-    // Mouse interaction - click to set playhead
+    // Mouse interaction - click to set playhead, drag to zoom
     void mouseDown(const juce::MouseEvent& event) override;
+    void mouseDrag(const juce::MouseEvent& event) override;
+    void mouseUp(const juce::MouseEvent& event) override;
 
     // Callbacks
-    std::function<void(double)> onPositionClicked;  // Time position clicked
+    std::function<void(double)> onPositionClicked;           // Time position clicked
+    std::function<void(double, double, int)> onZoomChanged;  // newZoom, anchorTime, anchorScreenX
 
   private:
     // Display state
@@ -111,6 +114,14 @@ class TimeRuler : public juce::Component, private juce::Timer {
     // Timer callback for real-time scroll sync
     void timerCallback() override;
     int lastViewportX = 0;  // Track last position to detect changes
+
+    // Zoom drag state
+    bool isZooming = false;
+    int mouseDownX = 0;
+    int mouseDownY = 0;
+    double zoomStartValue = 0.0;
+    double zoomAnchorTime = 0.0;
+    static constexpr int DRAG_THRESHOLD = 3;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(TimeRuler)
 };

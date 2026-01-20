@@ -76,6 +76,10 @@ class ClipComponent : public juce::Component, public ClipManagerListener {
     std::function<void(ClipId, double)> onClipSplit;  // clipId, splitTime (Alt+click)
     std::function<double(double)> snapTimeToGrid;     // Optional grid snapping
 
+    // Real-time preview callbacks (called during drag, not just on mouseUp)
+    std::function<void(ClipId, double, double)>
+        onClipDragPreview;  // clipId, previewStartTime, previewLength
+
   private:
     ClipId clipId_;
     TrackContentPanel* parentPanel_;

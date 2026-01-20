@@ -469,6 +469,14 @@ void ClipComponent::mouseDrag(const juce::MouseEvent& e) {
         default:
             break;
     }
+
+    // Emit real-time preview event via ClipManager (for global listeners like PianoRoll)
+    ClipManager::getInstance().notifyClipDragPreview(clipId_, previewStartTime_, previewLength_);
+
+    // Also call local callback if set
+    if (onClipDragPreview) {
+        onClipDragPreview(clipId_, previewStartTime_, previewLength_);
+    }
 }
 
 void ClipComponent::mouseUp(const juce::MouseEvent& e) {

@@ -78,6 +78,12 @@ class PianoRollGridComponent : public juce::Component {
         return relativeMode_;
     }
 
+    // Timeline length (for drawing grid lines to the full timeline extent)
+    void setTimelineLengthBeats(double lengthBeats);
+    double getTimelineLengthBeats() const {
+        return timelineLengthBeats_;
+    }
+
     // Grid snap settings
     enum class GridResolution {
         Off,
@@ -133,9 +139,10 @@ class PianoRollGridComponent : public juce::Component {
     GridResolution gridResolution_ = GridResolution::Sixteenth;
 
     // Clip position and display mode
-    double clipStartBeats_ = 0.0;   // Clip's start position on timeline (in beats)
-    double clipLengthBeats_ = 0.0;  // Clip's length (in beats)
-    bool relativeMode_ = true;      // true = notes at beat 0, false = notes at absolute position
+    double clipStartBeats_ = 0.0;        // Clip's start position on timeline (in beats)
+    double clipLengthBeats_ = 0.0;       // Clip's length (in beats)
+    double timelineLengthBeats_ = 64.0;  // Full timeline length (in beats) for drawing grid
+    bool relativeMode_ = true;  // true = notes at beat 0, false = notes at absolute position
 
     // Note components
     std::vector<std::unique_ptr<NoteComponent>> noteComponents_;

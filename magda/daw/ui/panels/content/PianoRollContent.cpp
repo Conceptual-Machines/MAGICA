@@ -10,16 +10,33 @@
 
 namespace magda::daw::ui {
 
-// Custom viewport that notifies on scroll
+// Custom viewport that notifies on scroll with real-time tracking
 class ScrollNotifyingViewport : public juce::Viewport {
   public:
     std::function<void(int, int)> onScrolled;
+    juce::Component* timeRulerToRepaint = nullptr;
+    juce::Component* keyboardToUpdate = nullptr;
 
     void visibleAreaChanged(const juce::Rectangle<int>& newVisibleArea) override {
         juce::Viewport::visibleAreaChanged(newVisibleArea);
         if (onScrolled) {
             onScrolled(getViewPositionX(), getViewPositionY());
         }
+        // Force immediate repaint during scroll
+        if (timeRulerToRepaint)
+            timeRulerToRepaint->repaint();
+        if (keyboardToUpdate)
+            keyboardToUpdate->repaint();
+    }
+
+    // Override scrollBarMoved for real-time updates during scrollbar drag
+    void scrollBarMoved(juce::ScrollBar* scrollBar, double newRangeStart) override {
+        juce::Viewport::scrollBarMoved(scrollBar, newRangeStart);
+        // Force immediate repaint during scrollbar drag
+        if (timeRulerToRepaint)
+            timeRulerToRepaint->repaint();
+        if (keyboardToUpdate)
+            keyboardToUpdate->repaint();
     }
 };
 
@@ -43,8 +60,27 @@ PianoRollContent::PianoRollContent() {
 
     // Create keyboard component
     keyboard_ = std::make_unique<magda::PianoRollKeyboard>();
-    keyboard_->setNoteHeight(NOTE_HEIGHT);
+    keyboard_->setNoteHeight(noteHeight_);
     keyboard_->setNoteRange(MIN_NOTE, MAX_NOTE);
+
+    // Set up vertical zoom callback from keyboard (drag up/down to zoom)
+    keyboard_->onZoomChanged = [this](int newHeight, int anchorNote, int anchorScreenY) {
+        if (newHeight != noteHeight_) {
+            noteHeight_ = newHeight;
+
+            // Update components
+            gridComponent_->setNoteHeight(noteHeight_);
+            keyboard_->setNoteHeight(noteHeight_);
+            updateGridSize();
+
+            // Adjust scroll to keep anchor note under mouse
+            int newAnchorY = (MAX_NOTE - anchorNote) * noteHeight_;
+            int newScrollY = newAnchorY - anchorScreenY;
+            newScrollY = juce::jmax(0, newScrollY);
+            viewport_->setViewPosition(viewport_->getViewPositionX(), newScrollY);
+        }
+    };
+
     addAndMakeVisible(keyboard_.get());
 
     // Create viewport for scrolling (custom viewport that notifies on scroll)
@@ -53,6 +89,8 @@ PianoRollContent::PianoRollContent() {
         keyboard_->setScrollOffset(y);
         timeRuler_->setScrollOffset(x);
     };
+    scrollViewport->timeRulerToRepaint = timeRuler_.get();
+    scrollViewport->keyboardToUpdate = keyboard_.get();
     scrollViewport->setScrollBarsShown(true, true);
     viewport_ = std::move(scrollViewport);
     addAndMakeVisible(viewport_.get());
@@ -60,12 +98,44 @@ PianoRollContent::PianoRollContent() {
     // Create the grid component
     gridComponent_ = std::make_unique<magda::PianoRollGridComponent>();
     gridComponent_->setPixelsPerBeat(horizontalZoom_);
-    gridComponent_->setNoteHeight(NOTE_HEIGHT);
+    gridComponent_->setNoteHeight(noteHeight_);
     gridComponent_->setLeftPadding(GRID_LEFT_PADDING);
     viewport_->setViewedComponent(gridComponent_.get(), false);
 
     // Link TimeRuler to viewport for real-time scroll sync
     timeRuler_->setLinkedViewport(viewport_.get());
+
+    // Set up zoom callback from time ruler (drag up/down to zoom)
+    timeRuler_->onZoomChanged = [this](double newZoom, double anchorTime, int anchorScreenX) {
+        // Convert pixels-per-second to pixels-per-beat
+        double tempo = 120.0;
+        if (auto* controller = magda::TimelineController::getCurrent()) {
+            tempo = controller->getState().tempo.bpm;
+        }
+        double secondsPerBeat = 60.0 / tempo;
+        double newPixelsPerBeat = newZoom * secondsPerBeat;
+
+        // Clamp to our limits
+        newPixelsPerBeat = juce::jlimit(MIN_HORIZONTAL_ZOOM, MAX_HORIZONTAL_ZOOM, newPixelsPerBeat);
+
+        if (newPixelsPerBeat != horizontalZoom_) {
+            // Calculate anchor beat position
+            double anchorBeat = anchorTime / secondsPerBeat;
+
+            horizontalZoom_ = newPixelsPerBeat;
+
+            // Update components
+            gridComponent_->setPixelsPerBeat(horizontalZoom_);
+            updateGridSize();
+            updateTimeRuler();
+
+            // Adjust scroll to keep anchor position under mouse
+            int newAnchorX = static_cast<int>(anchorBeat * horizontalZoom_) + GRID_LEFT_PADDING;
+            int newScrollX = newAnchorX - (anchorScreenX - KEYBOARD_WIDTH);
+            newScrollX = juce::jmax(0, newScrollX);
+            viewport_->setViewPosition(newScrollX, viewport_->getViewPositionY());
+        }
+    };
 
     setupGridCallbacks();
 
@@ -158,6 +228,73 @@ void PianoRollContent::resized() {
     updateTimeRuler();
 }
 
+void PianoRollContent::mouseWheelMove(const juce::MouseEvent& e,
+                                      const juce::MouseWheelDetails& wheel) {
+    // Cmd/Ctrl + scroll = horizontal zoom
+    if (e.mods.isCommandDown()) {
+        // Calculate zoom change
+        double zoomFactor = 1.0 + (wheel.deltaY * 0.1);
+
+        // Calculate anchor point - where in the content the mouse is pointing
+        int mouseXInContent = e.x - KEYBOARD_WIDTH + viewport_->getViewPositionX();
+        double anchorBeat =
+            static_cast<double>(mouseXInContent - GRID_LEFT_PADDING) / horizontalZoom_;
+
+        // Apply zoom
+        double newZoom = horizontalZoom_ * zoomFactor;
+        newZoom = juce::jlimit(MIN_HORIZONTAL_ZOOM, MAX_HORIZONTAL_ZOOM, newZoom);
+
+        if (newZoom != horizontalZoom_) {
+            horizontalZoom_ = newZoom;
+
+            // Update components
+            gridComponent_->setPixelsPerBeat(horizontalZoom_);
+            updateGridSize();
+            updateTimeRuler();
+
+            // Adjust scroll position to keep anchor point under mouse
+            int newAnchorX = static_cast<int>(anchorBeat * horizontalZoom_) + GRID_LEFT_PADDING;
+            int newScrollX = newAnchorX - (e.x - KEYBOARD_WIDTH);
+            newScrollX = juce::jmax(0, newScrollX);
+            viewport_->setViewPosition(newScrollX, viewport_->getViewPositionY());
+        }
+        return;
+    }
+
+    // Alt/Option + scroll = vertical zoom (note height)
+    if (e.mods.isAltDown()) {
+        // Calculate zoom change
+        int heightDelta = wheel.deltaY > 0 ? 2 : -2;
+
+        // Calculate anchor point - which note is under the mouse
+        int mouseYInContent = e.y - HEADER_HEIGHT + viewport_->getViewPositionY();
+        int anchorNote = MAX_NOTE - (mouseYInContent / noteHeight_);
+
+        // Apply zoom
+        int newHeight = noteHeight_ + heightDelta;
+        newHeight = juce::jlimit(MIN_NOTE_HEIGHT, MAX_NOTE_HEIGHT, newHeight);
+
+        if (newHeight != noteHeight_) {
+            noteHeight_ = newHeight;
+
+            // Update components
+            gridComponent_->setNoteHeight(noteHeight_);
+            keyboard_->setNoteHeight(noteHeight_);
+            updateGridSize();
+
+            // Adjust scroll position to keep anchor note under mouse
+            int newAnchorY = (MAX_NOTE - anchorNote) * noteHeight_;
+            int newScrollY = newAnchorY - (e.y - HEADER_HEIGHT);
+            newScrollY = juce::jmax(0, newScrollY);
+            viewport_->setViewPosition(viewport_->getViewPositionX(), newScrollY);
+        }
+        return;
+    }
+
+    // Regular scroll - don't handle, let default JUCE event propagation work
+    // (The viewport will receive the event through normal component hierarchy)
+}
+
 void PianoRollContent::updateGridSize() {
     const auto* clip = editingClipId_ != magda::INVALID_CLIP_ID
                            ? magda::ClipManager::getInstance().getClip(editingClipId_)
@@ -186,7 +323,7 @@ void PianoRollContent::updateGridSize() {
 
     int gridWidth = juce::jmax(viewport_->getWidth(),
                                static_cast<int>(displayLengthBeats * horizontalZoom_) + 100);
-    int gridHeight = (MAX_NOTE - MIN_NOTE + 1) * NOTE_HEIGHT;
+    int gridHeight = (MAX_NOTE - MIN_NOTE + 1) * noteHeight_;
 
     gridComponent_->setSize(gridWidth, gridHeight);
 
@@ -194,6 +331,7 @@ void PianoRollContent::updateGridSize() {
     gridComponent_->setRelativeMode(relativeTimeMode_);
     gridComponent_->setClipStartBeats(clipStartBeats);
     gridComponent_->setClipLengthBeats(clipLengthBeats);
+    gridComponent_->setTimelineLengthBeats(displayLengthBeats);
 }
 
 void PianoRollContent::updateTimeRuler() {
@@ -318,6 +456,30 @@ void PianoRollContent::clipSelectionChanged(magda::ClipId clipId) {
             repaint();
         }
     }
+}
+
+void PianoRollContent::clipDragPreview(magda::ClipId clipId, double previewStartTime,
+                                       double previewLength) {
+    // Only update if this is the clip we're editing
+    if (clipId != editingClipId_) {
+        return;
+    }
+
+    // Update TimeRuler with preview position in real-time
+    timeRuler_->setTimeOffset(previewStartTime);
+    timeRuler_->setClipLength(previewLength);
+
+    // Also update the grid with preview clip boundaries
+    double tempo = 120.0;
+    if (auto* controller = magda::TimelineController::getCurrent()) {
+        tempo = controller->getState().tempo.bpm;
+    }
+    double secondsPerBeat = 60.0 / tempo;
+    double clipStartBeats = previewStartTime / secondsPerBeat;
+    double clipLengthBeats = previewLength / secondsPerBeat;
+
+    gridComponent_->setClipStartBeats(clipStartBeats);
+    gridComponent_->setClipLengthBeats(clipLengthBeats);
 }
 
 // ============================================================================

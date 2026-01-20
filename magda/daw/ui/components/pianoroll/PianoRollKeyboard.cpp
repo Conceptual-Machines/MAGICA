@@ -86,4 +86,47 @@ juce::String PianoRollKeyboard::getNoteName(int noteNumber) const {
     return juce::String(noteNames[note]) + juce::String(octave);
 }
 
+int PianoRollKeyboard::yToNoteNumber(int y) const {
+    int adjustedY = y + scrollOffsetY_;
+    int note = maxNote_ - (adjustedY / noteHeight_);
+    return juce::jlimit(minNote_, maxNote_, note);
+}
+
+void PianoRollKeyboard::mouseDown(const juce::MouseEvent& event) {
+    mouseDownX_ = event.x;
+    mouseDownY_ = event.y;
+    zoomStartHeight_ = noteHeight_;
+    isZooming_ = false;
+
+    // Capture anchor note at mouse position
+    zoomAnchorNote_ = yToNoteNumber(event.y);
+}
+
+void PianoRollKeyboard::mouseDrag(const juce::MouseEvent& event) {
+    int deltaY = std::abs(event.y - mouseDownY_);
+
+    // Start zooming after crossing drag threshold
+    if (deltaY > DRAG_THRESHOLD) {
+        isZooming_ = true;
+
+        // Drag up = zoom in (larger notes), drag down = zoom out (smaller notes)
+        int yDelta = mouseDownY_ - event.y;
+
+        // Linear zoom - each 10 pixels of drag changes height by 1
+        int heightDelta = yDelta / 10;
+        int newHeight = zoomStartHeight_ + heightDelta;
+
+        // Clamp to reasonable limits
+        newHeight = juce::jlimit(6, 40, newHeight);
+
+        if (onZoomChanged && newHeight != noteHeight_) {
+            onZoomChanged(newHeight, zoomAnchorNote_, mouseDownY_);
+        }
+    }
+}
+
+void PianoRollKeyboard::mouseUp(const juce::MouseEvent& /*event*/) {
+    isZooming_ = false;
+}
+
 }  // namespace magda

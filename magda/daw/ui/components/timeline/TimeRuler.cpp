@@ -110,12 +110,58 @@ int TimeRuler::getPreferredHeight() const {
 }
 
 void TimeRuler::mouseDown(const juce::MouseEvent& event) {
-    if (onPositionClicked) {
-        double time = pixelToTime(event.x);
-        if (time >= 0.0 && time <= timelineLength) {
-            onPositionClicked(time);
+    mouseDownX = event.x;
+    mouseDownY = event.y;
+    zoomStartValue = zoom;
+    isZooming = false;
+
+    // Capture anchor time at mouse position
+    zoomAnchorTime = pixelToTime(event.x);
+    zoomAnchorTime = juce::jlimit(0.0, timelineLength, zoomAnchorTime);
+}
+
+void TimeRuler::mouseDrag(const juce::MouseEvent& event) {
+    int deltaY = std::abs(event.y - mouseDownY);
+
+    // Start zooming after crossing drag threshold (vertical movement)
+    if (deltaY > DRAG_THRESHOLD) {
+        isZooming = true;
+
+        // Drag up = zoom in, drag down = zoom out
+        int yDelta = mouseDownY - event.y;
+
+        // Exponential zoom for smooth feel
+        double sensitivity = 30.0;  // pixels to double/halve zoom
+        double exponent = static_cast<double>(yDelta) / sensitivity;
+        double newZoom = zoomStartValue * std::pow(2.0, exponent);
+
+        // Clamp zoom to reasonable limits (pixels per second)
+        // These translate to roughly 10-500 pixels per beat at 120 BPM
+        newZoom = juce::jlimit(5.0, 2000.0, newZoom);
+
+        if (onZoomChanged) {
+            onZoomChanged(newZoom, zoomAnchorTime, mouseDownX);
         }
     }
+}
+
+void TimeRuler::mouseUp(const juce::MouseEvent& event) {
+    // If it was a click (not a zoom drag), handle playhead positioning
+    if (!isZooming) {
+        int deltaX = std::abs(event.x - mouseDownX);
+        int deltaY = std::abs(event.y - mouseDownY);
+
+        if (deltaX <= DRAG_THRESHOLD && deltaY <= DRAG_THRESHOLD) {
+            if (onPositionClicked) {
+                double time = pixelToTime(event.x);
+                if (time >= 0.0 && time <= timelineLength) {
+                    onPositionClicked(time);
+                }
+            }
+        }
+    }
+
+    isZooming = false;
 }
 
 void TimeRuler::drawSecondsMode(juce::Graphics& g) {

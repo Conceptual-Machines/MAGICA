@@ -33,6 +33,11 @@ class ClipManagerListener {
     virtual void clipPlaybackStateChanged(ClipId clipId) {
         juce::ignoreUnused(clipId);
     }
+
+    // Called during clip drag for real-time preview updates
+    virtual void clipDragPreview(ClipId clipId, double previewStartTime, double previewLength) {
+        juce::ignoreUnused(clipId, previewStartTime, previewLength);
+    }
 };
 
 /**
@@ -207,6 +212,11 @@ class ClipManager {
 
     void addListener(ClipManagerListener* listener);
     void removeListener(ClipManagerListener* listener);
+
+    /**
+     * @brief Broadcast drag preview event (called during clip drag for real-time updates)
+     */
+    void notifyClipDragPreview(ClipId clipId, double previewStartTime, double previewLength);
 
     // ========================================================================
     // Project Management

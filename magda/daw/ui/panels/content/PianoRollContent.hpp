@@ -36,6 +36,7 @@ class PianoRollContent : public PanelContent, public magda::ClipManagerListener 
 
     void paint(juce::Graphics& g) override;
     void resized() override;
+    void mouseWheelMove(const juce::MouseEvent& e, const juce::MouseWheelDetails& wheel) override;
 
     void onActivated() override;
     void onDeactivated() override;
@@ -44,6 +45,8 @@ class PianoRollContent : public PanelContent, public magda::ClipManagerListener 
     void clipsChanged() override;
     void clipPropertyChanged(magda::ClipId clipId) override;
     void clipSelectionChanged(magda::ClipId clipId) override;
+    void clipDragPreview(magda::ClipId clipId, double previewStartTime,
+                         double previewLength) override;
 
     // Set the clip to edit
     void setClip(magda::ClipId clipId);
@@ -62,14 +65,21 @@ class PianoRollContent : public PanelContent, public magda::ClipManagerListener 
 
     // Layout constants
     static constexpr int KEYBOARD_WIDTH = 60;
-    static constexpr int NOTE_HEIGHT = 12;
-    static constexpr int HEADER_HEIGHT = 24;
+    static constexpr int DEFAULT_NOTE_HEIGHT = 12;
+    static constexpr int HEADER_HEIGHT = 36;     // Taller for zoom interaction
     static constexpr int MIN_NOTE = 21;          // A0
     static constexpr int MAX_NOTE = 108;         // C8
     static constexpr int GRID_LEFT_PADDING = 2;  // Small padding for timeline label visibility
 
-    // Zoom
+    // Zoom limits
+    static constexpr double MIN_HORIZONTAL_ZOOM = 10.0;   // pixels per beat
+    static constexpr double MAX_HORIZONTAL_ZOOM = 500.0;  // pixels per beat
+    static constexpr int MIN_NOTE_HEIGHT = 6;
+    static constexpr int MAX_NOTE_HEIGHT = 40;
+
+    // Zoom state
     double horizontalZoom_ = 50.0;  // pixels per beat
+    int noteHeight_ = DEFAULT_NOTE_HEIGHT;
 
     // Timeline mode (absolute vs relative)
     bool relativeTimeMode_ = true;  // Default to relative (1, 2, 3...)

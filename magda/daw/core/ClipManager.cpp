@@ -524,6 +524,16 @@ void ClipManager::notifyClipPlaybackStateChanged(ClipId clipId) {
     }
 }
 
+void ClipManager::notifyClipDragPreview(ClipId clipId, double previewStartTime,
+                                        double previewLength) {
+    auto listenersCopy = listeners_;
+    for (auto* listener : listenersCopy) {
+        if (std::find(listeners_.begin(), listeners_.end(), listener) != listeners_.end()) {
+            listener->clipDragPreview(clipId, previewStartTime, previewLength);
+        }
+    }
+}
+
 juce::String ClipManager::generateClipName(ClipType type) const {
     int count = 1;
     for (const auto& clip : clips_) {

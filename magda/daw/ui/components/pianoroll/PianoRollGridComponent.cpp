@@ -48,9 +48,8 @@ void PianoRollGridComponent::paintGrid(juce::Graphics& g, juce::Rectangle<int> a
     g.setColour(juce::Colour(0xFF3a3a3a));
     g.fillRect(area);
 
-    // Get clip info for length
-    const auto* clip = ClipManager::getInstance().getClip(clipId_);
-    double lengthBeats = clip ? clip->length * 2.0 : 16.0;  // Approximate beats (assuming 120 BPM)
+    // Use the full timeline length for drawing grid lines
+    double lengthBeats = timelineLengthBeats_;
 
     // The grid area starts after left padding
     auto gridArea = area.withTrimmedLeft(leftPadding_);
@@ -140,8 +139,16 @@ void PianoRollGridComponent::mouseDoubleClick(const juce::MouseEvent& e) {
     double beat = pixelToBeat(e.x);
     int noteNumber = yToNoteNumber(e.y);
 
+    // In ABS mode, convert absolute beat to clip-relative beat
+    if (!relativeMode_) {
+        beat = beat - clipStartBeats_;
+    }
+
     // Snap to grid
     beat = snapBeatToGrid(beat);
+
+    // Ensure beat is not negative (before clip start)
+    beat = juce::jmax(0.0, beat);
 
     // Clamp note number
     noteNumber = juce::jlimit(MIN_NOTE, MAX_NOTE, noteNumber);
@@ -232,6 +239,13 @@ void PianoRollGridComponent::setRelativeMode(bool relative) {
     }
 }
 
+void PianoRollGridComponent::setTimelineLengthBeats(double lengthBeats) {
+    if (timelineLengthBeats_ != lengthBeats) {
+        timelineLengthBeats_ = lengthBeats;
+        repaint();
+    }
+}
+
 int PianoRollGridComponent::noteNumberToY(int noteNumber) const {
     return (MAX_NOTE - noteNumber) * noteHeight_;
 }
@@ -246,7 +260,10 @@ void PianoRollGridComponent::updateNotePosition(NoteComponent* note, double beat
     if (!note)
         return;
 
-    int x = beatToPixel(beat);
+    // In ABS mode, offset by clip start position for display
+    double displayBeat = relativeMode_ ? beat : (clipStartBeats_ + beat);
+
+    int x = beatToPixel(displayBeat);
     int y = noteNumberToY(noteNumber);
     int width = juce::jmax(8, static_cast<int>(length * pixelsPerBeat_));
     int height = noteHeight_ - 2;  // Small gap between notes
