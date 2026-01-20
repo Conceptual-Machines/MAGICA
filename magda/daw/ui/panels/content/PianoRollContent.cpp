@@ -63,6 +63,14 @@ PianoRollContent::PianoRollContent() {
     timeModeButton_->onClick = [this]() { setRelativeTimeMode(timeModeButton_->getToggleState()); };
     addAndMakeVisible(timeModeButton_.get());
 
+    // Create chord row toggle button
+    chordRowToggle_ = std::make_unique<juce::TextButton>("C");
+    chordRowToggle_->setTooltip("Toggle chord detection row visibility");
+    chordRowToggle_->setClickingTogglesState(true);
+    chordRowToggle_->setToggleState(showChordRow_, juce::dontSendNotification);
+    chordRowToggle_->onClick = [this]() { setChordRowVisible(chordRowToggle_->getToggleState()); };
+    addAndMakeVisible(chordRowToggle_.get());
+
     // Create keyboard component
     keyboard_ = std::make_unique<magda::PianoRollKeyboard>();
     keyboard_->setNoteHeight(noteHeight_);
@@ -222,28 +230,40 @@ void PianoRollContent::setupGridCallbacks() {
 void PianoRollContent::paint(juce::Graphics& g) {
     g.fillAll(DarkTheme::getPanelBackgroundColour());
 
-    // Draw chord row at the top
-    auto chordArea = getLocalBounds().removeFromTop(CHORD_ROW_HEIGHT);
-    chordArea.removeFromLeft(KEYBOARD_WIDTH);  // Skip the button area
-    drawChordRow(g, chordArea);
+    // Draw chord row at the top (if visible)
+    if (showChordRow_) {
+        auto chordArea = getLocalBounds().removeFromTop(CHORD_ROW_HEIGHT);
+        chordArea.removeFromLeft(KEYBOARD_WIDTH);  // Skip the button area
+        drawChordRow(g, chordArea);
+    }
 }
 
 void PianoRollContent::resized() {
     auto bounds = getLocalBounds();
 
-    // Chord row at the very top (drawn in paint, just skip space here)
-    auto chordRowArea = bounds.removeFromTop(CHORD_ROW_HEIGHT);
-    (void)chordRowArea;  // Chord row is drawn in paint()
+    if (showChordRow_) {
+        // Chord row at the very top
+        auto chordRowArea = bounds.removeFromTop(CHORD_ROW_HEIGHT);
+        auto chordToggleArea = chordRowArea.removeFromLeft(KEYBOARD_WIDTH);
+        chordRowToggle_->setBounds(chordToggleArea.reduced(4, 2));
 
-    // Header row: toggle button + time ruler (below chord row)
-    auto headerArea = bounds.removeFromTop(RULER_HEIGHT);
+        // Ruler row below chord row
+        auto headerArea = bounds.removeFromTop(RULER_HEIGHT);
+        auto timeModeArea = headerArea.removeFromLeft(KEYBOARD_WIDTH);
+        timeModeButton_->setBounds(timeModeArea.reduced(4, 2));
+        timeRuler_->setBounds(headerArea);
+    } else {
+        // No chord row - just ruler with stacked buttons
+        auto headerArea = bounds.removeFromTop(RULER_HEIGHT);
+        auto buttonArea = headerArea.removeFromLeft(KEYBOARD_WIDTH);
 
-    // Small toggle button in the keyboard area
-    auto buttonArea = headerArea.removeFromLeft(KEYBOARD_WIDTH);
-    timeModeButton_->setBounds(buttonArea.reduced(4, 2));
+        // Stack the two buttons vertically
+        auto topHalf = buttonArea.removeFromTop(buttonArea.getHeight() / 2);
+        chordRowToggle_->setBounds(topHalf.reduced(4, 1));
+        timeModeButton_->setBounds(buttonArea.reduced(4, 1));
 
-    // Time ruler fills the rest of the header
-    timeRuler_->setBounds(headerArea);
+        timeRuler_->setBounds(headerArea);
+    }
 
     // Keyboard on the left
     auto keyboardArea = bounds.removeFromLeft(KEYBOARD_WIDTH);
@@ -259,8 +279,10 @@ void PianoRollContent::resized() {
 
 void PianoRollContent::mouseWheelMove(const juce::MouseEvent& e,
                                       const juce::MouseWheelDetails& wheel) {
-    // Check if mouse is over the chord row area (very top)
-    if (e.y < CHORD_ROW_HEIGHT && e.x >= KEYBOARD_WIDTH) {
+    int headerHeight = getHeaderHeight();
+
+    // Check if mouse is over the chord row area (very top, only when visible)
+    if (showChordRow_ && e.y < CHORD_ROW_HEIGHT && e.x >= KEYBOARD_WIDTH) {
         // Forward horizontal scrolling in chord row area
         if (timeRuler_->onScrollRequested) {
             float delta = (wheel.deltaX != 0.0f) ? wheel.deltaX : wheel.deltaY;
@@ -272,8 +294,9 @@ void PianoRollContent::mouseWheelMove(const juce::MouseEvent& e,
         return;
     }
 
-    // Check if mouse is over the time ruler area (below chord row, above grid)
-    if (e.y >= CHORD_ROW_HEIGHT && e.y < HEADER_HEIGHT && e.x >= KEYBOARD_WIDTH) {
+    // Check if mouse is over the time ruler area
+    int rulerTop = showChordRow_ ? CHORD_ROW_HEIGHT : 0;
+    if (e.y >= rulerTop && e.y < headerHeight && e.x >= KEYBOARD_WIDTH) {
         // Forward to time ruler for horizontal scrolling
         if (timeRuler_->onScrollRequested) {
             float delta = (wheel.deltaX != 0.0f) ? wheel.deltaX : wheel.deltaY;
@@ -286,7 +309,7 @@ void PianoRollContent::mouseWheelMove(const juce::MouseEvent& e,
     }
 
     // Check if mouse is over the keyboard area (left side, below header)
-    if (e.x < KEYBOARD_WIDTH && e.y >= HEADER_HEIGHT) {
+    if (e.x < KEYBOARD_WIDTH && e.y >= headerHeight) {
         // Forward to keyboard for vertical scrolling
         if (keyboard_->onScrollRequested) {
             int scrollAmount = static_cast<int>(-wheel.deltaY * 100.0f);
@@ -334,7 +357,7 @@ void PianoRollContent::mouseWheelMove(const juce::MouseEvent& e,
         int heightDelta = wheel.deltaY > 0 ? 2 : -2;
 
         // Calculate anchor point - which note is under the mouse
-        int mouseYInContent = e.y - HEADER_HEIGHT + viewport_->getViewPositionY();
+        int mouseYInContent = e.y - headerHeight + viewport_->getViewPositionY();
         int anchorNote = MAX_NOTE - (mouseYInContent / noteHeight_);
 
         // Apply zoom
@@ -351,7 +374,7 @@ void PianoRollContent::mouseWheelMove(const juce::MouseEvent& e,
 
             // Adjust scroll position to keep anchor note under mouse
             int newAnchorY = (MAX_NOTE - anchorNote) * noteHeight_;
-            int newScrollY = newAnchorY - (e.y - HEADER_HEIGHT);
+            int newScrollY = newAnchorY - (e.y - headerHeight);
             newScrollY = juce::jmax(0, newScrollY);
             viewport_->setViewPosition(viewport_->getViewPositionX(), newScrollY);
         }
@@ -461,6 +484,15 @@ void PianoRollContent::setRelativeTimeMode(bool relative) {
         // In ABS mode, scroll to show bar 1 at the left
         // In REL mode, reset scroll to show the start of the clip
         viewport_->setViewPosition(0, viewport_->getViewPositionY());
+    }
+}
+
+void PianoRollContent::setChordRowVisible(bool visible) {
+    if (showChordRow_ != visible) {
+        showChordRow_ = visible;
+        chordRowToggle_->setToggleState(visible, juce::dontSendNotification);
+        resized();
+        repaint();
     }
 }
 
@@ -577,13 +609,10 @@ void PianoRollContent::drawChordRow(juce::Graphics& g, juce::Rectangle<int> area
     g.drawLine(static_cast<float>(area.getX()), static_cast<float>(area.getBottom() - 1),
                static_cast<float>(area.getRight()), static_cast<float>(area.getBottom() - 1), 1.0f);
 
-    // Get tempo and calculate beat timing
-    double tempo = 120.0;
+    // Get time signature for beat timing
     int timeSignatureNumerator = 4;
     if (auto* controller = magda::TimelineController::getCurrent()) {
-        const auto& state = controller->getState();
-        tempo = state.tempo.bpm;
-        timeSignatureNumerator = state.tempo.timeSignatureNumerator;
+        timeSignatureNumerator = controller->getState().tempo.timeSignatureNumerator;
     }
 
     // Get scroll offset from viewport

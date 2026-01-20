@@ -60,6 +60,12 @@ class PianoRollContent : public PanelContent, public magda::ClipManagerListener 
         return relativeTimeMode_;
     }
 
+    // Chord row visibility
+    void setChordRowVisible(bool visible);
+    bool isChordRowVisible() const {
+        return showChordRow_;
+    }
+
   private:
     magda::ClipId editingClipId_ = magda::INVALID_CLIP_ID;
 
@@ -86,18 +92,27 @@ class PianoRollContent : public PanelContent, public magda::ClipManagerListener 
     // Timeline mode (absolute vs relative)
     bool relativeTimeMode_ = true;  // Default to relative (1, 2, 3...)
 
+    // Chord row visibility
+    bool showChordRow_ = true;  // Default to visible
+
     // Components
     std::unique_ptr<juce::Viewport> viewport_;
     std::unique_ptr<magda::PianoRollGridComponent> gridComponent_;
     std::unique_ptr<magda::PianoRollKeyboard> keyboard_;
     std::unique_ptr<magda::TimeRuler> timeRuler_;
     std::unique_ptr<juce::TextButton> timeModeButton_;
+    std::unique_ptr<juce::TextButton> chordRowToggle_;
 
     // Grid component management
     void setupGridCallbacks();
     void updateGridSize();
     void updateTimeRuler();
     void drawChordRow(juce::Graphics& g, juce::Rectangle<int> area);
+
+    // Helper to get current header height based on chord row visibility
+    int getHeaderHeight() const {
+        return showChordRow_ ? HEADER_HEIGHT : RULER_HEIGHT;
+    }
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PianoRollContent)
 };
