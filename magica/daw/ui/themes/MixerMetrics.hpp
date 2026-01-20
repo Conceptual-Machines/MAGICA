@@ -10,11 +10,11 @@ namespace magica {
  */
 struct MixerMetrics {
     // === Base values (tune these) ===
-    float thumbHeight = 14.0f;
-    float thumbWidthMultiplier = 3.0f;     // thumbWidth = thumbHeight * this (42px)
-    float trackWidthMultiplier = 0.50f;    // trackWidth = thumbHeight * this (7px)
-    float tickWidthMultiplier = 0.98f;     // tickWidth = thumbHeight * this (~14px)
-    float trackPaddingMultiplier = 0.25f;  // trackPadding = thumbHeight * this (3.5px)
+    float thumbHeight = 16.0f;
+    float thumbWidthMultiplier = 2.70f;    // thumbWidth = thumbHeight * this (~43px)
+    float trackWidthMultiplier = 0.66f;    // trackWidth = thumbHeight * this (~11px)
+    float tickWidthMultiplier = 0.78f;     // tickWidth = thumbHeight * this (~12px)
+    float trackPaddingMultiplier = 0.25f;  // trackPadding = thumbHeight * this (4px)
 
     // === Derived fader values ===
     float thumbWidth() const {
@@ -47,8 +47,8 @@ struct MixerMetrics {
     int channelPadding = 4;
 
     // === Fader dimensions ===
-    int faderWidth = 36;
-    int faderHeightRatio = 60;  // percentage of available height
+    int faderWidth = 40;
+    int faderHeightRatio = 75;  // percentage of available height
 
     // === Meter dimensions ===
     int meterWidth = 12;
@@ -61,7 +61,7 @@ struct MixerMetrics {
     // === Spacing ===
     int controlSpacing = 4;
     int tickToFaderGap = 0;
-    int tickToLabelGap = 1;
+    int tickToLabelGap = 0;
     int tickToMeterGap = 2;
 
     // === Singleton access ===

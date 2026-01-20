@@ -120,6 +120,7 @@ class MixerView : public juce::Component,
 
         // Stored bounds for layout regions
         // Layout: [fader] [leftTicks] [labels] [rightTicks] [meter]
+        juce::Rectangle<int> faderRegion_;  // Entire fader area (for border)
         juce::Rectangle<int> faderArea_;
         juce::Rectangle<int> leftTickArea_;
         juce::Rectangle<int> labelArea_;

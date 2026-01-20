@@ -301,6 +301,15 @@ void MixerView::ChannelStrip::paint(juce::Graphics& g) {
         g.fillRect(selected ? 2 : 0, selected ? 2 : 0, getWidth() - (selected ? 3 : 1), 4);
     }
 
+    // Draw fader region border (top and bottom lines)
+    if (!faderRegion_.isEmpty()) {
+        g.setColour(DarkTheme::getColour(DarkTheme::BORDER));
+        // Top border
+        g.fillRect(faderRegion_.getX(), faderRegion_.getY(), faderRegion_.getWidth(), 1);
+        // Bottom border
+        g.fillRect(faderRegion_.getX(), faderRegion_.getBottom() - 1, faderRegion_.getWidth(), 1);
+    }
+
     // Draw dB labels with ticks
     drawDbLabels(g);
 }
@@ -412,25 +421,31 @@ void MixerView::ChannelStrip::resized() {
     int tickWidth = static_cast<int>(std::ceil(metrics.tickWidth()));
     int gap = metrics.tickToFaderGap;
 
+    // Store the entire fader region for border drawing
+    faderRegion_ = bounds;
+
+    // Add vertical padding inside the border
+    const int borderPadding = 6;
+    bounds.removeFromTop(borderPadding);
+    bounds.removeFromBottom(borderPadding);
+
     auto layoutArea = bounds;
 
     // Fader on left
     faderArea_ = layoutArea.removeFromLeft(faderWidth);
     volumeFader->setBounds(faderArea_);
-    layoutArea.removeFromLeft(gap);
 
     // Meter on right
     meterArea_ = layoutArea.removeFromRight(meterWidthVal);
     levelMeter->setBounds(meterArea_);
-    layoutArea.removeFromRight(gap);
 
-    // Position tick areas adjacent to fader and meter
-    // Left ticks: right edge touches fader area
-    leftTickArea_ = juce::Rectangle<int>(faderArea_.getRight(), layoutArea.getY(), tickWidth,
+    // Position tick areas with gap from fader/meter
+    // Left ticks: positioned after fader + gap
+    leftTickArea_ = juce::Rectangle<int>(faderArea_.getRight() + gap, layoutArea.getY(), tickWidth,
                                          layoutArea.getHeight());
 
-    // Right ticks: left edge touches meter area
-    rightTickArea_ = juce::Rectangle<int>(meterArea_.getX() - tickWidth, layoutArea.getY(),
+    // Right ticks: positioned before meter - gap
+    rightTickArea_ = juce::Rectangle<int>(meterArea_.getX() - tickWidth - gap, layoutArea.getY(),
                                           tickWidth, layoutArea.getHeight());
 
     // Label area between ticks
