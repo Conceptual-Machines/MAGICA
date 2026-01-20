@@ -364,6 +364,34 @@ void MixerView::ChannelStrip::setupControls() {
                                                             recordButton->getToggleState());
         };
         addAndMakeVisible(*recordButton);
+
+        // Audio/MIDI routing indicators (small toggle buttons, not on master)
+        auto setupRoutingButton = [this](std::unique_ptr<juce::TextButton>& btn,
+                                         const juce::String& text, juce::Colour onColour) {
+            btn = std::make_unique<juce::TextButton>(text);
+            btn->setConnectedEdges(juce::Button::ConnectedOnLeft | juce::Button::ConnectedOnRight |
+                                   juce::Button::ConnectedOnTop | juce::Button::ConnectedOnBottom);
+            btn->setColour(juce::TextButton::buttonColourId,
+                           DarkTheme::getColour(DarkTheme::BUTTON_NORMAL));
+            btn->setColour(juce::TextButton::buttonOnColourId, onColour);
+            btn->setColour(juce::TextButton::textColourOffId,
+                           DarkTheme::getColour(DarkTheme::TEXT_SECONDARY));
+            btn->setColour(juce::TextButton::textColourOnId,
+                           DarkTheme::getColour(DarkTheme::TEXT_PRIMARY));
+            btn->setClickingTogglesState(true);
+            btn->setToggleState(true, juce::dontSendNotification);  // Default on
+            addAndMakeVisible(*btn);
+        };
+
+        // Audio routing: green tint when enabled
+        juce::Colour audioColour(0xFF55AA55);
+        setupRoutingButton(audioInButton, "Ai", audioColour);
+        setupRoutingButton(audioOutButton, "Ao", audioColour);
+
+        // MIDI routing: cyan tint when enabled
+        juce::Colour midiColour(0xFF55AAAA);
+        setupRoutingButton(midiInButton, "Mi", midiColour);
+        setupRoutingButton(midiOutButton, "Mo", midiColour);
     }
 }
 
@@ -492,7 +520,7 @@ void MixerView::ChannelStrip::resized() {
     panValueLabel->setBounds(panLabelArea);
     bounds.removeFromTop(metrics.controlSpacing);
 
-    // Buttons at bottom
+    // M/S/R buttons at bottom
     auto buttonArea = bounds.removeFromBottom(metrics.buttonSize);
     int numButtons = isMaster_ ? 2 : 3;
     int buttonWidth = (buttonArea.getWidth() - (numButtons - 1) * 2) / numButtons;
@@ -503,6 +531,27 @@ void MixerView::ChannelStrip::resized() {
     if (recordButton) {
         buttonArea.removeFromLeft(2);
         recordButton->setBounds(buttonArea.removeFromLeft(buttonWidth));
+    }
+
+    // Routing indicators above M/S/R (2 rows: Audio In/Out, MIDI In/Out)
+    if (audioInButton && audioOutButton && midiInButton && midiOutButton) {
+        bounds.removeFromBottom(2);  // Small gap
+
+        // MIDI row (Mi/Mo)
+        auto midiRow = bounds.removeFromBottom(14);
+        int halfWidth = (midiRow.getWidth() - 2) / 2;
+        midiInButton->setBounds(midiRow.removeFromLeft(halfWidth));
+        midiRow.removeFromLeft(2);
+        midiOutButton->setBounds(midiRow.removeFromLeft(halfWidth));
+
+        bounds.removeFromBottom(2);  // Small gap
+
+        // Audio row (Ai/Ao)
+        auto audioRow = bounds.removeFromBottom(14);
+        halfWidth = (audioRow.getWidth() - 2) / 2;
+        audioInButton->setBounds(audioRow.removeFromLeft(halfWidth));
+        audioRow.removeFromLeft(2);
+        audioOutButton->setBounds(audioRow.removeFromLeft(halfWidth));
     }
 
     bounds.removeFromBottom(metrics.controlSpacing);

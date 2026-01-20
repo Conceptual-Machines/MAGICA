@@ -116,6 +116,12 @@ class MixerView : public juce::Component,
         std::unique_ptr<juce::TextButton> soloButton;
         std::unique_ptr<juce::TextButton> recordButton;
 
+        // Routing indicators (small toggle buttons)
+        std::unique_ptr<juce::TextButton> audioInButton;
+        std::unique_ptr<juce::TextButton> audioOutButton;
+        std::unique_ptr<juce::TextButton> midiInButton;
+        std::unique_ptr<juce::TextButton> midiOutButton;
+
         // Meter component
         class LevelMeter;
         std::unique_ptr<LevelMeter> levelMeter;
