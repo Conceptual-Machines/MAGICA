@@ -103,12 +103,20 @@ void RackComponent::resizedContent(juce::Rectangle<int> contentArea) {
     // Calculate chain panel positioning with column-based layout
     juce::Rectangle<int> chainPanelArea;
     if (chainPanel_ && chainPanel_->isVisible()) {
-        // Reserve separator column on the right (unless chain's gain panel uses it)
-        int separatorSpace = chainPanel_->isGainPanelVisible() ? 0 : SEPARATOR_WIDTH;
-        contentArea.removeFromRight(separatorSpace);
+        // Chain panel left edge is always at the same position
+        int chainPanelX = contentArea.getRight() - CHAIN_PANEL_WIDTH - SEPARATOR_WIDTH;
 
-        // Chain panel takes its width from the right
-        chainPanelArea = contentArea.removeFromRight(CHAIN_PANEL_WIDTH);
+        // Width varies: when gain panel visible, it expands into separator space
+        int chainPanelWidth = CHAIN_PANEL_WIDTH;
+        if (chainPanel_->isGainPanelVisible()) {
+            chainPanelWidth += SEPARATOR_WIDTH;
+        }
+
+        chainPanelArea = juce::Rectangle<int>(chainPanelX, contentArea.getY(), chainPanelWidth,
+                                              contentArea.getHeight());
+
+        // Reduce content area for chains list
+        contentArea.setWidth(chainPanelX - contentArea.getX() - 4);
     }
 
     // "Chains:" label row with [+] button next to it
