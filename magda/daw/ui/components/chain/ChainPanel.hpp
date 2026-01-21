@@ -51,7 +51,9 @@ class ChainPanel : public NodeComponent {
     magda::ChainId chainId_;
     bool hasChain_ = false;
 
-    // Devices
+    // Devices viewport
+    juce::Viewport deviceViewport_;
+    juce::Component deviceSlotsContainer_;
     juce::TextButton addDeviceButton_;
     std::vector<std::unique_ptr<DeviceSlotComponent>> deviceSlots_;
 

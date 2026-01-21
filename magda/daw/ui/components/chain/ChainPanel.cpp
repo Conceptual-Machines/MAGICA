@@ -296,6 +296,11 @@ ChainPanel::ChainPanel() {
         }
     };
 
+    // Viewport for device slots (horizontal scrolling)
+    deviceViewport_.setViewedComponent(&deviceSlotsContainer_, false);
+    deviceViewport_.setScrollBarsShown(false, true);  // Horizontal only
+    addAndMakeVisible(deviceViewport_);
+
     // Add device button
     addDeviceButton_.setButtonText("+");
     addDeviceButton_.setColour(juce::TextButton::buttonColourId,
@@ -304,7 +309,7 @@ ChainPanel::ChainPanel() {
                                DarkTheme::getSecondaryTextColour());
     addDeviceButton_.onClick = [this]() { onAddDeviceClicked(); };
     addDeviceButton_.setLookAndFeel(&SmallButtonLookAndFeel::getInstance());
-    addAndMakeVisible(addDeviceButton_);
+    deviceSlotsContainer_.addAndMakeVisible(addDeviceButton_);
 
     setVisible(false);
 }
@@ -338,17 +343,35 @@ void ChainPanel::paintContent(juce::Graphics& g, juce::Rectangle<int> contentAre
 }
 
 void ChainPanel::resizedContent(juce::Rectangle<int> contentArea) {
-    int x = contentArea.getX();
-    int arrowWidth = 16;
+    // Viewport takes the full content area
+    deviceViewport_.setBounds(contentArea);
 
+    int arrowWidth = 16;
+    int x = 0;
+
+    // Calculate total width needed for all slots
     for (auto& slot : deviceSlots_) {
         int slotWidth = slot->getPreferredWidth();
-        slot->setBounds(x, contentArea.getY(), slotWidth, contentArea.getHeight());
+        x += slotWidth + arrowWidth;
+    }
+    // Add space for the add button
+    x += 24;
+
+    // Set container size
+    int containerHeight =
+        contentArea.getHeight() - (deviceViewport_.isHorizontalScrollBarShown() ? 8 : 0);
+    deviceSlotsContainer_.setSize(juce::jmax(x, contentArea.getWidth()), containerHeight);
+
+    // Layout slots inside container
+    x = 0;
+    for (auto& slot : deviceSlots_) {
+        int slotWidth = slot->getPreferredWidth();
+        slot->setBounds(x, 0, slotWidth, containerHeight);
         x += slotWidth + arrowWidth;
     }
 
     // Add device button after all slots
-    addDeviceButton_.setBounds(x, contentArea.getY() + (contentArea.getHeight() - 20) / 2, 20, 20);
+    addDeviceButton_.setBounds(x, (containerHeight - 20) / 2, 20, 20);
 }
 
 void ChainPanel::showChain(magda::TrackId trackId, magda::RackId rackId, magda::ChainId chainId) {
@@ -430,7 +453,7 @@ void ChainPanel::rebuildDeviceSlots() {
             // Create new slot for new device
             auto slot =
                 std::make_unique<DeviceSlotComponent>(*this, trackId_, rackId_, chainId_, device);
-            addAndMakeVisible(*slot);
+            deviceSlotsContainer_.addAndMakeVisible(*slot);
             newSlots.push_back(std::move(slot));
         }
     }

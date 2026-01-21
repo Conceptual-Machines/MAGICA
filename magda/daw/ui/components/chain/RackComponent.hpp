@@ -69,6 +69,10 @@ class RackComponent : public NodeComponent {
     // Content area
     juce::Label chainsLabel_;  // "Chains:" label
 
+    // Viewport for chain rows
+    juce::Viewport chainViewport_;
+    juce::Component chainRowsContainer_;
+
     // Chain rows
     std::vector<std::unique_ptr<ChainRowComponent>> chainRows_;
 

@@ -81,6 +81,11 @@ RackComponent::RackComponent(magda::TrackId trackId, const magda::RackInfo& rack
     addChainButton_.setLookAndFeel(&SmallButtonLookAndFeel::getInstance());
     addAndMakeVisible(addChainButton_);
 
+    // Viewport for chain rows
+    chainViewport_.setViewedComponent(&chainRowsContainer_, false);
+    chainViewport_.setScrollBarsShown(true, false);  // Vertical only
+    addAndMakeVisible(chainViewport_);
+
     // Create chain panel (initially hidden)
     chainPanel_ = std::make_unique<ChainPanel>();
     chainPanel_->onClose = [this]() { hideChainPanel(); };
@@ -113,13 +118,24 @@ void RackComponent::resizedContent(juce::Rectangle<int> contentArea) {
     chainsLabelArea.removeFromLeft(2);
     addChainButton_.setBounds(chainsLabelArea.removeFromLeft(16));
 
-    // Chain rows (below separator)
+    // Chain rows viewport (below separator)
     contentArea.removeFromTop(2);  // Small gap after separator
-    int y = contentArea.getY();
+    chainViewport_.setBounds(contentArea);
 
+    // Calculate total height for chain rows container
+    int totalHeight = 0;
+    for (const auto& row : chainRows_) {
+        totalHeight += row->getPreferredHeight() + 2;
+    }
+    totalHeight = juce::jmax(totalHeight, contentArea.getHeight());
+
+    // Set container size and layout rows inside it
+    chainRowsContainer_.setSize(
+        contentArea.getWidth() - (chainViewport_.isVerticalScrollBarShown() ? 8 : 0), totalHeight);
+    int y = 0;
     for (auto& row : chainRows_) {
         int rowHeight = row->getPreferredHeight();
-        row->setBounds(contentArea.getX(), y, contentArea.getWidth(), rowHeight);
+        row->setBounds(0, y, chainRowsContainer_.getWidth(), rowHeight);
         y += rowHeight + 2;
     }
 
@@ -209,7 +225,7 @@ void RackComponent::rebuildChainRows() {
             row->onSelected = [this](ChainRowComponent& selectedRow) {
                 onChainRowSelected(selectedRow);
             };
-            addAndMakeVisible(*row);
+            chainRowsContainer_.addAndMakeVisible(*row);
             newRows.push_back(std::move(row));
         }
     }
