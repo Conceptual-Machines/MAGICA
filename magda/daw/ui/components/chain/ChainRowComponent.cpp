@@ -36,6 +36,36 @@ ChainRowComponent::ChainRowComponent(RackComponent& owner, magda::TrackId trackI
     };
     addAndMakeVisible(panSlider_);
 
+    // MOD button (modulators toggle)
+    modButton_.setButtonText("M");
+    modButton_.setColour(juce::TextButton::buttonColourId,
+                         DarkTheme::getColour(DarkTheme::SURFACE));
+    modButton_.setColour(juce::TextButton::buttonOnColourId,
+                         DarkTheme::getColour(DarkTheme::ACCENT_PURPLE));
+    modButton_.setColour(juce::TextButton::textColourOffId, DarkTheme::getSecondaryTextColour());
+    modButton_.setColour(juce::TextButton::textColourOnId, DarkTheme::getTextColour());
+    modButton_.setClickingTogglesState(true);
+    modButton_.onClick = [this]() {
+        // TODO: Toggle mod panel visibility for this chain
+    };
+    modButton_.setLookAndFeel(&SmallButtonLookAndFeel::getInstance());
+    addAndMakeVisible(modButton_);
+
+    // MACRO button (macros toggle)
+    macroButton_.setButtonText("P");
+    macroButton_.setColour(juce::TextButton::buttonColourId,
+                           DarkTheme::getColour(DarkTheme::SURFACE));
+    macroButton_.setColour(juce::TextButton::buttonOnColourId,
+                           DarkTheme::getColour(DarkTheme::ACCENT_BLUE));
+    macroButton_.setColour(juce::TextButton::textColourOffId, DarkTheme::getSecondaryTextColour());
+    macroButton_.setColour(juce::TextButton::textColourOnId, DarkTheme::getTextColour());
+    macroButton_.setClickingTogglesState(true);
+    macroButton_.onClick = [this]() {
+        // TODO: Toggle macro panel visibility for this chain
+    };
+    macroButton_.setLookAndFeel(&SmallButtonLookAndFeel::getInstance());
+    addAndMakeVisible(macroButton_);
+
     // Mute button
     muteButton_.setButtonText("M");
     muteButton_.setColour(juce::TextButton::buttonColourId,
@@ -133,7 +163,7 @@ void ChainRowComponent::setSelected(bool selected) {
 void ChainRowComponent::resized() {
     auto bounds = getLocalBounds().reduced(3, 2);
 
-    // Layout: [Name] [Gain] [Pan] [M] [S] [On] [X]
+    // Layout: [Name] [Gain] [Pan] [MOD] [MACRO] [M] [S] [On] [X]
     nameLabel_.setBounds(bounds.removeFromLeft(50));
     bounds.removeFromLeft(4);
 
@@ -142,6 +172,12 @@ void ChainRowComponent::resized() {
 
     panSlider_.setBounds(bounds.removeFromLeft(35));
     bounds.removeFromLeft(4);
+
+    modButton_.setBounds(bounds.removeFromLeft(16));
+    bounds.removeFromLeft(2);
+
+    macroButton_.setBounds(bounds.removeFromLeft(16));
+    bounds.removeFromLeft(2);
 
     muteButton_.setBounds(bounds.removeFromLeft(16));
     bounds.removeFromLeft(2);

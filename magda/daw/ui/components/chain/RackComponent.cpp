@@ -24,15 +24,45 @@ RackComponent::RackComponent(magda::TrackId trackId, const magda::RackInfo& rack
 
     onLayoutChanged = [this]() { childLayoutChanged(); };
 
-    // Hide macro buttons when param panel is hidden
-    onParamPanelToggled = [this](bool visible) {
-        if (!visible) {
-            for (auto& btn : macroButtons_) {
-                if (btn)
-                    btn->setVisible(false);
-            }
-        }
+    // === HEADER EXTRA CONTROLS ===
+
+    // MOD button (modulators toggle)
+    modButton_.setButtonText("MOD");
+    modButton_.setColour(juce::TextButton::buttonColourId,
+                         DarkTheme::getColour(DarkTheme::SURFACE));
+    modButton_.setColour(juce::TextButton::buttonOnColourId,
+                         DarkTheme::getColour(DarkTheme::ACCENT_PURPLE));
+    modButton_.setColour(juce::TextButton::textColourOffId, DarkTheme::getSecondaryTextColour());
+    modButton_.setColour(juce::TextButton::textColourOnId, DarkTheme::getTextColour());
+    modButton_.setClickingTogglesState(true);
+    modButton_.onClick = [this]() {
+        modPanelVisible_ = modButton_.getToggleState();
+        if (onModPanelToggled)
+            onModPanelToggled(modPanelVisible_);
+        if (onLayoutChanged)
+            onLayoutChanged();
     };
+    modButton_.setLookAndFeel(&SmallButtonLookAndFeel::getInstance());
+    addAndMakeVisible(modButton_);
+
+    // MACRO button (macros toggle)
+    macroButton_.setButtonText("MACRO");
+    macroButton_.setColour(juce::TextButton::buttonColourId,
+                           DarkTheme::getColour(DarkTheme::SURFACE));
+    macroButton_.setColour(juce::TextButton::buttonOnColourId,
+                           DarkTheme::getColour(DarkTheme::ACCENT_BLUE));
+    macroButton_.setColour(juce::TextButton::textColourOffId, DarkTheme::getSecondaryTextColour());
+    macroButton_.setColour(juce::TextButton::textColourOnId, DarkTheme::getTextColour());
+    macroButton_.setClickingTogglesState(true);
+    macroButton_.onClick = [this]() {
+        paramPanelVisible_ = macroButton_.getToggleState();
+        if (onParamPanelToggled)
+            onParamPanelToggled(paramPanelVisible_);
+        if (onLayoutChanged)
+            onLayoutChanged();
+    };
+    macroButton_.setLookAndFeel(&SmallButtonLookAndFeel::getInstance());
+    addAndMakeVisible(macroButton_);
 
     // === CONTENT AREA SETUP ===
 
@@ -57,30 +87,6 @@ RackComponent::RackComponent(magda::TrackId trackId, const magda::RackInfo& rack
     chainPanel_ = std::make_unique<ChainPanel>();
     chainPanel_->onClose = [this]() { hideChainPanel(); };
     addChildComponent(*chainPanel_);
-
-    // === MACRO BUTTONS (for param panel) ===
-    for (int i = 0; i < 4; ++i) {
-        macroButtons_[i] = std::make_unique<juce::TextButton>("+");
-        macroButtons_[i]->setColour(juce::TextButton::buttonColourId,
-                                    DarkTheme::getColour(DarkTheme::SURFACE));
-        macroButtons_[i]->setColour(juce::TextButton::textColourOffId,
-                                    DarkTheme::getSecondaryTextColour());
-        macroButtons_[i]->onClick = [this, i]() {
-            juce::PopupMenu menu;
-            menu.addSectionHeader("Create Macro " + juce::String(i + 1));
-            menu.addItem(1, "Link to parameter...");
-            menu.addItem(2, "Create empty macro");
-            menu.showMenuAsync(juce::PopupMenu::Options(), [this, i](int result) {
-                if (result == 1) {
-                    // TODO: Open parameter browser to link
-                    macroButtons_[i]->setButtonText("M" + juce::String(i + 1));
-                } else if (result == 2) {
-                    macroButtons_[i]->setButtonText("M" + juce::String(i + 1));
-                }
-            });
-        };
-        addChildComponent(*macroButtons_[i]);
-    }
 
     // Build chain rows
     updateFromRack(rack);
@@ -125,17 +131,20 @@ void RackComponent::resizedContent(juce::Rectangle<int> contentArea) {
     }
 }
 
-void RackComponent::resizedHeaderExtra(juce::Rectangle<int>& /*headerArea*/) {
-    // No extra header buttons for rack - the add chain button is in content area
+void RackComponent::resizedHeaderExtra(juce::Rectangle<int>& headerArea) {
+    // MOD and MACRO buttons in header (before name)
+    modButton_.setBounds(headerArea.removeFromLeft(30));
+    headerArea.removeFromLeft(4);
+    macroButton_.setBounds(headerArea.removeFromLeft(42));
+    headerArea.removeFromLeft(4);
 }
 
 int RackComponent::getPreferredHeight() const {
-    int height = HEADER_HEIGHT + CHAINS_LABEL_HEIGHT + FOOTER_HEIGHT + 8;
+    int height = HEADER_HEIGHT + CHAINS_LABEL_HEIGHT + 8;
     for (const auto& row : chainRows_) {
         height += row->getPreferredHeight() + 2;
     }
-    return juce::jmax(height,
-                      HEADER_HEIGHT + CHAINS_LABEL_HEIGHT + FOOTER_HEIGHT + MIN_CONTENT_HEIGHT);
+    return juce::jmax(height, HEADER_HEIGHT + CHAINS_LABEL_HEIGHT + MIN_CONTENT_HEIGHT);
 }
 
 int RackComponent::getPreferredWidth() const {
@@ -276,33 +285,6 @@ void RackComponent::hideChainPanel() {
 
 bool RackComponent::isChainPanelVisible() const {
     return chainPanel_ && chainPanel_->isVisible();
-}
-
-void RackComponent::paintParamPanel(juce::Graphics& g, juce::Rectangle<int> panelArea) {
-    // Override: draw "MACRO" label instead of "PRM"
-    g.setColour(DarkTheme::getColour(DarkTheme::ACCENT_PURPLE));
-    g.setFont(FontManager::getInstance().getUIFont(8.0f));
-    g.drawText("MACRO", panelArea.removeFromTop(16), juce::Justification::centred);
-}
-
-void RackComponent::resizedParamPanel(juce::Rectangle<int> panelArea) {
-    panelArea.removeFromTop(16);  // Skip label
-    panelArea = panelArea.reduced(2);
-
-    // 2x2 grid of macro buttons
-    int btnSize = (panelArea.getWidth() - 2) / 2;
-    int row = 0, col = 0;
-    for (int i = 0; i < 4; ++i) {
-        int x = panelArea.getX() + col * (btnSize + 2);
-        int y = panelArea.getY() + row * (btnSize + 2);
-        macroButtons_[i]->setBounds(x, y, btnSize, btnSize);
-        macroButtons_[i]->setVisible(true);
-        col++;
-        if (col >= 2) {
-            col = 0;
-            row++;
-        }
-    }
 }
 
 }  // namespace magda::daw::ui

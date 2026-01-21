@@ -48,9 +48,10 @@ class RackComponent : public NodeComponent {
     void resizedContent(juce::Rectangle<int> contentArea) override;
     void resizedHeaderExtra(juce::Rectangle<int>& headerArea) override;
 
-    // Override param panel for macro controls (instead of device params)
-    void paintParamPanel(juce::Graphics& g, juce::Rectangle<int> panelArea) override;
-    void resizedParamPanel(juce::Rectangle<int> panelArea) override;
+    // Hide footer - MOD/MACRO buttons are in header instead
+    int getFooterHeight() const override {
+        return 0;
+    }
 
   private:
     void onChainRowSelected(ChainRowComponent& row);
@@ -60,6 +61,8 @@ class RackComponent : public NodeComponent {
     magda::RackId rackId_;
 
     // Header extra controls
+    juce::TextButton modButton_;    // Modulators toggle
+    juce::TextButton macroButton_;  // Macros toggle
     juce::TextButton addChainButton_;
 
     // Content area
@@ -71,9 +74,6 @@ class RackComponent : public NodeComponent {
     // Chain panel (shown within rack when chain is selected)
     std::unique_ptr<ChainPanel> chainPanel_;
     magda::ChainId selectedChainId_ = magda::INVALID_CHAIN_ID;
-
-    // Macro buttons for param panel (4 macro slots in 2x2 grid)
-    std::unique_ptr<juce::TextButton> macroButtons_[4];
 
     static constexpr int CHAINS_LABEL_HEIGHT = 18;
     static constexpr int MIN_CONTENT_HEIGHT = 30;

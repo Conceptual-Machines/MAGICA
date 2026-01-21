@@ -62,10 +62,12 @@ class ChainRowComponent : public juce::Component {
     magda::ChainId chainId_;
     bool selected_ = false;
 
-    // Single row controls: Name | Gain | Pan | M | S | On | X
+    // Single row controls: Name | Gain | Pan | MOD | MACRO | M | S | On | X
     juce::Label nameLabel_;
     TextSlider gainSlider_{TextSlider::Format::Decibels};
     TextSlider panSlider_{TextSlider::Format::Pan};
+    juce::TextButton modButton_;    // Modulators toggle
+    juce::TextButton macroButton_;  // Macros toggle
     juce::TextButton muteButton_;
     juce::TextButton soloButton_;
     juce::TextButton onButton_;      // Bypass/enable toggle

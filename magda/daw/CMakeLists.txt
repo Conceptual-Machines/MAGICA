@@ -46,6 +46,8 @@ juce_add_binary_data(MagdaAssets
     ../../assets/icons/zoom_in.svg
     ../../assets/icons/zoom_out.svg
     ../../assets/icons/Chords2.svg
+    ../../assets/icons/link.svg
+    ../../assets/icons/sine-wave.svg
     # Mouse cursors
     ../../assets/icons/mouse_zoom/search.svg
     ../../assets/icons/mouse_zoom/zoom_in.svg

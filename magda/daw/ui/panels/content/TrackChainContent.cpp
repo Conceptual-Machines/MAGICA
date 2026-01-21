@@ -312,14 +312,18 @@ class TrackChainContent::DeviceSlotComponent : public NodeComponent {
         uiButton_.setLookAndFeel(&SmallButtonLookAndFeel::getInstance());
         addAndMakeVisible(uiButton_);
 
-        // Bypass/On button
-        onButton_.setButtonText("on");
+        // Bypass/On button (power symbol)
+        onButton_.setButtonText(juce::String::fromUTF8("\xe2\x8f\xbb"));  // ⏻ power symbol
+        // OFF state (not bypassed = active) = darker green background
         onButton_.setColour(juce::TextButton::buttonColourId,
-                            DarkTheme::getColour(DarkTheme::ACCENT_GREEN));
+                            DarkTheme::getColour(DarkTheme::ACCENT_GREEN).darker(0.3f));
+        // ON state (bypassed) = reddish background
         onButton_.setColour(juce::TextButton::buttonOnColourId,
-                            DarkTheme::getColour(DarkTheme::SURFACE));
-        onButton_.setColour(juce::TextButton::textColourOffId, DarkTheme::getTextColour());
-        onButton_.setColour(juce::TextButton::textColourOnId, DarkTheme::getSecondaryTextColour());
+                            DarkTheme::getColour(DarkTheme::STATUS_ERROR));
+        onButton_.setColour(juce::TextButton::textColourOffId,
+                            DarkTheme::getColour(DarkTheme::BACKGROUND));
+        onButton_.setColour(juce::TextButton::textColourOnId,
+                            DarkTheme::getColour(DarkTheme::BACKGROUND));
         onButton_.setClickingTogglesState(true);
         onButton_.setToggleState(device.bypassed, juce::dontSendNotification);
         onButton_.onClick = [this]() {
@@ -428,8 +432,8 @@ class TrackChainContent::DeviceSlotComponent : public NodeComponent {
         modButton_.setBounds(headerArea.removeFromLeft(BUTTON_SIZE));
         headerArea.removeFromLeft(4);
 
-        // On button on the right (before delete which is handled by parent)
-        onButton_.setBounds(headerArea.removeFromRight(BUTTON_SIZE + 6));
+        // Power button on the right (before delete which is handled by parent)
+        onButton_.setBounds(headerArea.removeFromRight(BUTTON_SIZE));
         headerArea.removeFromRight(4);
 
         // UI button
