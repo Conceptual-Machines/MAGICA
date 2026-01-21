@@ -373,8 +373,6 @@ class TrackChainContent::DeviceSlotComponent : public NodeComponent {
 // dB conversion helpers
 namespace {
 constexpr float MIN_DB = -60.0f;
-constexpr float MAX_DB = 6.0f;
-constexpr float UNITY_DB = 0.0f;
 
 float gainToDb(float gain) {
     if (gain <= 0.0f)
@@ -386,32 +384,6 @@ float dbToGain(float db) {
     if (db <= MIN_DB)
         return 0.0f;
     return std::pow(10.0f, db / 20.0f);
-}
-
-float dbToFaderPos(float db) {
-    if (db <= MIN_DB)
-        return 0.0f;
-    if (db >= MAX_DB)
-        return 1.0f;
-
-    if (db < UNITY_DB) {
-        return 0.75f * (db - MIN_DB) / (UNITY_DB - MIN_DB);
-    } else {
-        return 0.75f + 0.25f * (db - UNITY_DB) / (MAX_DB - UNITY_DB);
-    }
-}
-
-float faderPosToDb(float pos) {
-    if (pos <= 0.0f)
-        return MIN_DB;
-    if (pos >= 1.0f)
-        return MAX_DB;
-
-    if (pos < 0.75f) {
-        return MIN_DB + (pos / 0.75f) * (UNITY_DB - MIN_DB);
-    } else {
-        return UNITY_DB + ((pos - 0.75f) / 0.25f) * (MAX_DB - UNITY_DB);
-    }
 }
 }  // namespace
 
@@ -481,43 +453,16 @@ TrackChainContent::TrackChainContent() {
     trackNameLabel_.setJustificationType(juce::Justification::centredRight);
     addChildComponent(trackNameLabel_);
 
-    // Volume slider - horizontal, using dB scale with unity at 0.75 position
-    volumeSlider_.setSliderStyle(juce::Slider::LinearHorizontal);
-    volumeSlider_.setTextBoxStyle(juce::Slider::NoTextBox, false, 0, 0);
-    volumeSlider_.setRange(0.0, 1.0, 0.001);
-    volumeSlider_.setValue(0.75);  // Unity gain (0 dB)
-    volumeSlider_.setSliderSnapsToMousePosition(false);
-    volumeSlider_.setColour(juce::Slider::trackColourId,
-                            DarkTheme::getColour(DarkTheme::ACCENT_BLUE));
-    volumeSlider_.setColour(juce::Slider::backgroundColourId,
-                            DarkTheme::getColour(DarkTheme::SURFACE));
-    volumeSlider_.setColour(juce::Slider::thumbColourId,
-                            DarkTheme::getColour(DarkTheme::TEXT_PRIMARY));
-    volumeSlider_.onValueChange = [this]() {
+    // Volume text slider (dB format)
+    volumeSlider_.setRange(-60.0, 6.0, 0.1);
+    volumeSlider_.setValue(0.0, juce::dontSendNotification);  // Unity gain (0 dB)
+    volumeSlider_.onValueChanged = [this](double db) {
         if (selectedTrackId_ != magda::INVALID_TRACK_ID) {
-            float faderPos = static_cast<float>(volumeSlider_.getValue());
-            float db = faderPosToDb(faderPos);
-            float gain = dbToGain(db);
+            float gain = dbToGain(static_cast<float>(db));
             magda::TrackManager::getInstance().setTrackVolume(selectedTrackId_, gain);
-            // Update volume label
-            juce::String dbText;
-            if (db <= MIN_DB) {
-                dbText = "-inf";
-            } else {
-                dbText = juce::String(db, 1) + " dB";
-            }
-            volumeValueLabel_.setText(dbText, juce::dontSendNotification);
         }
     };
     addChildComponent(volumeSlider_);
-
-    // Volume value label
-    volumeValueLabel_.setText("0.0 dB", juce::dontSendNotification);
-    volumeValueLabel_.setJustificationType(juce::Justification::centred);
-    volumeValueLabel_.setColour(juce::Label::textColourId,
-                                DarkTheme::getColour(DarkTheme::TEXT_SECONDARY));
-    volumeValueLabel_.setFont(FontManager::getInstance().getUIFont(9.0f));
-    addChildComponent(volumeValueLabel_);
 
     // Chain bypass button (on/off for entire track chain)
     chainBypassButton_.setButtonText("ON");
@@ -671,9 +616,7 @@ void TrackChainContent::resized() {
         // RIGHT SIDE - Track info (from right to left)
         chainBypassButton_.setBounds(headerArea.removeFromRight(36));
         headerArea.removeFromRight(8);
-        volumeSlider_.setBounds(headerArea.removeFromRight(80));
-        headerArea.removeFromRight(4);
-        volumeValueLabel_.setBounds(headerArea.removeFromRight(50));
+        volumeSlider_.setBounds(headerArea.removeFromRight(50));
         headerArea.removeFromRight(8);
         trackNameLabel_.setBounds(headerArea);  // Name takes remaining space
 
@@ -759,19 +702,9 @@ void TrackChainContent::updateFromSelectedTrack() {
         if (track) {
             trackNameLabel_.setText(track->name, juce::dontSendNotification);
 
-            // Convert linear gain to fader position for volume slider
+            // Convert linear gain to dB for volume slider
             float db = gainToDb(track->volume);
-            float faderPos = dbToFaderPos(db);
-            volumeSlider_.setValue(faderPos, juce::dontSendNotification);
-
-            // Update volume label
-            juce::String dbText;
-            if (db <= MIN_DB) {
-                dbText = "-inf";
-            } else {
-                dbText = juce::String(db, 1) + " dB";
-            }
-            volumeValueLabel_.setText(dbText, juce::dontSendNotification);
+            volumeSlider_.setValue(db, juce::dontSendNotification);
 
             // Reset chain bypass button state
             chainBypassButton_.setToggleState(false, juce::dontSendNotification);
@@ -801,7 +734,6 @@ void TrackChainContent::showHeader(bool show) {
     // Right side - track info
     trackNameLabel_.setVisible(show);
     volumeSlider_.setVisible(show);
-    volumeValueLabel_.setVisible(show);
     chainBypassButton_.setVisible(show);
 }
 

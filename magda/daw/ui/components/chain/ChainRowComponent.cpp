@@ -18,25 +18,22 @@ ChainRowComponent::ChainRowComponent(RackComponent& owner, magda::TrackId trackI
     nameLabel_.setInterceptsMouseClicks(false, false);
     addAndMakeVisible(nameLabel_);
 
-    // Gain slider
-    gainSlider_.setSliderStyle(juce::Slider::LinearHorizontal);
-    gainSlider_.setTextBoxStyle(juce::Slider::NoTextBox, false, 0, 0);
-    gainSlider_.setRange(0.0, 1.0, 0.01);
-    gainSlider_.setValue(chain.volume);
-    gainSlider_.setColour(juce::Slider::trackColourId,
-                          DarkTheme::getColour(DarkTheme::ACCENT_BLUE));
-    gainSlider_.setColour(juce::Slider::backgroundColourId,
-                          DarkTheme::getColour(DarkTheme::SURFACE));
+    // Gain text slider (dB format)
+    gainSlider_.setRange(-60.0, 6.0, 0.1);
+    gainSlider_.setValue(chain.volume, juce::dontSendNotification);
+    gainSlider_.onValueChanged = [this](double value) {
+        magda::TrackManager::getInstance().setChainVolume(trackId_, rackId_, chainId_,
+                                                          static_cast<float>(value));
+    };
     addAndMakeVisible(gainSlider_);
 
-    // Pan slider
-    panSlider_.setSliderStyle(juce::Slider::LinearHorizontal);
-    panSlider_.setTextBoxStyle(juce::Slider::NoTextBox, false, 0, 0);
+    // Pan text slider (L/C/R format)
     panSlider_.setRange(-1.0, 1.0, 0.01);
-    panSlider_.setValue(chain.pan);
-    panSlider_.setColour(juce::Slider::trackColourId, DarkTheme::getColour(DarkTheme::ACCENT_BLUE));
-    panSlider_.setColour(juce::Slider::backgroundColourId,
-                         DarkTheme::getColour(DarkTheme::SURFACE));
+    panSlider_.setValue(chain.pan, juce::dontSendNotification);
+    panSlider_.onValueChanged = [this](double value) {
+        magda::TrackManager::getInstance().setChainPan(trackId_, rackId_, chainId_,
+                                                       static_cast<float>(value));
+    };
     addAndMakeVisible(panSlider_);
 
     // Mute button

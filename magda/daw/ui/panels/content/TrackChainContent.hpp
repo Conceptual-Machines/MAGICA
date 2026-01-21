@@ -3,6 +3,7 @@
 #include "../../themes/MixerLookAndFeel.hpp"
 #include "PanelContent.hpp"
 #include "core/TrackManager.hpp"
+#include "ui/components/common/TextSlider.hpp"
 
 namespace magda::daw::ui {
 
@@ -49,9 +50,8 @@ class TrackChainContent : public PanelContent, public magda::TrackManagerListene
 
     // Header bar controls - RIGHT side (track info)
     juce::Label trackNameLabel_;
-    juce::Slider volumeSlider_;  // Horizontal volume slider
-    juce::Label volumeValueLabel_;
-    juce::TextButton chainBypassButton_;  // On/off - bypasses entire track chain
+    TextSlider volumeSlider_{TextSlider::Format::Decibels};  // Track volume (dB)
+    juce::TextButton chainBypassButton_;                     // On/off - bypasses entire track chain
 
     // Global mods panel visibility
     bool globalModsVisible_ = false;

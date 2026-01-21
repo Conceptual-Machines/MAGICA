@@ -6,6 +6,7 @@
 
 #include "core/RackInfo.hpp"
 #include "core/TrackManager.hpp"
+#include "ui/components/common/TextSlider.hpp"
 
 namespace magda::daw::ui {
 
@@ -62,8 +63,8 @@ class ChainRowComponent : public juce::Component {
 
     // Single row controls: Name | Gain | Pan | M | S | On
     juce::Label nameLabel_;
-    juce::Slider gainSlider_;
-    juce::Slider panSlider_;
+    TextSlider gainSlider_{TextSlider::Format::Decibels};
+    TextSlider panSlider_{TextSlider::Format::Pan};
     juce::TextButton muteButton_;
     juce::TextButton soloButton_;
     juce::TextButton onButton_;  // Bypass/enable toggle
