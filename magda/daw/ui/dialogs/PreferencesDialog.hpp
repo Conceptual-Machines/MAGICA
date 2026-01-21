@@ -41,6 +41,9 @@ class PreferencesDialog : public juce::Component {
     juce::ToggleButton showRightPanelToggle;
     juce::ToggleButton showBottomPanelToggle;
 
+    // Layout section
+    juce::ToggleButton leftHandedLayoutToggle;
+
     // Keyboard shortcuts section (read-only display for now)
     juce::Label shortcutsHeader;
     juce::Label addTrackShortcut;
@@ -61,6 +64,7 @@ class PreferencesDialog : public juce::Component {
     juce::Label timelineHeader;
     juce::Label transportHeader;
     juce::Label panelsHeader;
+    juce::Label layoutHeader;
 
     // Buttons
     juce::TextButton okButton;

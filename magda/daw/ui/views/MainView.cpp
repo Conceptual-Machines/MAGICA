@@ -6,6 +6,7 @@
 #include <iostream>
 #include <set>
 
+#include "../components/common/SideColumn.hpp"
 #include "../themes/DarkTheme.hpp"
 #include "../themes/FontManager.hpp"
 #include "Config.hpp"
@@ -432,13 +433,19 @@ void MainView::resized() {
     static constexpr int ZOOM_SCROLLBAR_SIZE = 20;
     auto& layout = LayoutConfig::getInstance();
 
-    // Vertical zoom scroll bar on the right
-    auto verticalScrollBarArea = bounds.removeFromRight(ZOOM_SCROLLBAR_SIZE);
+    // Side columns: headers default to left, zoom scrollbar default to right
+    // When swapped: headers on right, zoom scrollbar on left
+    bool swapped = Config::getInstance().getScrollbarOnLeft();
+    SideColumn headerColumn(!swapped);  // left by default
+    SideColumn zoomColumn(swapped);     // right by default (opposite of header)
+
+    // Vertical zoom scroll bar
+    auto verticalScrollBarArea = zoomColumn.removeFrom(bounds, ZOOM_SCROLLBAR_SIZE);
 
     // Horizontal zoom scroll bar at the bottom
     auto horizontalScrollBarArea = bounds.removeFromBottom(ZOOM_SCROLLBAR_SIZE);
-    // Leave space in bottom-left corner for track headers
-    horizontalScrollBarArea.removeFromLeft(trackHeaderWidth + layout.componentSpacing);
+    // Leave space in corner for track headers
+    headerColumn.removeSpacing(horizontalScrollBarArea, trackHeaderWidth + layout.componentSpacing);
     horizontalZoomScrollBar->setBounds(horizontalScrollBarArea);
 
     // Fixed master track row at the bottom (above horizontal scroll bar) - only if visible
@@ -447,10 +454,9 @@ void MainView::resized() {
 
     if (masterVisible_) {
         auto masterRowArea = bounds.removeFromBottom(masterStripHeight);
-        // Master header on the left (same width as track headers)
-        masterHeaderPanel->setBounds(masterRowArea.removeFromLeft(trackHeaderWidth));
-        // Padding between header and content
-        masterRowArea.removeFromLeft(layout.componentSpacing);
+        // Master header in the header column
+        masterHeaderPanel->setBounds(headerColumn.removeFrom(masterRowArea, trackHeaderWidth));
+        headerColumn.removeSpacing(masterRowArea, layout.componentSpacing);
         // Master content takes the rest
         masterContentPanel->setBounds(masterRowArea);
 
@@ -467,25 +473,25 @@ void MainView::resized() {
     // Timeline viewport at the top - offset by track header width
     auto timelineArea = bounds.removeFromTop(getTimelineHeight());
 
-    // Position buttons in the top-left corner above track headers
-    auto buttonArea = timelineArea.removeFromLeft(trackHeaderWidth);
+    // Position buttons in corner above track headers
+    auto buttonArea = headerColumn.removeFrom(timelineArea, trackHeaderWidth);
     auto topRow = buttonArea.removeFromTop(35);
 
-    // Lock button on the left
+    // Lock button
     arrangementLockButton->setBounds(topRow.removeFromLeft(35).reduced(3));
 
     // Add padding space for the resize handle
-    timelineArea.removeFromLeft(layout.componentSpacing);  // Remove padding from timeline area too
+    headerColumn.removeSpacing(timelineArea, layout.componentSpacing);
 
     // Timeline takes the remaining width
     timelineViewport->setBounds(timelineArea);
 
-    // Track headers viewport on the left (variable width)
-    auto trackHeadersArea = bounds.removeFromLeft(trackHeaderWidth);
+    // Track headers viewport in the header column
+    auto trackHeadersArea = headerColumn.removeFrom(bounds, trackHeaderWidth);
     trackHeadersViewport->setBounds(trackHeadersArea);
 
     // Remove padding space between headers and content
-    bounds.removeFromLeft(layout.componentSpacing);
+    headerColumn.removeSpacing(bounds, layout.componentSpacing);
 
     // Track content viewport gets the remaining space
     trackContentViewport->setBounds(bounds);

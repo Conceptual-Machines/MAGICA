@@ -645,6 +645,14 @@ void MainWindow::setupMenuCallbacks() {
 
     callbacks.onToggleFullscreen = [this]() { setFullScreen(!isFullScreen()); };
 
+    callbacks.onToggleScrollbarPosition = [this]() {
+        auto& config = Config::getInstance();
+        config.setScrollbarOnLeft(!config.getScrollbarOnLeft());
+        if (mainComponent && mainComponent->mainView) {
+            mainComponent->mainView->resized();
+        }
+    };
+
     // Transport menu callbacks
     callbacks.onPlay = [this]() {
         // TODO: Implement play/pause

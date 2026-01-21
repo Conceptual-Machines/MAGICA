@@ -26,6 +26,7 @@ void Config::saveToFile(const std::string& filename) {
     file << "zoomOutSensitivity=" << zoomOutSensitivity << std::endl;
     file << "zoomInSensitivityShift=" << zoomInSensitivityShift << std::endl;
     file << "zoomOutSensitivityShift=" << zoomOutSensitivityShift << std::endl;
+    file << "scrollbarOnLeft=" << (scrollbarOnLeft ? 1 : 0) << std::endl;
 
     file.close();
     std::cout << "Config saved to: " << filename << std::endl;
@@ -66,6 +67,8 @@ void Config::loadFromFile(const std::string& filename) {
                 zoomInSensitivityShift = numValue;
             } else if (key == "zoomOutSensitivityShift") {
                 zoomOutSensitivityShift = numValue;
+            } else if (key == "scrollbarOnLeft") {
+                scrollbarOnLeft = (numValue != 0);
             }
         } catch (const std::exception& e) {
             std::cerr << "Error parsing config value: " << key << "=" << value << std::endl;

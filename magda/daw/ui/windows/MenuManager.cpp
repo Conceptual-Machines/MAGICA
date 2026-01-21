@@ -1,5 +1,6 @@
 #include "MenuManager.hpp"
 
+#include "Config.hpp"
 #include "core/UndoManager.hpp"
 
 namespace magda {
@@ -104,6 +105,9 @@ juce::PopupMenu MenuManager::getMenuForIndex(int topLevelMenuIndex, const juce::
         menu.addItem(ToggleBottomPanel, "Show Bottom Panel", true, bottomPanelVisible_);
         menu.addSeparator();
         menu.addItem(ShowTrackManager, "Track Manager...", true, false);
+        menu.addSeparator();
+        bool headersOnRight = Config::getInstance().getScrollbarOnLeft();
+        menu.addItem(ToggleScrollbarPosition, "Headers on Right", true, headersOnRight);
         menu.addSeparator();
         menu.addItem(ZoomIn, "Zoom In", true, false);
         menu.addItem(ZoomOut, "Zoom Out", true, false);
@@ -258,6 +262,10 @@ void MenuManager::menuItemSelected(int menuItemID, int topLevelMenuIndex) {
         case ShowTrackManager:
             if (callbacks_.onShowTrackManager)
                 callbacks_.onShowTrackManager();
+            break;
+        case ToggleScrollbarPosition:
+            if (callbacks_.onToggleScrollbarPosition)
+                callbacks_.onToggleScrollbarPosition();
             break;
 
         // Transport menu

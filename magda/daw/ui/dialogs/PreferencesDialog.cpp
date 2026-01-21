@@ -33,6 +33,10 @@ PreferencesDialog::PreferencesDialog() {
     setupToggle(showRightPanelToggle, "Show Right Panel (Inspector)");
     setupToggle(showBottomPanelToggle, "Show Bottom Panel (Mixer)");
 
+    // Setup layout section
+    setupSectionHeader(layoutHeader, "Layout");
+    setupToggle(leftHandedLayoutToggle, "Headers on Right");
+
     // Setup keyboard shortcuts section
     setupSectionHeader(shortcutsHeader, "Keyboard Shortcuts");
 #if JUCE_MAC
@@ -73,8 +77,8 @@ PreferencesDialog::PreferencesDialog() {
     // Load current settings
     loadCurrentSettings();
 
-    // Set preferred size (increased height for panels and shortcuts sections)
-    setSize(450, 780);
+    // Set preferred size (increased height for panels, layout and shortcuts sections)
+    setSize(450, 840);
 }
 
 PreferencesDialog::~PreferencesDialog() = default;
@@ -174,6 +178,17 @@ void PreferencesDialog::resized() {
 
     bounds.removeFromTop(sectionSpacing);
 
+    // Layout section
+    auto layoutHeaderBounds = bounds.removeFromTop(headerHeight);
+    layoutHeader.setBounds(layoutHeaderBounds);
+    bounds.removeFromTop(4);
+
+    // Left-handed layout toggle
+    row = bounds.removeFromTop(toggleHeight + 8);
+    leftHandedLayoutToggle.setBounds(row.reduced(0, 4));
+
+    bounds.removeFromTop(sectionSpacing);
+
     // Keyboard Shortcuts section
     auto shortcutsHeaderBounds = bounds.removeFromTop(headerHeight);
     shortcutsHeader.setBounds(shortcutsHeaderBounds);
@@ -240,6 +255,9 @@ void PreferencesDialog::loadCurrentSettings() {
     showLeftPanelToggle.setToggleState(config.getShowLeftPanel(), juce::dontSendNotification);
     showRightPanelToggle.setToggleState(config.getShowRightPanel(), juce::dontSendNotification);
     showBottomPanelToggle.setToggleState(config.getShowBottomPanel(), juce::dontSendNotification);
+
+    // Load layout settings
+    leftHandedLayoutToggle.setToggleState(config.getScrollbarOnLeft(), juce::dontSendNotification);
 }
 
 void PreferencesDialog::applySettings() {
@@ -264,6 +282,9 @@ void PreferencesDialog::applySettings() {
     config.setShowLeftPanel(showLeftPanelToggle.getToggleState());
     config.setShowRightPanel(showRightPanelToggle.getToggleState());
     config.setShowBottomPanel(showBottomPanelToggle.getToggleState());
+
+    // Apply layout settings
+    config.setScrollbarOnLeft(leftHandedLayoutToggle.getToggleState());
 }
 
 void PreferencesDialog::showDialog(juce::Component* parent) {

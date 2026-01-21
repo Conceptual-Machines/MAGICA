@@ -40,6 +40,7 @@ class MenuManager : public juce::MenuBarModel, public UndoManagerListener {
         std::function<void()> onZoomOut;
         std::function<void()> onZoomToFit;
         std::function<void()> onToggleFullscreen;
+        std::function<void()> onToggleScrollbarPosition;
 
         // Transport menu
         std::function<void()> onPlay;
@@ -135,6 +136,7 @@ class MenuManager : public juce::MenuBarModel, public UndoManagerListener {
         ZoomOut,
         ZoomToFit,
         ToggleFullscreen = 320,
+        ToggleScrollbarPosition = 325,
 
         // Transport menu (400-499)
         Play = 400,

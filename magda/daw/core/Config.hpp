@@ -108,6 +108,14 @@ class Config {
         showBottomPanel = show;
     }
 
+    // Layout Configuration
+    bool getScrollbarOnLeft() const {
+        return scrollbarOnLeft;
+    }
+    void setScrollbarOnLeft(bool onLeft) {
+        scrollbarOnLeft = onLeft;
+    }
+
     // Save/Load Configuration (for future use)
     void saveToFile(const std::string& filename);
     void loadFromFile(const std::string& filename);
@@ -137,6 +145,9 @@ class Config {
     bool showLeftPanel = true;    // Show left panel by default
     bool showRightPanel = true;   // Show right panel by default
     bool showBottomPanel = true;  // Show bottom panel by default
+
+    // Layout settings
+    bool scrollbarOnLeft = false;  // Scrollbar on right by default
 };
 
 }  // namespace magda
