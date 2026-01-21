@@ -533,23 +533,17 @@ void ChainPanel::rebuildDeviceSlots() {
         }
 
         if (existingSlot) {
-            // Set node path for centralized selection
+            // Set node path for centralized selection (no legacy callback needed)
             existingSlot->setNodePath(
                 magda::ChainNodePath::chainDevice(trackId_, rackId_, chainId_, device.id));
-            // Legacy callback (will be removed once selection is fully centralized)
-            auto deviceId = device.id;
-            existingSlot->onSelected = [this, deviceId]() { onDeviceSlotSelected(deviceId); };
             newSlots.push_back(std::move(existingSlot));
         } else {
             // Create new slot for new device - add to container
             auto slot =
                 std::make_unique<DeviceSlotComponent>(*this, trackId_, rackId_, chainId_, device);
-            // Set node path for centralized selection
+            // Set node path for centralized selection (no legacy callback needed)
             slot->setNodePath(
                 magda::ChainNodePath::chainDevice(trackId_, rackId_, chainId_, device.id));
-            // Legacy callback (will be removed once selection is fully centralized)
-            auto deviceId = device.id;
-            slot->onSelected = [this, deviceId]() { onDeviceSlotSelected(deviceId); };
             deviceSlotsContainer_->addAndMakeVisible(*slot);
             newSlots.push_back(std::move(slot));
         }
