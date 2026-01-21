@@ -96,6 +96,11 @@ class NodeComponent : public juce::Component {
         return GAIN_PANEL_WIDTH;
     }
 
+    // Override to hide header (return 0)
+    virtual int getHeaderHeight() const {
+        return HEADER_HEIGHT;
+    }
+
     // Panel visibility state (accessible to subclasses)
     bool modPanelVisible_ = false;
     bool paramPanelVisible_ = false;

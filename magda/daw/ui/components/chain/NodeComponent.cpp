@@ -209,9 +209,12 @@ void NodeComponent::paint(juce::Graphics& g) {
     g.setColour(DarkTheme::getColour(DarkTheme::BORDER));
     g.drawRoundedRectangle(bounds.toFloat(), 4.0f, 1.0f);
 
-    // Header separator
-    g.drawHorizontalLine(HEADER_HEIGHT, static_cast<float>(bounds.getX()),
-                         static_cast<float>(bounds.getRight()));
+    // Header separator (only if header visible)
+    int headerHeight = getHeaderHeight();
+    if (headerHeight > 0) {
+        g.drawHorizontalLine(headerHeight, static_cast<float>(bounds.getX()),
+                             static_cast<float>(bounds.getRight()));
+    }
 
     // Footer separator
     g.drawHorizontalLine(getHeight() - FOOTER_HEIGHT, static_cast<float>(bounds.getX()),
@@ -219,7 +222,7 @@ void NodeComponent::paint(juce::Graphics& g) {
 
     // Calculate content area (between header and footer)
     auto contentArea = bounds;
-    contentArea.removeFromTop(HEADER_HEIGHT);
+    contentArea.removeFromTop(headerHeight);
     contentArea.removeFromBottom(FOOTER_HEIGHT);
 
     // Let subclass paint main content
@@ -265,17 +268,29 @@ void NodeComponent::resized() {
 
     // === MAIN NODE AREA (remaining bounds) ===
 
-    // === HEADER: [B] Name ... [X] ===
-    auto headerArea = bounds.removeFromTop(HEADER_HEIGHT).reduced(3, 2);
-    bypassButton_.setBounds(headerArea.removeFromLeft(BUTTON_SIZE));
-    headerArea.removeFromLeft(4);
-    deleteButton_.setBounds(headerArea.removeFromRight(BUTTON_SIZE));
-    headerArea.removeFromRight(4);
+    // === HEADER: [B] Name ... [X] === (only if header visible)
+    int headerHeight = getHeaderHeight();
+    if (headerHeight > 0) {
+        auto headerArea = bounds.removeFromTop(headerHeight).reduced(3, 2);
+        bypassButton_.setBounds(headerArea.removeFromLeft(BUTTON_SIZE));
+        headerArea.removeFromLeft(4);
+        deleteButton_.setBounds(headerArea.removeFromRight(BUTTON_SIZE));
+        headerArea.removeFromRight(4);
 
-    // Let subclass add extra header buttons
-    resizedHeaderExtra(headerArea);
+        // Let subclass add extra header buttons
+        resizedHeaderExtra(headerArea);
 
-    nameLabel_.setBounds(headerArea);
+        nameLabel_.setBounds(headerArea);
+
+        bypassButton_.setVisible(true);
+        deleteButton_.setVisible(true);
+        nameLabel_.setVisible(true);
+    } else {
+        // Hide header controls
+        bypassButton_.setVisible(false);
+        deleteButton_.setVisible(false);
+        nameLabel_.setVisible(false);
+    }
 
     // === FOOTER: [M] [P] ... [G] ===
     auto footerArea = bounds.removeFromBottom(FOOTER_HEIGHT).reduced(3, 2);

@@ -66,12 +66,16 @@ ChainRowComponent::ChainRowComponent(RackComponent& owner, magda::TrackId trackI
     soloButton_.setLookAndFeel(&SmallButtonLookAndFeel::getInstance());
     addAndMakeVisible(soloButton_);
 
-    // On/bypass button
-    onButton_.setButtonText("On");
-    onButton_.setColour(juce::TextButton::buttonColourId, DarkTheme::getColour(DarkTheme::SURFACE));
+    // On/bypass button (power symbol like other bypass buttons)
+    onButton_.setButtonText(juce::String::fromUTF8("\xe2\x8f\xbb"));  // ⏻ power symbol
+    // OFF state (bypassed) = reddish background
+    onButton_.setColour(juce::TextButton::buttonColourId,
+                        DarkTheme::getColour(DarkTheme::STATUS_ERROR));
+    // ON state (active) = green background
     onButton_.setColour(juce::TextButton::buttonOnColourId,
-                        DarkTheme::getColour(DarkTheme::STATUS_SUCCESS));
-    onButton_.setColour(juce::TextButton::textColourOffId, DarkTheme::getSecondaryTextColour());
+                        DarkTheme::getColour(DarkTheme::ACCENT_GREEN).darker(0.3f));
+    onButton_.setColour(juce::TextButton::textColourOffId,
+                        DarkTheme::getColour(DarkTheme::BACKGROUND));
     onButton_.setColour(juce::TextButton::textColourOnId,
                         DarkTheme::getColour(DarkTheme::BACKGROUND));
     onButton_.setClickingTogglesState(true);
@@ -79,6 +83,16 @@ ChainRowComponent::ChainRowComponent(RackComponent& owner, magda::TrackId trackI
     onButton_.onClick = [this]() { onBypassClicked(); };
     onButton_.setLookAndFeel(&SmallButtonLookAndFeel::getInstance());
     addAndMakeVisible(onButton_);
+
+    // Delete button (reddish background)
+    deleteButton_.setButtonText(juce::String::fromUTF8("\xc3\x97"));  // × symbol
+    deleteButton_.setColour(juce::TextButton::buttonColourId,
+                            DarkTheme::getColour(DarkTheme::STATUS_ERROR).darker(0.2f));
+    deleteButton_.setColour(juce::TextButton::textColourOffId,
+                            DarkTheme::getColour(DarkTheme::BACKGROUND));
+    deleteButton_.onClick = [this]() { onDeleteClicked(); };
+    deleteButton_.setLookAndFeel(&SmallButtonLookAndFeel::getInstance());
+    addAndMakeVisible(deleteButton_);
 }
 
 ChainRowComponent::~ChainRowComponent() = default;
@@ -119,7 +133,7 @@ void ChainRowComponent::setSelected(bool selected) {
 void ChainRowComponent::resized() {
     auto bounds = getLocalBounds().reduced(3, 2);
 
-    // Layout: [Name] [Gain] [Pan] [M] [S] [On]
+    // Layout: [Name] [Gain] [Pan] [M] [S] [On] [X]
     nameLabel_.setBounds(bounds.removeFromLeft(50));
     bounds.removeFromLeft(4);
 
@@ -135,7 +149,10 @@ void ChainRowComponent::resized() {
     soloButton_.setBounds(bounds.removeFromLeft(16));
     bounds.removeFromLeft(2);
 
-    onButton_.setBounds(bounds.removeFromLeft(22));
+    onButton_.setBounds(bounds.removeFromLeft(16));
+    bounds.removeFromLeft(2);
+
+    deleteButton_.setBounds(bounds.removeFromLeft(16));
 }
 
 int ChainRowComponent::getPreferredHeight() const {
@@ -165,6 +182,10 @@ void ChainRowComponent::onBypassClicked() {
     // "On" button: when ON, chain is not bypassed; when OFF, chain is bypassed
     // This is the inverse of mute, but could be a separate bypass flag
     // For now, we'll treat it as a visual indicator (could link to a bypass field)
+}
+
+void ChainRowComponent::onDeleteClicked() {
+    magda::TrackManager::getInstance().removeChainFromRack(trackId_, rackId_, chainId_);
 }
 
 }  // namespace magda::daw::ui

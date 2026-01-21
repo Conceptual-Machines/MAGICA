@@ -15,7 +15,7 @@ class RackComponent;
 /**
  * @brief A single chain row within a rack - simple strip layout
  *
- * Layout: [Name] [Gain] [Pan] [M] [S] [On]
+ * Layout: [Name] [Gain] [Pan] [M] [S] [On] [X]
  *
  * Clicking the row will open a chain panel on the right side showing devices
  */
@@ -54,6 +54,7 @@ class ChainRowComponent : public juce::Component {
     void onMuteClicked();
     void onSoloClicked();
     void onBypassClicked();
+    void onDeleteClicked();
 
     RackComponent& owner_;
     magda::TrackId trackId_;
@@ -61,13 +62,14 @@ class ChainRowComponent : public juce::Component {
     magda::ChainId chainId_;
     bool selected_ = false;
 
-    // Single row controls: Name | Gain | Pan | M | S | On
+    // Single row controls: Name | Gain | Pan | M | S | On | X
     juce::Label nameLabel_;
     TextSlider gainSlider_{TextSlider::Format::Decibels};
     TextSlider panSlider_{TextSlider::Format::Pan};
     juce::TextButton muteButton_;
     juce::TextButton soloButton_;
-    juce::TextButton onButton_;  // Bypass/enable toggle
+    juce::TextButton onButton_;      // Bypass/enable toggle
+    juce::TextButton deleteButton_;  // Delete chain
 
     static constexpr int ROW_HEIGHT = 22;
 

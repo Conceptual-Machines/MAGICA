@@ -80,19 +80,7 @@ class ChainPanel::DeviceSlotComponent : public NodeComponent {
 //==============================================================================
 
 ChainPanel::ChainPanel() {
-    setNodeName("Chain");
-
-    // Set up callbacks
-    onDeleteClicked = [this]() {
-        if (hasChain_) {
-            // Actually delete the chain from the data model
-            magda::TrackManager::getInstance().removeChainFromRack(trackId_, rackId_, chainId_);
-        }
-        clear();
-        if (onClose) {
-            onClose();
-        }
-    };
+    // No header - controls are on the chain row
 
     onLayoutChanged = [this]() {
         if (auto* parent = getParentComponent()) {

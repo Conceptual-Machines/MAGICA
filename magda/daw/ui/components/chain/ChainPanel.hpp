@@ -34,6 +34,11 @@ class ChainPanel : public NodeComponent {
     void paintParamPanel(juce::Graphics& g, juce::Rectangle<int> panelArea) override;
     void resizedParamPanel(juce::Rectangle<int> panelArea) override;
 
+    // Hide header - controls are on the chain row instead
+    int getHeaderHeight() const override {
+        return 0;
+    }
+
   private:
     class DeviceSlotComponent;
 
