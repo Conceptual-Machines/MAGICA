@@ -105,6 +105,7 @@ set(DAW_UI_SOURCES
     ui/windows/MenuManager.cpp
     # Dialogs
     ui/dialogs/AudioSettingsDialog.cpp
+    ui/dialogs/ParameterConfigDialog.cpp
     ui/dialogs/PreferencesDialog.cpp
     ui/dialogs/TrackManagerDialog.cpp
     # Panels
@@ -168,6 +169,7 @@ set(DAW_HEADERS
     command.hpp
     magda.hpp
     core/Config.hpp
+    core/DeviceInfo.hpp
     core/ViewModeState.hpp
     core/ViewModeEvents.hpp
     core/ViewModeController.hpp
@@ -202,6 +204,7 @@ set(DAW_HEADERS
     ui/windows/MenuManager.hpp
     # Dialogs
     ui/dialogs/AudioSettingsDialog.hpp
+    ui/dialogs/ParameterConfigDialog.hpp
     ui/dialogs/PreferencesDialog.hpp
     ui/dialogs/TrackManagerDialog.hpp
     # Panels

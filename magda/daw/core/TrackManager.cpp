@@ -333,6 +333,81 @@ void TrackManager::setTrackType(TrackId trackId, TrackType type) {
 }
 
 // ============================================================================
+// Device/FX Chain Management
+// ============================================================================
+
+DeviceId TrackManager::addDeviceToTrack(TrackId trackId, const DeviceInfo& device) {
+    if (auto* track = getTrack(trackId)) {
+        DeviceInfo newDevice = device;
+        newDevice.id = nextDeviceId_++;
+        track->devices.push_back(newDevice);
+        notifyTrackDevicesChanged(trackId);
+        DBG("Added device: " << newDevice.name << " (id=" << newDevice.id << ") to track "
+                             << trackId);
+        return newDevice.id;
+    }
+    return INVALID_DEVICE_ID;
+}
+
+void TrackManager::removeDeviceFromTrack(TrackId trackId, DeviceId deviceId) {
+    if (auto* track = getTrack(trackId)) {
+        auto& devices = track->devices;
+        auto it = std::find_if(devices.begin(), devices.end(),
+                               [deviceId](const DeviceInfo& d) { return d.id == deviceId; });
+        if (it != devices.end()) {
+            DBG("Removed device: " << it->name << " (id=" << deviceId << ") from track "
+                                   << trackId);
+            devices.erase(it);
+            notifyTrackDevicesChanged(trackId);
+        }
+    }
+}
+
+void TrackManager::moveDevice(TrackId trackId, DeviceId deviceId, int newIndex) {
+    if (auto* track = getTrack(trackId)) {
+        auto& devices = track->devices;
+        auto it = std::find_if(devices.begin(), devices.end(),
+                               [deviceId](const DeviceInfo& d) { return d.id == deviceId; });
+        if (it != devices.end()) {
+            int currentIndex = static_cast<int>(std::distance(devices.begin(), it));
+            if (currentIndex != newIndex && newIndex >= 0 &&
+                newIndex < static_cast<int>(devices.size())) {
+                DeviceInfo device = *it;
+                devices.erase(it);
+                devices.insert(devices.begin() + newIndex, device);
+                notifyTrackDevicesChanged(trackId);
+            }
+        }
+    }
+}
+
+void TrackManager::setDeviceBypassed(TrackId trackId, DeviceId deviceId, bool bypassed) {
+    if (auto* device = getDevice(trackId, deviceId)) {
+        device->bypassed = bypassed;
+        notifyTrackDevicesChanged(trackId);
+    }
+}
+
+const std::vector<DeviceInfo>* TrackManager::getDevices(TrackId trackId) const {
+    if (const auto* track = getTrack(trackId)) {
+        return &track->devices;
+    }
+    return nullptr;
+}
+
+DeviceInfo* TrackManager::getDevice(TrackId trackId, DeviceId deviceId) {
+    if (auto* track = getTrack(trackId)) {
+        auto& devices = track->devices;
+        auto it = std::find_if(devices.begin(), devices.end(),
+                               [deviceId](const DeviceInfo& d) { return d.id == deviceId; });
+        if (it != devices.end()) {
+            return &(*it);
+        }
+    }
+    return nullptr;
+}
+
+// ============================================================================
 // View Settings
 // ============================================================================
 
@@ -486,6 +561,12 @@ void TrackManager::notifyMasterChannelChanged() {
 void TrackManager::notifyTrackSelectionChanged(TrackId trackId) {
     for (auto* listener : listeners_) {
         listener->trackSelectionChanged(trackId);
+    }
+}
+
+void TrackManager::notifyTrackDevicesChanged(TrackId trackId) {
+    for (auto* listener : listeners_) {
+        listener->trackDevicesChanged(trackId);
     }
 }
 

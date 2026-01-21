@@ -5,8 +5,101 @@
 #include "../../themes/DarkTheme.hpp"
 #include "../../themes/FontManager.hpp"
 #include "../../themes/MixerMetrics.hpp"
+#include "core/DeviceInfo.hpp"
 
 namespace magda::daw::ui {
+
+//==============================================================================
+// DeviceSlotComponent - Interactive device display
+//==============================================================================
+class TrackChainContent::DeviceSlotComponent : public juce::Component {
+  public:
+    DeviceSlotComponent(TrackChainContent& owner, magda::TrackId trackId,
+                        const magda::DeviceInfo& device)
+        : owner_(owner), trackId_(trackId), device_(device) {
+        // Bypass button
+        bypassButton_.setButtonText("B");
+        bypassButton_.setColour(juce::TextButton::buttonColourId,
+                                DarkTheme::getColour(DarkTheme::SURFACE));
+        bypassButton_.setColour(juce::TextButton::buttonOnColourId,
+                                DarkTheme::getColour(DarkTheme::STATUS_WARNING));
+        bypassButton_.setColour(juce::TextButton::textColourOffId,
+                                DarkTheme::getSecondaryTextColour());
+        bypassButton_.setColour(juce::TextButton::textColourOnId,
+                                DarkTheme::getColour(DarkTheme::BACKGROUND));
+        bypassButton_.setClickingTogglesState(true);
+        bypassButton_.setToggleState(device_.bypassed, juce::dontSendNotification);
+        bypassButton_.onClick = [this]() {
+            magda::TrackManager::getInstance().setDeviceBypassed(trackId_, device_.id,
+                                                                 bypassButton_.getToggleState());
+        };
+        addAndMakeVisible(bypassButton_);
+
+        // Delete button
+        deleteButton_.setButtonText(juce::String::fromUTF8("✕"));
+        deleteButton_.setColour(juce::TextButton::buttonColourId,
+                                DarkTheme::getColour(DarkTheme::SURFACE));
+        deleteButton_.setColour(juce::TextButton::textColourOffId,
+                                DarkTheme::getSecondaryTextColour());
+        deleteButton_.onClick = [this]() {
+            magda::TrackManager::getInstance().removeDeviceFromTrack(trackId_, device_.id);
+        };
+        addAndMakeVisible(deleteButton_);
+    }
+
+    void paint(juce::Graphics& g) override {
+        auto bounds = getLocalBounds();
+
+        // Background
+        auto bgColour = device_.bypassed ? DarkTheme::getColour(DarkTheme::SURFACE).withAlpha(0.5f)
+                                         : DarkTheme::getColour(DarkTheme::SURFACE);
+        g.setColour(bgColour);
+        g.fillRoundedRectangle(bounds.toFloat(), 4.0f);
+
+        // Border
+        g.setColour(DarkTheme::getColour(DarkTheme::BORDER));
+        g.drawRoundedRectangle(bounds.toFloat(), 4.0f, 1.0f);
+
+        // Device name
+        auto textBounds = bounds.reduced(6);
+        textBounds.removeFromTop(22);     // Skip button row
+        textBounds.removeFromBottom(16);  // Skip format label
+
+        auto textColour = device_.bypassed ? DarkTheme::getSecondaryTextColour().withAlpha(0.5f)
+                                           : DarkTheme::getTextColour();
+        g.setColour(textColour);
+        g.setFont(FontManager::getInstance().getUIFontBold(11.0f));
+        g.drawText(device_.name, textBounds, juce::Justification::centred);
+
+        // Manufacturer
+        auto mfrBounds = textBounds;
+        mfrBounds.removeFromTop(16);
+        g.setColour(DarkTheme::getSecondaryTextColour());
+        g.setFont(FontManager::getInstance().getUIFont(9.0f));
+        g.drawText(device_.manufacturer, mfrBounds, juce::Justification::centred);
+
+        // Format badge at bottom
+        auto formatBounds = bounds.reduced(6).removeFromBottom(14);
+        g.setColour(DarkTheme::getSecondaryTextColour());
+        g.setFont(FontManager::getInstance().getUIFont(8.0f));
+        g.drawText(device_.getFormatString(), formatBounds, juce::Justification::centredRight);
+    }
+
+    void resized() override {
+        auto bounds = getLocalBounds().reduced(4);
+        auto buttonRow = bounds.removeFromTop(18);
+
+        bypassButton_.setBounds(buttonRow.removeFromLeft(20));
+        deleteButton_.setBounds(buttonRow.removeFromRight(20));
+    }
+
+  private:
+    TrackChainContent& owner_;
+    magda::TrackId trackId_;
+    magda::DeviceInfo device_;
+    juce::TextButton bypassButton_;
+    juce::TextButton deleteButton_;
+};
 
 // dB conversion helpers
 namespace {
@@ -180,6 +273,18 @@ TrackChainContent::TrackChainContent() {
     panValueLabel_.setFont(FontManager::getInstance().getUIFont(10.0f));
     addChildComponent(panValueLabel_);
 
+    // Add device button
+    addDeviceButton_.setButtonText("+");
+    addDeviceButton_.setColour(juce::TextButton::buttonColourId,
+                               DarkTheme::getColour(DarkTheme::SURFACE));
+    addDeviceButton_.setColour(juce::TextButton::textColourOffId,
+                               DarkTheme::getSecondaryTextColour());
+    addDeviceButton_.onClick = [this]() {
+        // Would open plugin browser or show plugin selector
+        DBG("Add device clicked - would show plugin selector");
+    };
+    addChildComponent(addDeviceButton_);
+
     // Register as listener
     magda::TrackManager::getInstance().addListener(this);
 
@@ -199,60 +304,26 @@ void TrackChainContent::paint(juce::Graphics& g) {
     g.fillAll(DarkTheme::getPanelBackgroundColour());
 
     if (selectedTrackId_ != magda::INVALID_TRACK_ID) {
-        // Draw the chain mockup area (horizontal layout)
+        // Draw the chain area background
         auto bounds = getLocalBounds();
         auto stripWidth = 100;
         auto chainArea = bounds.withTrimmedRight(stripWidth);
 
-        paintChainMockup(g, chainArea);
+        // Draw arrows between device slots
+        auto slotArea = chainArea.reduced(8);
+        int slotWidth = 100;
+        int slotSpacing = 8;
+        int arrowWidth = 20;
 
-        // Draw separator line before strip
-        g.setColour(DarkTheme::getColour(DarkTheme::BORDER));
-        g.drawLine(static_cast<float>(chainArea.getRight()), 0.0f,
-                   static_cast<float>(chainArea.getRight()), static_cast<float>(getHeight()), 1.0f);
-    }
-}
+        int x = slotArea.getX();
+        for (size_t i = 0; i < deviceSlots_.size(); ++i) {
+            x += slotWidth;  // After device slot
 
-void TrackChainContent::paintChainMockup(juce::Graphics& g, juce::Rectangle<int> area) {
-    // Draw mockup FX chain slots horizontally
-    auto slotArea = area.reduced(8);
-    int slotWidth = 120;
-    int slotSpacing = 8;
-    int arrowWidth = 20;
-
-    // Draw empty FX slots horizontally
-    juce::StringArray slotLabels = {"Input", "Insert 1", "Insert 2", "Insert 3", "Send"};
-    for (size_t i = 0; i < slotLabels.size(); ++i) {
-        if (slotArea.getWidth() < slotWidth)
-            break;
-
-        auto slot = slotArea.removeFromLeft(slotWidth);
-
-        // Slot background
-        g.setColour(DarkTheme::getColour(DarkTheme::SURFACE));
-        g.fillRoundedRectangle(slot.toFloat(), 4.0f);
-
-        // Slot border
-        g.setColour(DarkTheme::getColour(DarkTheme::BORDER));
-        g.drawRoundedRectangle(slot.toFloat(), 4.0f, 1.0f);
-
-        // Slot label at top
-        g.setColour(DarkTheme::getSecondaryTextColour());
-        g.setFont(FontManager::getInstance().getUIFont(10.0f));
-        g.drawText(slotLabels[static_cast<int>(i)], slot.reduced(6).removeFromTop(16),
-                   juce::Justification::centredLeft);
-
-        // "(empty)" hint centered
-        g.setColour(DarkTheme::getSecondaryTextColour().withAlpha(0.5f));
-        g.setFont(FontManager::getInstance().getUIFont(9.0f));
-        g.drawText("(empty)", slot, juce::Justification::centred);
-
-        // Draw arrow between slots (except after last)
-        if (i < slotLabels.size() - 1) {
-            auto arrowArea = slotArea.removeFromLeft(arrowWidth);
+            // Draw arrow after each device (except the last one before add button)
+            auto arrowArea =
+                juce::Rectangle<int>(x, slotArea.getY(), arrowWidth, slotArea.getHeight());
             g.setColour(DarkTheme::getSecondaryTextColour());
 
-            // Draw arrow: →
             int arrowY = arrowArea.getCentreY();
             int arrowX = arrowArea.getCentreX();
             g.drawLine(static_cast<float>(arrowX - 6), static_cast<float>(arrowY),
@@ -263,8 +334,13 @@ void TrackChainContent::paintChainMockup(juce::Graphics& g, juce::Rectangle<int>
             g.drawLine(static_cast<float>(arrowX + 2), static_cast<float>(arrowY + 4),
                        static_cast<float>(arrowX + 6), static_cast<float>(arrowY), 1.5f);
 
-            slotArea.removeFromLeft(slotSpacing);
+            x += arrowWidth + slotSpacing;
         }
+
+        // Draw separator line before track strip
+        g.setColour(DarkTheme::getColour(DarkTheme::BORDER));
+        g.drawLine(static_cast<float>(chainArea.getRight()), 0.0f,
+                   static_cast<float>(chainArea.getRight()), static_cast<float>(getHeight()), 1.0f);
     }
 }
 
@@ -274,12 +350,32 @@ void TrackChainContent::resized() {
 
     if (selectedTrackId_ == magda::INVALID_TRACK_ID) {
         noSelectionLabel_.setBounds(bounds);
+        addDeviceButton_.setVisible(false);
     } else {
         // Track info strip at right border
         auto stripWidth = 100;
         auto strip = bounds.removeFromRight(stripWidth).reduced(4);
 
-        // Track name at top
+        // Chain area (left of strip)
+        auto chainArea = bounds.reduced(8);
+
+        // Layout device slots horizontally
+        int slotWidth = 100;
+        int slotHeight = chainArea.getHeight();
+        int arrowWidth = 20;
+        int slotSpacing = 8;
+
+        int x = chainArea.getX();
+        for (auto& slot : deviceSlots_) {
+            slot->setBounds(x, chainArea.getY(), slotWidth, slotHeight);
+            x += slotWidth + arrowWidth + slotSpacing;
+        }
+
+        // Add device button after all slots
+        addDeviceButton_.setBounds(x, chainArea.getY(), 40, slotHeight);
+        addDeviceButton_.setVisible(true);
+
+        // Track name at top of strip
         trackNameLabel_.setBounds(strip.removeFromTop(20));
         strip.removeFromTop(4);
 
@@ -336,10 +432,17 @@ void TrackChainContent::trackSelectionChanged(magda::TrackId trackId) {
     updateFromSelectedTrack();
 }
 
+void TrackChainContent::trackDevicesChanged(magda::TrackId trackId) {
+    if (trackId == selectedTrackId_) {
+        rebuildDeviceSlots();
+    }
+}
+
 void TrackChainContent::updateFromSelectedTrack() {
     if (selectedTrackId_ == magda::INVALID_TRACK_ID) {
         showTrackStrip(false);
         noSelectionLabel_.setVisible(true);
+        deviceSlots_.clear();
     } else {
         const auto* track = magda::TrackManager::getInstance().getTrack(selectedTrackId_);
         if (track) {
@@ -377,9 +480,11 @@ void TrackChainContent::updateFromSelectedTrack() {
 
             showTrackStrip(true);
             noSelectionLabel_.setVisible(false);
+            rebuildDeviceSlots();
         } else {
             showTrackStrip(false);
             noSelectionLabel_.setVisible(true);
+            deviceSlots_.clear();
         }
     }
 
@@ -395,6 +500,30 @@ void TrackChainContent::showTrackStrip(bool show) {
     gainValueLabel_.setVisible(show);
     panSlider_.setVisible(show);
     panValueLabel_.setVisible(show);
+}
+
+void TrackChainContent::rebuildDeviceSlots() {
+    // Remove existing slots
+    deviceSlots_.clear();
+
+    if (selectedTrackId_ == magda::INVALID_TRACK_ID) {
+        return;
+    }
+
+    const auto* devices = magda::TrackManager::getInstance().getDevices(selectedTrackId_);
+    if (!devices) {
+        return;
+    }
+
+    // Create a slot component for each device
+    for (const auto& device : *devices) {
+        auto slot = std::make_unique<DeviceSlotComponent>(*this, selectedTrackId_, device);
+        addAndMakeVisible(*slot);
+        deviceSlots_.push_back(std::move(slot));
+    }
+
+    resized();
+    repaint();
 }
 
 }  // namespace magda::daw::ui

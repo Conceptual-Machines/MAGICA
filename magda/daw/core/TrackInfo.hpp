@@ -3,6 +3,7 @@
 #include <juce_core/juce_core.h>
 #include <juce_graphics/juce_graphics.h>
 
+#include "DeviceInfo.hpp"
 #include "TrackTypes.hpp"
 #include "TrackViewSettings.hpp"
 
@@ -27,6 +28,9 @@ struct TrackInfo {
     bool muted = false;
     bool soloed = false;
     bool recordArmed = false;
+
+    // FX chain - ordered list of devices/plugins on this track
+    std::vector<DeviceInfo> devices;
 
     // View settings per view mode
     TrackViewSettingsMap viewSettings;

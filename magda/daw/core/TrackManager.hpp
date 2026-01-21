@@ -46,6 +46,11 @@ class TrackManagerListener {
     virtual void trackSelectionChanged(TrackId trackId) {
         juce::ignoreUnused(trackId);
     }
+
+    // Called when devices on a track change (added, removed, reordered, bypassed)
+    virtual void trackDevicesChanged(TrackId trackId) {
+        juce::ignoreUnused(trackId);
+    }
 };
 
 /**
@@ -105,6 +110,14 @@ class TrackManager {
     void setTrackCollapsed(TrackId trackId, ViewMode mode, bool collapsed);
     void setTrackHeight(TrackId trackId, ViewMode mode, int height);
 
+    // Device/FX chain management
+    DeviceId addDeviceToTrack(TrackId trackId, const DeviceInfo& device);
+    void removeDeviceFromTrack(TrackId trackId, DeviceId deviceId);
+    void moveDevice(TrackId trackId, DeviceId deviceId, int newIndex);
+    void setDeviceBypassed(TrackId trackId, DeviceId deviceId, bool bypassed);
+    const std::vector<DeviceInfo>* getDevices(TrackId trackId) const;
+    DeviceInfo* getDevice(TrackId trackId, DeviceId deviceId);
+
     // Query tracks by view
     std::vector<TrackId> getVisibleTracks(ViewMode mode) const;
     std::vector<TrackId> getVisibleTopLevelTracks(ViewMode mode) const;
@@ -140,6 +153,7 @@ class TrackManager {
     std::vector<TrackInfo> tracks_;
     std::vector<TrackManagerListener*> listeners_;
     int nextTrackId_ = 1;
+    int nextDeviceId_ = 1;
     MasterChannelState masterChannel_;
     TrackId selectedTrackId_ = INVALID_TRACK_ID;
 
@@ -147,6 +161,7 @@ class TrackManager {
     void notifyTrackPropertyChanged(int trackId);
     void notifyMasterChannelChanged();
     void notifyTrackSelectionChanged(TrackId trackId);
+    void notifyTrackDevicesChanged(TrackId trackId);
 
     juce::String generateTrackName() const;
 };

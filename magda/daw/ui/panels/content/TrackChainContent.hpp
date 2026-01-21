@@ -35,6 +35,7 @@ class TrackChainContent : public PanelContent, public magda::TrackManagerListene
     void tracksChanged() override;
     void trackPropertyChanged(int trackId) override;
     void trackSelectionChanged(magda::TrackId trackId) override;
+    void trackDevicesChanged(magda::TrackId trackId) override;
 
   private:
     juce::Label noSelectionLabel_;
@@ -55,7 +56,14 @@ class TrackChainContent : public PanelContent, public magda::TrackManagerListene
 
     void updateFromSelectedTrack();
     void showTrackStrip(bool show);
-    void paintChainMockup(juce::Graphics& g, juce::Rectangle<int> area);
+    void rebuildDeviceSlots();
+
+    // Device slot component for interactive device display
+    class DeviceSlotComponent;
+    std::vector<std::unique_ptr<DeviceSlotComponent>> deviceSlots_;
+
+    // Empty slot for adding new devices
+    juce::TextButton addDeviceButton_;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(TrackChainContent)
 };
