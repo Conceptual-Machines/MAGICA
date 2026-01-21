@@ -47,6 +47,7 @@ class TrackChainContent : public PanelContent, public magda::TrackManagerListene
     juce::TextButton globalModsButton_;        // Toggle global modulators panel
     juce::TextButton addRackButton_;           // Add rack button
     juce::TextButton addMultibandRackButton_;  // Add multi-band rack button
+    juce::TextButton addDeviceButton_;         // Add device to selected chain
 
     // Header bar controls - RIGHT side (track info)
     juce::Label trackNameLabel_;
@@ -57,6 +58,8 @@ class TrackChainContent : public PanelContent, public magda::TrackManagerListene
     bool globalModsVisible_ = false;
 
     magda::TrackId selectedTrackId_ = magda::INVALID_TRACK_ID;
+    magda::RackId selectedRackId_ = magda::INVALID_RACK_ID;
+    magda::ChainId selectedChainId_ = magda::INVALID_CHAIN_ID;
 
     // Custom look and feel for sliders
     magda::MixerLookAndFeel mixerLookAndFeel_;
@@ -75,6 +78,8 @@ class TrackChainContent : public PanelContent, public magda::TrackManagerListene
 
     // Chain selection handling
     void onChainSelected(magda::TrackId trackId, magda::RackId rackId, magda::ChainId chainId);
+    void addDeviceToSelectedChain();
+    bool hasSelectedChain() const;
 
     static constexpr int HEADER_HEIGHT = 36;
     static constexpr int MODS_PANEL_WIDTH = 160;

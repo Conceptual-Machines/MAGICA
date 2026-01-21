@@ -445,6 +445,15 @@ TrackChainContent::TrackChainContent() {
     };
     addChildComponent(addMultibandRackButton_);
 
+    // Add device button (adds device to selected chain)
+    addDeviceButton_.setButtonText("DEV+");
+    addDeviceButton_.setColour(juce::TextButton::buttonColourId,
+                               DarkTheme::getColour(DarkTheme::SURFACE));
+    addDeviceButton_.setColour(juce::TextButton::textColourOffId,
+                               DarkTheme::getSecondaryTextColour());
+    addDeviceButton_.onClick = [this]() { addDeviceToSelectedChain(); };
+    addChildComponent(addDeviceButton_);
+
     // === HEADER BAR CONTROLS - RIGHT SIDE (track info) ===
 
     // Track name label
@@ -611,6 +620,8 @@ void TrackChainContent::resized() {
         addRackButton_.setBounds(headerArea.removeFromLeft(55));
         headerArea.removeFromLeft(4);
         addMultibandRackButton_.setBounds(headerArea.removeFromLeft(75));
+        headerArea.removeFromLeft(4);
+        addDeviceButton_.setBounds(headerArea.removeFromLeft(45));
         headerArea.removeFromLeft(16);
 
         // RIGHT SIDE - Track info (from right to left)
@@ -731,6 +742,7 @@ void TrackChainContent::showHeader(bool show) {
     globalModsButton_.setVisible(show);
     addRackButton_.setVisible(show);
     addMultibandRackButton_.setVisible(show);
+    addDeviceButton_.setVisible(show);
     // Right side - track info
     trackNameLabel_.setVisible(show);
     volumeSlider_.setVisible(show);
@@ -820,8 +832,10 @@ void TrackChainContent::rebuildRackComponents() {
 
 void TrackChainContent::onChainSelected(magda::TrackId trackId, magda::RackId rackId,
                                         magda::ChainId chainId) {
-    (void)trackId;
-    (void)chainId;
+    // Store selection
+    selectedRackId_ = rackId;
+    selectedChainId_ = chainId;
+    (void)trackId;  // Already tracked via selectedTrackId_
 
     // Clear selection in other racks (hide their chain panels)
     for (auto& rack : rackComponents_) {
@@ -834,6 +848,57 @@ void TrackChainContent::onChainSelected(magda::TrackId trackId, magda::RackId ra
     // Relayout since rack widths may have changed
     resized();
     repaint();
+}
+
+bool TrackChainContent::hasSelectedChain() const {
+    return selectedTrackId_ != magda::INVALID_TRACK_ID &&
+           selectedRackId_ != magda::INVALID_RACK_ID && selectedChainId_ != magda::INVALID_CHAIN_ID;
+}
+
+void TrackChainContent::addDeviceToSelectedChain() {
+    if (!hasSelectedChain()) {
+        return;
+    }
+
+    // Show device picker popup
+    juce::PopupMenu menu;
+    menu.addSectionHeader("Add Device");
+    menu.addItem(1, "Pro-Q 3");
+    menu.addItem(2, "Pro-C 2");
+    menu.addItem(3, "Saturn 2");
+    menu.addItem(4, "Valhalla Room");
+    menu.addItem(5, "Serum");
+
+    menu.showMenuAsync(juce::PopupMenu::Options(), [this](int result) {
+        if (result > 0 && hasSelectedChain()) {
+            magda::DeviceInfo device;
+            switch (result) {
+                case 1:
+                    device.name = "Pro-Q 3";
+                    device.manufacturer = "FabFilter";
+                    break;
+                case 2:
+                    device.name = "Pro-C 2";
+                    device.manufacturer = "FabFilter";
+                    break;
+                case 3:
+                    device.name = "Saturn 2";
+                    device.manufacturer = "FabFilter";
+                    break;
+                case 4:
+                    device.name = "Valhalla Room";
+                    device.manufacturer = "Valhalla DSP";
+                    break;
+                case 5:
+                    device.name = "Serum";
+                    device.manufacturer = "Xfer Records";
+                    break;
+            }
+            device.format = magda::PluginFormat::VST3;
+            magda::TrackManager::getInstance().addDeviceToChain(selectedTrackId_, selectedRackId_,
+                                                                selectedChainId_, device);
+        }
+    });
 }
 
 }  // namespace magda::daw::ui
