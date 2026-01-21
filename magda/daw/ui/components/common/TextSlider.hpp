@@ -102,28 +102,29 @@ class TextSlider : public juce::Component, public juce::Label::Listener {
 
         if (hasDragged_) {
             // Vertical drag: up increases, down decreases
-            double dragSensitivity = (maxValue_ - minValue_) / 100.0;
+            // Use 200 pixels for full range for smoother control
+            double dragSensitivity = (maxValue_ - minValue_) / 200.0;
             double delta = (dragStartY_ - e.y) * dragSensitivity;
             setValue(dragStartValue_ + delta);
         }
     }
 
-    void mouseUp(const juce::MouseEvent&) override {
-        if (!label_.isBeingEdited() && !hasDragged_) {
-            // Single click without drag - show editor
+    void mouseUp(const juce::MouseEvent& e) override {
+        if (!hasDragged_ && e.mods.isPopupMenu()) {
+            // Right-click to edit text directly
             label_.showEditor();
         }
         hasDragged_ = false;
     }
 
     void mouseDoubleClick(const juce::MouseEvent&) override {
-        // Reset to default (0 for pan, 0dB for gain, or middle of range)
+        // Double-click to reset to default (0.0 for pan, 0.0 dB for gain)
         if (format_ == Format::Pan) {
-            setValue(0.0);
+            setValue(0.0);  // Center
         } else if (format_ == Format::Decibels) {
-            setValue(0.0);
+            setValue(0.0);  // 0 dB
         } else {
-            setValue((minValue_ + maxValue_) / 2.0);
+            setValue((minValue_ + maxValue_) / 2.0);  // Midpoint for decimal
         }
     }
 

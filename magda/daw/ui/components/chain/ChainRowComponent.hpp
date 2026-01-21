@@ -65,8 +65,8 @@ class ChainRowComponent : public juce::Component {
 
     // Single row controls: Name | Gain | Pan | MOD | MACRO | M | S | On | X
     juce::Label nameLabel_;
-    TextSlider gainSlider_{TextSlider::Format::Decibels};
-    TextSlider panSlider_{TextSlider::Format::Pan};
+    TextSlider gainSlider_;                          // Will be configured in constructor
+    TextSlider panSlider_;                           // Will be configured in constructor
     std::unique_ptr<magda::SvgButton> modButton_;    // Modulators toggle
     std::unique_ptr<magda::SvgButton> macroButton_;  // Macros toggle
     juce::TextButton muteButton_;

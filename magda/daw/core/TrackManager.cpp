@@ -562,7 +562,7 @@ void TrackManager::setChainSolo(TrackId trackId, RackId rackId, ChainId chainId,
 
 void TrackManager::setChainVolume(TrackId trackId, RackId rackId, ChainId chainId, float volume) {
     if (auto* chain = getChain(trackId, rackId, chainId)) {
-        chain->volume = juce::jlimit(0.0f, 2.0f, volume);
+        chain->volume = juce::jlimit(-60.0f, 6.0f, volume);  // dB range
         notifyTrackDevicesChanged(trackId);
     }
 }

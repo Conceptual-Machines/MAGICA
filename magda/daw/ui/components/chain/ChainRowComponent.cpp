@@ -21,6 +21,7 @@ ChainRowComponent::ChainRowComponent(RackComponent& owner, magda::TrackId trackI
     addAndMakeVisible(nameLabel_);
 
     // Gain text slider (dB format)
+    gainSlider_.setFormat(TextSlider::Format::Decibels);
     gainSlider_.setRange(-60.0, 6.0, 0.1);
     gainSlider_.setValue(chain.volume, juce::dontSendNotification);
     gainSlider_.onValueChanged = [this](double value) {
@@ -30,6 +31,7 @@ ChainRowComponent::ChainRowComponent(RackComponent& owner, magda::TrackId trackI
     addAndMakeVisible(gainSlider_);
 
     // Pan text slider (L/C/R format)
+    panSlider_.setFormat(TextSlider::Format::Pan);
     panSlider_.setRange(-1.0, 1.0, 0.01);
     panSlider_.setValue(chain.pan, juce::dontSendNotification);
     panSlider_.onValueChanged = [this](double value) {
