@@ -190,16 +190,52 @@ class GainMeterComponent : public juce::Component,
 };
 
 //==============================================================================
+// SquareButtonLookAndFeel - Square corners for device slot buttons
+//==============================================================================
+class SquareButtonLookAndFeel : public juce::LookAndFeel_V4 {
+  public:
+    void drawButtonBackground(juce::Graphics& g, juce::Button& button, const juce::Colour& bgColour,
+                              bool shouldDrawButtonAsHighlighted,
+                              bool shouldDrawButtonAsDown) override {
+        auto bounds = button.getLocalBounds().toFloat();
+
+        auto baseColour = bgColour;
+        if (shouldDrawButtonAsDown)
+            baseColour = baseColour.darker(0.2f);
+        else if (shouldDrawButtonAsHighlighted)
+            baseColour = baseColour.brighter(0.1f);
+
+        g.setColour(baseColour);
+        g.fillRect(bounds);
+
+        g.setColour(DarkTheme::getColour(DarkTheme::BORDER));
+        g.drawRect(bounds, 1.0f);
+    }
+};
+
+//==============================================================================
 // DeviceSlotComponent - Interactive device display
 //==============================================================================
 class TrackChainContent::DeviceSlotComponent : public juce::Component {
   public:
     static constexpr int GAIN_SLIDER_WIDTH = 28;
     static constexpr int MODULATOR_PANEL_WIDTH = 60;
+    static constexpr int PARAM_PANEL_WIDTH = 80;
+
+    static SquareButtonLookAndFeel& getSquareButtonLookAndFeel() {
+        static SquareButtonLookAndFeel laf;
+        return laf;
+    }
 
     DeviceSlotComponent(TrackChainContent& owner, magda::TrackId trackId,
                         const magda::DeviceInfo& device)
-        : owner_(owner), trackId_(trackId), device_(device) {
+        : owner_(owner),
+          trackId_(trackId),
+          device_(device),
+          gainSliderVisible_(device.gainPanelOpen),
+          modPanelVisible_(device.modPanelOpen),
+          paramPanelVisible_(device.paramPanelOpen),
+          collapsed_(!device.expanded) {
         // Bypass button
         bypassButton_.setButtonText("B");
         bypassButton_.setColour(juce::TextButton::buttonColourId,
@@ -229,10 +265,18 @@ class TrackChainContent::DeviceSlotComponent : public juce::Component {
         modToggleButton_.setColour(juce::TextButton::textColourOnId,
                                    DarkTheme::getColour(DarkTheme::TEXT_PRIMARY));
         modToggleButton_.setClickingTogglesState(true);
+        modToggleButton_.setToggleState(modPanelVisible_, juce::dontSendNotification);
         modToggleButton_.onClick = [this]() {
             modPanelVisible_ = modToggleButton_.getToggleState();
+            // Save state to TrackManager
+            if (auto* dev = magda::TrackManager::getInstance().getDevice(trackId_, device_.id)) {
+                dev->modPanelOpen = modPanelVisible_;
+            }
             resized();
             repaint();
+            // Notify parent to re-layout all slots
+            owner_.resized();
+            owner_.repaint();
         };
         addAndMakeVisible(modToggleButton_);
 
@@ -251,19 +295,73 @@ class TrackChainContent::DeviceSlotComponent : public juce::Component {
         gainToggleButton_.onClick = [this]() {
             gainSliderVisible_ = gainToggleButton_.getToggleState();
             gainMeter_.setVisible(gainSliderVisible_);
+            // Save state to TrackManager
+            if (auto* dev = magda::TrackManager::getInstance().getDevice(trackId_, device_.id)) {
+                dev->gainPanelOpen = gainSliderVisible_;
+            }
             resized();
             repaint();
+            // Notify parent to re-layout all slots
+            owner_.resized();
+            owner_.repaint();
         };
         addAndMakeVisible(gainToggleButton_);
 
-        // Gain meter with text slider
-        gainMeter_.setGainDb(0.0, juce::dontSendNotification);
+        // Gain meter with text slider - restore dB value from device
+        gainMeter_.setGainDb(device_.gainDb, juce::dontSendNotification);
+        gainMeter_.setVisible(gainSliderVisible_);
         gainMeter_.onGainChanged = [this](double db) {
-            // TODO: Update device gain value in TrackManager
-            DBG("Gain changed to: " << db << " dB");
+            // Save gain dB value to TrackManager
+            if (auto* dev = magda::TrackManager::getInstance().getDevice(trackId_, device_.id)) {
+                dev->gainDb = static_cast<float>(db);
+            }
         };
-        gainMeter_.setVisible(false);
-        addChildComponent(gainMeter_);
+        if (gainSliderVisible_) {
+            addAndMakeVisible(gainMeter_);
+        } else {
+            addChildComponent(gainMeter_);
+        }
+
+        // Parameter toggle button
+        paramToggleButton_.setButtonText("P");
+        paramToggleButton_.setColour(juce::TextButton::buttonColourId,
+                                     DarkTheme::getColour(DarkTheme::SURFACE));
+        paramToggleButton_.setColour(juce::TextButton::buttonOnColourId,
+                                     DarkTheme::getColour(DarkTheme::ACCENT_PURPLE));
+        paramToggleButton_.setColour(juce::TextButton::textColourOffId,
+                                     DarkTheme::getSecondaryTextColour());
+        paramToggleButton_.setColour(juce::TextButton::textColourOnId,
+                                     DarkTheme::getColour(DarkTheme::TEXT_PRIMARY));
+        paramToggleButton_.setClickingTogglesState(true);
+        paramToggleButton_.setToggleState(paramPanelVisible_, juce::dontSendNotification);
+        paramToggleButton_.onClick = [this]() {
+            paramPanelVisible_ = paramToggleButton_.getToggleState();
+            // Save state to TrackManager
+            if (auto* dev = magda::TrackManager::getInstance().getDevice(trackId_, device_.id)) {
+                dev->paramPanelOpen = paramPanelVisible_;
+            }
+            resized();
+            repaint();
+            // Notify parent to re-layout all slots
+            owner_.resized();
+            owner_.repaint();
+        };
+        addAndMakeVisible(paramToggleButton_);
+
+        // Mock parameter knobs (will be replaced with real params later)
+        for (int i = 0; i < 4; ++i) {
+            auto knob = std::make_unique<juce::Slider>();
+            knob->setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
+            knob->setTextBoxStyle(juce::Slider::NoTextBox, false, 0, 0);
+            knob->setRange(0.0, 1.0, 0.01);
+            knob->setValue(0.5);
+            knob->setColour(juce::Slider::rotarySliderFillColourId,
+                            DarkTheme::getColour(DarkTheme::ACCENT_PURPLE));
+            knob->setColour(juce::Slider::rotarySliderOutlineColourId,
+                            DarkTheme::getColour(DarkTheme::SURFACE));
+            addChildComponent(*knob);
+            paramKnobs_.push_back(std::move(knob));
+        }
 
         // Modulator slot buttons (mock - 3 slots)
         for (int i = 0; i < 3; ++i) {
@@ -290,6 +388,17 @@ class TrackChainContent::DeviceSlotComponent : public juce::Component {
             addChildComponent(*btn);
         }
 
+        // UI button (opens plugin editor window)
+        uiButton_.setButtonText("U");
+        uiButton_.setColour(juce::TextButton::buttonColourId,
+                            DarkTheme::getColour(DarkTheme::SURFACE));
+        uiButton_.setColour(juce::TextButton::textColourOffId, DarkTheme::getSecondaryTextColour());
+        uiButton_.onClick = [this]() {
+            // TODO: Open plugin UI window
+            DBG("Open plugin UI for: " << device_.name);
+        };
+        addAndMakeVisible(uiButton_);
+
         // Delete button
         deleteButton_.setButtonText(juce::String::fromUTF8("✕"));
         deleteButton_.setColour(juce::TextButton::buttonColourId,
@@ -300,12 +409,30 @@ class TrackChainContent::DeviceSlotComponent : public juce::Component {
             magda::TrackManager::getInstance().removeDeviceFromTrack(trackId_, device_.id);
         };
         addAndMakeVisible(deleteButton_);
+
+        // Apply square button look and feel to all buttons
+        bypassButton_.setLookAndFeel(&getSquareButtonLookAndFeel());
+        modToggleButton_.setLookAndFeel(&getSquareButtonLookAndFeel());
+        paramToggleButton_.setLookAndFeel(&getSquareButtonLookAndFeel());
+        gainToggleButton_.setLookAndFeel(&getSquareButtonLookAndFeel());
+        uiButton_.setLookAndFeel(&getSquareButtonLookAndFeel());
+        deleteButton_.setLookAndFeel(&getSquareButtonLookAndFeel());
+    }
+
+    ~DeviceSlotComponent() override {
+        // Clear LookAndFeel references
+        bypassButton_.setLookAndFeel(nullptr);
+        modToggleButton_.setLookAndFeel(nullptr);
+        paramToggleButton_.setLookAndFeel(nullptr);
+        gainToggleButton_.setLookAndFeel(nullptr);
+        uiButton_.setLookAndFeel(nullptr);
+        deleteButton_.setLookAndFeel(nullptr);
     }
 
     void paint(juce::Graphics& g) override {
         auto bounds = getLocalBounds();
 
-        // Account for modulator panel on left
+        // Mod panel on left (visible even when collapsed)
         if (modPanelVisible_) {
             auto modArea = bounds.removeFromLeft(MODULATOR_PANEL_WIDTH);
             g.setColour(DarkTheme::getColour(DarkTheme::BACKGROUND));
@@ -319,12 +446,26 @@ class TrackChainContent::DeviceSlotComponent : public juce::Component {
             g.drawText("Mod", modArea.removeFromTop(14), juce::Justification::centred);
         }
 
-        // Account for gain slider on right
+        // Param panel (between mod and main, visible even when collapsed)
+        if (paramPanelVisible_) {
+            auto paramArea = bounds.removeFromLeft(PARAM_PANEL_WIDTH);
+            g.setColour(DarkTheme::getColour(DarkTheme::BACKGROUND));
+            g.fillRoundedRectangle(paramArea.toFloat(), 4.0f);
+            g.setColour(DarkTheme::getColour(DarkTheme::BORDER));
+            g.drawRoundedRectangle(paramArea.toFloat(), 4.0f, 1.0f);
+
+            // Draw "Params" label at top
+            g.setColour(DarkTheme::getSecondaryTextColour());
+            g.setFont(FontManager::getInstance().getUIFont(8.0f));
+            g.drawText("Params", paramArea.removeFromTop(14), juce::Justification::centred);
+        }
+
+        // Gain panel on right (visible even when collapsed)
         if (gainSliderVisible_) {
             bounds.removeFromRight(GAIN_SLIDER_WIDTH);
         }
 
-        // Background
+        // Background for main area
         auto bgColour = device_.bypassed ? DarkTheme::getColour(DarkTheme::SURFACE).withAlpha(0.5f)
                                          : DarkTheme::getColour(DarkTheme::SURFACE);
         g.setColour(bgColour);
@@ -334,35 +475,45 @@ class TrackChainContent::DeviceSlotComponent : public juce::Component {
         g.setColour(DarkTheme::getColour(DarkTheme::BORDER));
         g.drawRoundedRectangle(bounds.toFloat(), 4.0f, 1.0f);
 
-        // Device name
-        auto textBounds = bounds.reduced(6);
-        textBounds.removeFromTop(22);     // Skip button row
-        textBounds.removeFromBottom(16);  // Skip format label
+        if (!collapsed_) {
+            // Device name
+            auto textBounds = bounds.reduced(6);
+            textBounds.removeFromTop(20);     // Skip header row
+            textBounds.removeFromBottom(20);  // Skip footer row
 
-        auto textColour = device_.bypassed ? DarkTheme::getSecondaryTextColour().withAlpha(0.5f)
-                                           : DarkTheme::getTextColour();
-        g.setColour(textColour);
-        g.setFont(FontManager::getInstance().getUIFontBold(11.0f));
-        g.drawText(device_.name, textBounds, juce::Justification::centred);
+            auto textColour = device_.bypassed ? DarkTheme::getSecondaryTextColour().withAlpha(0.5f)
+                                               : DarkTheme::getTextColour();
+            g.setColour(textColour);
+            g.setFont(FontManager::getInstance().getUIFontBold(11.0f));
+            g.drawText(device_.name, textBounds, juce::Justification::centred);
 
-        // Manufacturer
-        auto mfrBounds = textBounds;
-        mfrBounds.removeFromTop(16);
-        g.setColour(DarkTheme::getSecondaryTextColour());
-        g.setFont(FontManager::getInstance().getUIFont(9.0f));
-        g.drawText(device_.manufacturer, mfrBounds, juce::Justification::centred);
+            // Manufacturer + format
+            auto mfrBounds = textBounds;
+            mfrBounds.removeFromTop(16);
+            g.setColour(DarkTheme::getSecondaryTextColour());
+            g.setFont(FontManager::getInstance().getUIFont(9.0f));
+            g.drawText(device_.manufacturer + " - " + device_.getFormatString(), mfrBounds,
+                       juce::Justification::centred);
+        }
+    }
 
-        // Format badge at bottom
-        auto formatBounds = bounds.reduced(6).removeFromBottom(14);
-        g.setColour(DarkTheme::getSecondaryTextColour());
-        g.setFont(FontManager::getInstance().getUIFont(8.0f));
-        g.drawText(device_.getFormatString(), formatBounds, juce::Justification::centredRight);
+    void mouseDoubleClick(const juce::MouseEvent&) override {
+        collapsed_ = !collapsed_;
+        // Save state to TrackManager
+        if (auto* dev = magda::TrackManager::getInstance().getDevice(trackId_, device_.id)) {
+            dev->expanded = !collapsed_;
+        }
+        resized();
+        repaint();
+        // Notify parent to re-layout all slots
+        owner_.resized();
+        owner_.repaint();
     }
 
     void resized() override {
         auto bounds = getLocalBounds().reduced(4);
 
-        // Modulator panel on the left if visible
+        // Modulator panel on the left if visible (always, even when collapsed)
         if (modPanelVisible_) {
             auto modArea = bounds.removeFromLeft(MODULATOR_PANEL_WIDTH - 4);
             modArea.removeFromTop(14);  // Skip "Mod" label
@@ -379,22 +530,89 @@ class TrackChainContent::DeviceSlotComponent : public juce::Component {
             }
         }
 
-        // Gain meter on the right if visible
+        // Parameter panel (always, even when collapsed)
+        if (paramPanelVisible_) {
+            auto paramArea = bounds.removeFromLeft(PARAM_PANEL_WIDTH - 4);
+            paramArea.removeFromTop(14);  // Skip "Params" label
+            paramArea = paramArea.reduced(2);
+
+            // Layout knobs in a 2x2 grid
+            int knobSize = (paramArea.getWidth() - 2) / 2;
+            int row = 0, col = 0;
+            for (auto& knob : paramKnobs_) {
+                int x = paramArea.getX() + col * (knobSize + 2);
+                int y = paramArea.getY() + row * (knobSize + 2);
+                knob->setBounds(x, y, knobSize, knobSize);
+                knob->setVisible(true);
+                col++;
+                if (col >= 2) {
+                    col = 0;
+                    row++;
+                }
+            }
+        } else {
+            for (auto& knob : paramKnobs_) {
+                knob->setVisible(false);
+            }
+        }
+
+        // Gain meter on the right if visible (always, even when collapsed)
         if (gainSliderVisible_) {
             auto meterArea = bounds.removeFromRight(GAIN_SLIDER_WIDTH - 4);
             gainMeter_.setBounds(meterArea.reduced(2, 2));
+            gainMeter_.setVisible(true);
+        } else {
+            gainMeter_.setVisible(false);
         }
 
-        auto buttonRow = bounds.removeFromTop(18);
+        // Layout buttons for main plugin area
+        if (collapsed_) {
+            // Collapsed mode: vertical column of buttons
+            // Top group: ON, U, X (device controls)
+            // Bottom group: M, P, G (panel toggles)
+            int buttonSize = 16;
+            int spacing = 2;
+            int x = bounds.getX() + (bounds.getWidth() - buttonSize) / 2;  // Center horizontally
+            int y = bounds.getY();
 
-        // Layout: M-G  B-X
-        modToggleButton_.setBounds(buttonRow.removeFromLeft(20));
-        buttonRow.removeFromLeft(2);
-        gainToggleButton_.setBounds(buttonRow.removeFromLeft(20));
-        // Space in middle
-        deleteButton_.setBounds(buttonRow.removeFromRight(20));
-        buttonRow.removeFromRight(2);
-        bypassButton_.setBounds(buttonRow.removeFromRight(20));
+            // Device controls at top
+            bypassButton_.setBounds(x, y, buttonSize, buttonSize);
+            y += buttonSize + spacing;
+            uiButton_.setBounds(x, y, buttonSize, buttonSize);
+            y += buttonSize + spacing;
+            deleteButton_.setBounds(x, y, buttonSize, buttonSize);
+            y += buttonSize + spacing + 4;  // Extra gap between groups
+
+            // Panel toggles at bottom
+            modToggleButton_.setBounds(x, y, buttonSize, buttonSize);
+            y += buttonSize + spacing;
+            paramToggleButton_.setBounds(x, y, buttonSize, buttonSize);
+            y += buttonSize + spacing;
+            gainToggleButton_.setBounds(x, y, buttonSize, buttonSize);
+        } else {
+            // Expanded mode: header and footer layout
+            int btnSize = 16;
+            int btnSpacing = 2;
+            int inset = 6;  // Inset from edges
+
+            // Header: [ON] [U] ... [X]
+            auto headerRow = bounds.removeFromTop(18);
+            headerRow.removeFromLeft(inset);
+            headerRow.removeFromRight(inset);
+            bypassButton_.setBounds(headerRow.removeFromLeft(btnSize));
+            headerRow.removeFromLeft(btnSpacing);
+            uiButton_.setBounds(headerRow.removeFromLeft(btnSize));
+            deleteButton_.setBounds(headerRow.removeFromRight(btnSize));
+
+            // Footer: [M] [P] ... [G]
+            auto footerRow = bounds.removeFromBottom(18);
+            footerRow.removeFromLeft(inset);
+            footerRow.removeFromRight(inset);
+            modToggleButton_.setBounds(footerRow.removeFromLeft(btnSize));
+            footerRow.removeFromLeft(btnSpacing);
+            paramToggleButton_.setBounds(footerRow.removeFromLeft(btnSize));
+            gainToggleButton_.setBounds(footerRow.removeFromRight(btnSize));
+        }
     }
 
     bool isGainSliderVisible() const {
@@ -405,12 +623,18 @@ class TrackChainContent::DeviceSlotComponent : public juce::Component {
     }
 
     int getExpandedWidth() const {
-        int width = 100;  // Base width
+        int width = collapsed_ ? 36 : 130;  // Collapsed = vertical buttons only, expanded = full
         if (modPanelVisible_)
             width += MODULATOR_PANEL_WIDTH;
+        if (paramPanelVisible_)
+            width += PARAM_PANEL_WIDTH;
         if (gainSliderVisible_)
             width += GAIN_SLIDER_WIDTH;
         return width;
+    }
+
+    bool isCollapsed() const {
+        return collapsed_;
     }
 
   private:
@@ -419,12 +643,17 @@ class TrackChainContent::DeviceSlotComponent : public juce::Component {
     magda::DeviceInfo device_;
     juce::TextButton bypassButton_;
     juce::TextButton modToggleButton_;
+    juce::TextButton paramToggleButton_;
     juce::TextButton gainToggleButton_;
+    juce::TextButton uiButton_;
     juce::TextButton deleteButton_;
     GainMeterComponent gainMeter_;
     std::unique_ptr<juce::TextButton> modSlotButtons_[3];
+    std::vector<std::unique_ptr<juce::Slider>> paramKnobs_;
     bool gainSliderVisible_ = false;
     bool modPanelVisible_ = false;
+    bool paramPanelVisible_ = false;
+    bool collapsed_ = false;
 };
 
 // dB conversion helpers
@@ -637,12 +866,12 @@ void TrackChainContent::paint(juce::Graphics& g) {
 
         // Draw arrows between device slots
         auto slotArea = chainArea.reduced(8);
-        int slotWidth = 100;
         int slotSpacing = 8;
         int arrowWidth = 20;
 
         int x = slotArea.getX();
         for (size_t i = 0; i < deviceSlots_.size(); ++i) {
+            int slotWidth = deviceSlots_[i]->getExpandedWidth();
             x += slotWidth;  // After device slot
 
             // Draw arrow after each device (except the last one before add button)
@@ -686,13 +915,13 @@ void TrackChainContent::resized() {
         auto chainArea = bounds.reduced(8);
 
         // Layout device slots horizontally
-        int slotWidth = 100;
         int slotHeight = chainArea.getHeight();
         int arrowWidth = 20;
         int slotSpacing = 8;
 
         int x = chainArea.getX();
         for (auto& slot : deviceSlots_) {
+            int slotWidth = slot->getExpandedWidth();
             slot->setBounds(x, chainArea.getY(), slotWidth, slotHeight);
             x += slotWidth + arrowWidth + slotSpacing;
         }

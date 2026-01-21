@@ -25,9 +25,18 @@ struct DeviceInfo {
     bool bypassed = false;  // Device bypass state
     bool expanded = true;   // UI expanded state
 
+    // UI panel visibility states
+    bool modPanelOpen = false;    // Modulator panel visible
+    bool gainPanelOpen = false;   // Gain panel visible
+    bool paramPanelOpen = false;  // Parameter panel visible
+
+    // User-selected visible parameters (indices into plugin parameter list)
+    std::vector<int> visibleParameters;
+
     // Gain stage (for the hidden gain stage feature)
     int gainParameterIndex = -1;  // -1 means no gain stage configured
     float gainValue = 1.0f;       // Current gain value (linear)
+    float gainDb = 0.0f;          // Current gain in dB for UI
 
     // For future use: parameter state, modulation targets, etc.
 
