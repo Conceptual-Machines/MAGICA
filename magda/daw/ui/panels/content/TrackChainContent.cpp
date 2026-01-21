@@ -9,6 +9,7 @@
 #include "core/DeviceInfo.hpp"
 #include "ui/components/chain/NodeComponent.hpp"
 #include "ui/components/chain/RackComponent.hpp"
+#include "ui/components/common/TextSlider.hpp"
 
 namespace magda::daw::ui {
 
@@ -233,6 +234,8 @@ class DeviceButtonLookAndFeel : public juce::LookAndFeel_V4 {
 class TrackChainContent::DeviceSlotComponent : public NodeComponent {
   public:
     static constexpr int BASE_WIDTH = 130;
+    static constexpr int NUM_PARAMS = 16;
+    static constexpr int PARAMS_PER_ROW = 4;
 
     DeviceSlotComponent(TrackChainContent& owner, magda::TrackId trackId,
                         const magda::DeviceInfo& device)
@@ -262,14 +265,6 @@ class TrackChainContent::DeviceSlotComponent : public NodeComponent {
             owner_.repaint();
         };
 
-        onParamPanelToggled = [this](bool visible) {
-            if (auto* dev = magda::TrackManager::getInstance().getDevice(trackId_, device_.id)) {
-                dev->paramPanelOpen = visible;
-            }
-            owner_.resized();
-            owner_.repaint();
-        };
-
         onGainPanelToggled = [this](bool visible) {
             if (auto* dev = magda::TrackManager::getInstance().getDevice(trackId_, device_.id)) {
                 dev->gainPanelOpen = visible;
@@ -282,6 +277,9 @@ class TrackChainContent::DeviceSlotComponent : public NodeComponent {
             owner_.resized();
             owner_.repaint();
         };
+
+        // Hide param button - params shown inline instead
+        setParamButtonVisible(false);
 
         // UI button (extra header button)
         uiButton_.setButtonText("U");
@@ -300,6 +298,31 @@ class TrackChainContent::DeviceSlotComponent : public NodeComponent {
             }
         };
         addAndMakeVisible(gainMeter_);
+
+        // Create inline param sliders with labels (mock params)
+        // clang-format off
+        static const char* mockParamNames[NUM_PARAMS] = {
+            "Cutoff", "Resonance", "Drive", "Mix",
+            "Attack", "Decay", "Sustain", "Release",
+            "LFO Rate", "LFO Depth", "Feedback", "Width",
+            "Low", "Mid", "High", "Output"
+        };
+        // clang-format on
+
+        for (int i = 0; i < NUM_PARAMS; ++i) {
+            paramLabels_[i] = std::make_unique<juce::Label>();
+            paramLabels_[i]->setText(mockParamNames[i], juce::dontSendNotification);
+            paramLabels_[i]->setFont(FontManager::getInstance().getUIFont(8.0f));
+            paramLabels_[i]->setColour(juce::Label::textColourId,
+                                       DarkTheme::getSecondaryTextColour());
+            paramLabels_[i]->setJustificationType(juce::Justification::centredLeft);
+            addAndMakeVisible(*paramLabels_[i]);
+
+            paramSliders_[i] = std::make_unique<TextSlider>(TextSlider::Format::Decimal);
+            paramSliders_[i]->setRange(0.0, 1.0, 0.01);
+            paramSliders_[i]->setValue(0.5, juce::dontSendNotification);
+            addAndMakeVisible(*paramSliders_[i]);
+        }
     }
 
     ~DeviceSlotComponent() override {
@@ -322,23 +345,36 @@ class TrackChainContent::DeviceSlotComponent : public NodeComponent {
 
   protected:
     void paintContent(juce::Graphics& g, juce::Rectangle<int> contentArea) override {
-        // Device name and manufacturer
+        // Manufacturer label at top
+        auto labelArea = contentArea.removeFromTop(12);
         auto textColour = isBypassed() ? DarkTheme::getSecondaryTextColour().withAlpha(0.5f)
-                                       : DarkTheme::getTextColour();
+                                       : DarkTheme::getSecondaryTextColour();
         g.setColour(textColour);
-        g.setFont(FontManager::getInstance().getUIFontBold(11.0f));
-        g.drawText(device_.name, contentArea, juce::Justification::centred);
-
-        auto mfrBounds = contentArea;
-        mfrBounds.removeFromTop(16);
-        g.setColour(DarkTheme::getSecondaryTextColour());
-        g.setFont(FontManager::getInstance().getUIFont(9.0f));
-        g.drawText(device_.manufacturer + " - " + device_.getFormatString(), mfrBounds,
-                   juce::Justification::centred);
+        g.setFont(FontManager::getInstance().getUIFont(8.0f));
+        g.drawText(device_.manufacturer, labelArea.reduced(2, 0), juce::Justification::centredLeft);
     }
 
-    void resizedContent(juce::Rectangle<int> /*contentArea*/) override {
-        // Content area doesn't need child layout - just painted text
+    void resizedContent(juce::Rectangle<int> contentArea) override {
+        // Skip manufacturer label area
+        contentArea.removeFromTop(12);
+        contentArea = contentArea.reduced(2, 0);
+
+        // Layout params in a 4-column grid
+        int numRows = (NUM_PARAMS + PARAMS_PER_ROW - 1) / PARAMS_PER_ROW;
+        int cellWidth = contentArea.getWidth() / PARAMS_PER_ROW;
+        int labelHeight = 10;
+        int sliderHeight = 14;
+        int cellHeight = labelHeight + sliderHeight + 2;
+
+        for (int i = 0; i < NUM_PARAMS; ++i) {
+            int row = i / PARAMS_PER_ROW;
+            int col = i % PARAMS_PER_ROW;
+            int x = contentArea.getX() + col * cellWidth;
+            int y = contentArea.getY() + row * cellHeight;
+
+            paramLabels_[i]->setBounds(x, y, cellWidth - 2, labelHeight);
+            paramSliders_[i]->setBounds(x, y + labelHeight, cellWidth - 2, sliderHeight);
+        }
     }
 
     void resizedHeaderExtra(juce::Rectangle<int>& headerArea) override {
@@ -368,6 +404,9 @@ class TrackChainContent::DeviceSlotComponent : public NodeComponent {
     magda::DeviceInfo device_;
     juce::TextButton uiButton_;
     GainMeterComponent gainMeter_;
+
+    std::unique_ptr<juce::Label> paramLabels_[NUM_PARAMS];
+    std::unique_ptr<TextSlider> paramSliders_[NUM_PARAMS];
 };
 
 // dB conversion helpers
