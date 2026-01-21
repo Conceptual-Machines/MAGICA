@@ -139,7 +139,7 @@ int RackComponent::getPreferredHeight() const {
 }
 
 int RackComponent::getPreferredWidth() const {
-    int width = 220;  // Base width for chains list
+    int width = 260;  // Base width for chains list
     // Add side panels width (left: mods+params, right: gain)
     width += getLeftPanelsWidth() + getRightPanelsWidth();
     // Add chain panel if visible
