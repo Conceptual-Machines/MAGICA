@@ -10,11 +10,192 @@
 namespace magda::daw::ui {
 
 //==============================================================================
+// GainMeterComponent - Vertical gain slider with peak meter background
+//==============================================================================
+class GainMeterComponent : public juce::Component,
+                           public juce::Label::Listener,
+                           private juce::Timer {
+  public:
+    GainMeterComponent() {
+        // Editable label for dB value
+        dbLabel_.setFont(FontManager::getInstance().getUIFont(9.0f));
+        dbLabel_.setColour(juce::Label::textColourId, DarkTheme::getTextColour());
+        dbLabel_.setColour(juce::Label::backgroundColourId, juce::Colours::transparentBlack);
+        dbLabel_.setColour(juce::Label::outlineColourId, juce::Colours::transparentBlack);
+        dbLabel_.setColour(juce::Label::outlineWhenEditingColourId,
+                           DarkTheme::getColour(DarkTheme::ACCENT_BLUE));
+        dbLabel_.setColour(juce::Label::backgroundWhenEditingColourId,
+                           DarkTheme::getColour(DarkTheme::BACKGROUND));
+        dbLabel_.setJustificationType(juce::Justification::centred);
+        dbLabel_.setEditable(false, true, false);  // Single-click to edit
+        dbLabel_.addListener(this);
+        addAndMakeVisible(dbLabel_);
+
+        updateLabel();
+
+        // Start timer for mock meter animation
+        startTimerHz(30);
+    }
+
+    ~GainMeterComponent() override {
+        stopTimer();
+    }
+
+    void setGainDb(double db, juce::NotificationType notification = juce::sendNotification) {
+        db = juce::jlimit(-60.0, 6.0, db);
+        if (std::abs(gainDb_ - db) > 0.01) {
+            gainDb_ = db;
+            updateLabel();
+            repaint();
+            if (notification != juce::dontSendNotification && onGainChanged) {
+                onGainChanged(gainDb_);
+            }
+        }
+    }
+
+    double getGainDb() const {
+        return gainDb_;
+    }
+
+    // Mock meter level (0-1) - in real implementation this would come from audio processing
+    void setMeterLevel(float level) {
+        meterLevel_ = juce::jlimit(0.0f, 1.0f, level);
+        repaint();
+    }
+
+    std::function<void(double)> onGainChanged;
+
+    void paint(juce::Graphics& g) override {
+        auto bounds = getLocalBounds();
+        auto meterArea = bounds.removeFromTop(bounds.getHeight() - 14).reduced(2);
+
+        // Background
+        g.setColour(DarkTheme::getColour(DarkTheme::BACKGROUND));
+        g.fillRoundedRectangle(meterArea.toFloat(), 2.0f);
+
+        // Meter fill (from bottom up)
+        float fillHeight = meterLevel_ * meterArea.getHeight();
+        auto fillArea = meterArea.removeFromBottom(static_cast<int>(fillHeight));
+
+        // Gradient from green (low) to yellow to red (high)
+        juce::ColourGradient gradient(
+            juce::Colour(0xff2ecc71), 0.0f, static_cast<float>(meterArea.getBottom()),
+            juce::Colour(0xffe74c3c), 0.0f, static_cast<float>(meterArea.getY()), false);
+        gradient.addColour(0.7, juce::Colour(0xfff39c12));  // Yellow at 70%
+        g.setGradientFill(gradient);
+        g.fillRect(fillArea);
+
+        // Gain position indicator (horizontal line)
+        float gainNormalized = static_cast<float>((gainDb_ + 60.0) / 66.0);  // -60 to +6 dB
+        int gainY =
+            meterArea.getY() + static_cast<int>((1.0f - gainNormalized) * meterArea.getHeight());
+        g.setColour(DarkTheme::getTextColour());
+        g.drawHorizontalLine(gainY, static_cast<float>(meterArea.getX()),
+                             static_cast<float>(meterArea.getRight()));
+
+        // Small triangles on sides to show gain position
+        juce::Path triangle;
+        triangle.addTriangle(static_cast<float>(meterArea.getX()), static_cast<float>(gainY - 3),
+                             static_cast<float>(meterArea.getX()), static_cast<float>(gainY + 3),
+                             static_cast<float>(meterArea.getX() + 4), static_cast<float>(gainY));
+        g.fillPath(triangle);
+
+        triangle.clear();
+        triangle.addTriangle(
+            static_cast<float>(meterArea.getRight()), static_cast<float>(gainY - 3),
+            static_cast<float>(meterArea.getRight()), static_cast<float>(gainY + 3),
+            static_cast<float>(meterArea.getRight() - 4), static_cast<float>(gainY));
+        g.fillPath(triangle);
+
+        // Border
+        g.setColour(DarkTheme::getColour(DarkTheme::BORDER));
+        auto fullMeterArea = getLocalBounds().removeFromTop(getHeight() - 14).reduced(2);
+        g.drawRoundedRectangle(fullMeterArea.toFloat(), 2.0f, 1.0f);
+    }
+
+    void resized() override {
+        auto bounds = getLocalBounds();
+        dbLabel_.setBounds(bounds.removeFromBottom(14));
+    }
+
+    void mouseDown(const juce::MouseEvent& e) override {
+        if (e.mods.isLeftButtonDown()) {
+            dragging_ = true;
+            setGainFromY(e.y);
+        }
+    }
+
+    void mouseDrag(const juce::MouseEvent& e) override {
+        if (dragging_) {
+            setGainFromY(e.y);
+        }
+    }
+
+    void mouseUp(const juce::MouseEvent&) override {
+        dragging_ = false;
+    }
+
+    void mouseDoubleClick(const juce::MouseEvent&) override {
+        // Reset to unity (0 dB)
+        setGainDb(0.0);
+    }
+
+    // Label::Listener
+    void labelTextChanged(juce::Label* label) override {
+        if (label == &dbLabel_) {
+            auto text = dbLabel_.getText().trim();
+            // Remove "dB" suffix if present
+            if (text.endsWithIgnoreCase("db")) {
+                text = text.dropLastCharacters(2).trim();
+            }
+            double newDb = text.getDoubleValue();
+            setGainDb(newDb);
+        }
+    }
+
+  private:
+    double gainDb_ = 0.0;
+    float meterLevel_ = 0.0f;
+    float peakLevel_ = 0.0f;
+    bool dragging_ = false;
+    juce::Label dbLabel_;
+
+    void updateLabel() {
+        if (gainDb_ <= -60.0) {
+            dbLabel_.setText("-inf", juce::dontSendNotification);
+        } else {
+            dbLabel_.setText(juce::String(gainDb_, 1), juce::dontSendNotification);
+        }
+    }
+
+    void setGainFromY(int y) {
+        auto meterArea = getLocalBounds().removeFromTop(getHeight() - 14).reduced(2);
+        float normalized = 1.0f - static_cast<float>(y - meterArea.getY()) / meterArea.getHeight();
+        normalized = juce::jlimit(0.0f, 1.0f, normalized);
+        double db = -60.0 + normalized * 66.0;  // -60 to +6 dB range
+        setGainDb(db);
+    }
+
+    void timerCallback() override {
+        // Mock meter animation - simulate audio activity
+        // In real implementation, this would receive actual audio levels
+        float targetLevel = static_cast<float>((gainDb_ + 60.0) / 66.0) * 0.8f;
+        targetLevel += (juce::Random::getSystemRandom().nextFloat() - 0.5f) * 0.1f;
+        meterLevel_ = meterLevel_ * 0.9f + targetLevel * 0.1f;
+        meterLevel_ = juce::jlimit(0.0f, 1.0f, meterLevel_);
+        repaint();
+    }
+
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(GainMeterComponent)
+};
+
+//==============================================================================
 // DeviceSlotComponent - Interactive device display
 //==============================================================================
 class TrackChainContent::DeviceSlotComponent : public juce::Component {
   public:
-    static constexpr int GAIN_SLIDER_WIDTH = 24;
+    static constexpr int GAIN_SLIDER_WIDTH = 28;
+    static constexpr int MODULATOR_PANEL_WIDTH = 60;
 
     DeviceSlotComponent(TrackChainContent& owner, magda::TrackId trackId,
                         const magda::DeviceInfo& device)
@@ -37,6 +218,24 @@ class TrackChainContent::DeviceSlotComponent : public juce::Component {
         };
         addAndMakeVisible(bypassButton_);
 
+        // Modulator toggle button
+        modToggleButton_.setButtonText("M");
+        modToggleButton_.setColour(juce::TextButton::buttonColourId,
+                                   DarkTheme::getColour(DarkTheme::SURFACE));
+        modToggleButton_.setColour(juce::TextButton::buttonOnColourId,
+                                   DarkTheme::getColour(DarkTheme::ACCENT_ORANGE));
+        modToggleButton_.setColour(juce::TextButton::textColourOffId,
+                                   DarkTheme::getSecondaryTextColour());
+        modToggleButton_.setColour(juce::TextButton::textColourOnId,
+                                   DarkTheme::getColour(DarkTheme::TEXT_PRIMARY));
+        modToggleButton_.setClickingTogglesState(true);
+        modToggleButton_.onClick = [this]() {
+            modPanelVisible_ = modToggleButton_.getToggleState();
+            resized();
+            repaint();
+        };
+        addAndMakeVisible(modToggleButton_);
+
         // Gain toggle button
         gainToggleButton_.setButtonText("G");
         gainToggleButton_.setColour(juce::TextButton::buttonColourId,
@@ -51,45 +250,45 @@ class TrackChainContent::DeviceSlotComponent : public juce::Component {
         gainToggleButton_.setToggleState(gainSliderVisible_, juce::dontSendNotification);
         gainToggleButton_.onClick = [this]() {
             gainSliderVisible_ = gainToggleButton_.getToggleState();
-            gainSlider_.setVisible(gainSliderVisible_);
-            gainLabel_.setVisible(gainSliderVisible_);
+            gainMeter_.setVisible(gainSliderVisible_);
             resized();
             repaint();
         };
         addAndMakeVisible(gainToggleButton_);
 
-        // Gain slider (vertical)
-        gainSlider_.setSliderStyle(juce::Slider::LinearVertical);
-        gainSlider_.setTextBoxStyle(juce::Slider::NoTextBox, false, 0, 0);
-        gainSlider_.setRange(-60.0, 6.0, 0.1);  // dB range
-        gainSlider_.setValue(0.0);              // Unity gain
-        gainSlider_.setDoubleClickReturnValue(true, 0.0);
-        gainSlider_.setColour(juce::Slider::trackColourId,
-                              DarkTheme::getColour(DarkTheme::SURFACE));
-        gainSlider_.setColour(juce::Slider::backgroundColourId,
-                              DarkTheme::getColour(DarkTheme::BACKGROUND));
-        gainSlider_.setColour(juce::Slider::thumbColourId,
-                              DarkTheme::getColour(DarkTheme::ACCENT_BLUE));
-        gainSlider_.onValueChange = [this]() {
-            // Update the gain label
-            double db = gainSlider_.getValue();
-            if (db <= -60.0) {
-                gainLabel_.setText("-inf", juce::dontSendNotification);
-            } else {
-                gainLabel_.setText(juce::String(db, 1), juce::dontSendNotification);
-            }
+        // Gain meter with text slider
+        gainMeter_.setGainDb(0.0, juce::dontSendNotification);
+        gainMeter_.onGainChanged = [this](double db) {
             // TODO: Update device gain value in TrackManager
+            DBG("Gain changed to: " << db << " dB");
         };
-        gainSlider_.setVisible(false);
-        addChildComponent(gainSlider_);
+        gainMeter_.setVisible(false);
+        addChildComponent(gainMeter_);
 
-        // Gain value label
-        gainLabel_.setText("0.0", juce::dontSendNotification);
-        gainLabel_.setFont(FontManager::getInstance().getUIFont(8.0f));
-        gainLabel_.setColour(juce::Label::textColourId, DarkTheme::getSecondaryTextColour());
-        gainLabel_.setJustificationType(juce::Justification::centred);
-        gainLabel_.setVisible(false);
-        addChildComponent(gainLabel_);
+        // Modulator slot buttons (mock - 3 slots)
+        for (int i = 0; i < 3; ++i) {
+            auto& btn = modSlotButtons_[i];
+            btn = std::make_unique<juce::TextButton>("+");
+            btn->setColour(juce::TextButton::buttonColourId,
+                           DarkTheme::getColour(DarkTheme::SURFACE));
+            btn->setColour(juce::TextButton::textColourOffId, DarkTheme::getSecondaryTextColour());
+            btn->onClick = [this, i]() {
+                // Show modulator type menu
+                juce::PopupMenu menu;
+                menu.addItem(1, "LFO");
+                menu.addItem(2, "Bezier LFO");
+                menu.addItem(3, "ADSR");
+                menu.addItem(4, "Envelope Follower");
+                menu.showMenuAsync(juce::PopupMenu::Options(), [this, i](int result) {
+                    if (result > 0) {
+                        juce::StringArray types = {"", "LFO", "BEZ", "ADSR", "ENV"};
+                        modSlotButtons_[i]->setButtonText(types[result]);
+                        DBG("Added modulator type " << result << " to slot " << i);
+                    }
+                });
+            };
+            addChildComponent(*btn);
+        }
 
         // Delete button
         deleteButton_.setButtonText(juce::String::fromUTF8("✕"));
@@ -106,7 +305,21 @@ class TrackChainContent::DeviceSlotComponent : public juce::Component {
     void paint(juce::Graphics& g) override {
         auto bounds = getLocalBounds();
 
-        // If gain slider visible, account for it
+        // Account for modulator panel on left
+        if (modPanelVisible_) {
+            auto modArea = bounds.removeFromLeft(MODULATOR_PANEL_WIDTH);
+            g.setColour(DarkTheme::getColour(DarkTheme::BACKGROUND));
+            g.fillRoundedRectangle(modArea.toFloat(), 4.0f);
+            g.setColour(DarkTheme::getColour(DarkTheme::BORDER));
+            g.drawRoundedRectangle(modArea.toFloat(), 4.0f, 1.0f);
+
+            // Draw "Mod" label at top
+            g.setColour(DarkTheme::getSecondaryTextColour());
+            g.setFont(FontManager::getInstance().getUIFont(8.0f));
+            g.drawText("Mod", modArea.removeFromTop(14), juce::Justification::centred);
+        }
+
+        // Account for gain slider on right
         if (gainSliderVisible_) {
             bounds.removeFromRight(GAIN_SLIDER_WIDTH);
         }
@@ -144,37 +357,60 @@ class TrackChainContent::DeviceSlotComponent : public juce::Component {
         g.setColour(DarkTheme::getSecondaryTextColour());
         g.setFont(FontManager::getInstance().getUIFont(8.0f));
         g.drawText(device_.getFormatString(), formatBounds, juce::Justification::centredRight);
-
-        // Draw gain slider background if visible
-        if (gainSliderVisible_) {
-            auto sliderArea = getLocalBounds().removeFromRight(GAIN_SLIDER_WIDTH);
-            g.setColour(DarkTheme::getColour(DarkTheme::BACKGROUND));
-            g.fillRoundedRectangle(sliderArea.toFloat(), 4.0f);
-            g.setColour(DarkTheme::getColour(DarkTheme::BORDER));
-            g.drawRoundedRectangle(sliderArea.toFloat(), 4.0f, 1.0f);
-        }
     }
 
     void resized() override {
         auto bounds = getLocalBounds().reduced(4);
 
-        // Gain slider on the right if visible
+        // Modulator panel on the left if visible
+        if (modPanelVisible_) {
+            auto modArea = bounds.removeFromLeft(MODULATOR_PANEL_WIDTH - 4);
+            modArea.removeFromTop(14);  // Skip "Mod" label
+            modArea = modArea.reduced(2);
+
+            int slotHeight = (modArea.getHeight() - 4) / 3;
+            for (int i = 0; i < 3; ++i) {
+                modSlotButtons_[i]->setBounds(modArea.removeFromTop(slotHeight).reduced(0, 1));
+                modSlotButtons_[i]->setVisible(true);
+            }
+        } else {
+            for (auto& btn : modSlotButtons_) {
+                btn->setVisible(false);
+            }
+        }
+
+        // Gain meter on the right if visible
         if (gainSliderVisible_) {
-            auto sliderArea = bounds.removeFromRight(GAIN_SLIDER_WIDTH - 4);
-            gainLabel_.setBounds(sliderArea.removeFromBottom(12));
-            gainSlider_.setBounds(sliderArea.reduced(2, 4));
+            auto meterArea = bounds.removeFromRight(GAIN_SLIDER_WIDTH - 4);
+            gainMeter_.setBounds(meterArea.reduced(2, 2));
         }
 
         auto buttonRow = bounds.removeFromTop(18);
 
-        bypassButton_.setBounds(buttonRow.removeFromLeft(20));
+        // Layout: M-G  B-X
+        modToggleButton_.setBounds(buttonRow.removeFromLeft(20));
         buttonRow.removeFromLeft(2);
         gainToggleButton_.setBounds(buttonRow.removeFromLeft(20));
+        // Space in middle
         deleteButton_.setBounds(buttonRow.removeFromRight(20));
+        buttonRow.removeFromRight(2);
+        bypassButton_.setBounds(buttonRow.removeFromRight(20));
     }
 
     bool isGainSliderVisible() const {
         return gainSliderVisible_;
+    }
+    bool isModPanelVisible() const {
+        return modPanelVisible_;
+    }
+
+    int getExpandedWidth() const {
+        int width = 100;  // Base width
+        if (modPanelVisible_)
+            width += MODULATOR_PANEL_WIDTH;
+        if (gainSliderVisible_)
+            width += GAIN_SLIDER_WIDTH;
+        return width;
     }
 
   private:
@@ -182,11 +418,13 @@ class TrackChainContent::DeviceSlotComponent : public juce::Component {
     magda::TrackId trackId_;
     magda::DeviceInfo device_;
     juce::TextButton bypassButton_;
+    juce::TextButton modToggleButton_;
     juce::TextButton gainToggleButton_;
     juce::TextButton deleteButton_;
-    juce::Slider gainSlider_;
-    juce::Label gainLabel_;
+    GainMeterComponent gainMeter_;
+    std::unique_ptr<juce::TextButton> modSlotButtons_[3];
     bool gainSliderVisible_ = false;
+    bool modPanelVisible_ = false;
 };
 
 // dB conversion helpers
