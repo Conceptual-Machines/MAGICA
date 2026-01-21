@@ -98,9 +98,9 @@ void RackComponent::paintContent(juce::Graphics& g, juce::Rectangle<int> content
 
 void RackComponent::resizedContent(juce::Rectangle<int> contentArea) {
     // If chain panel is visible, split the content area
-    int chainsListWidth = contentArea.getWidth();
+    juce::Rectangle<int> chainPanelArea;
     if (chainPanel_ && chainPanel_->isVisible()) {
-        chainsListWidth = contentArea.getWidth() - CHAIN_PANEL_WIDTH - 4;  // -4 for gap
+        chainPanelArea = contentArea.removeFromRight(CHAIN_PANEL_WIDTH);
     }
 
     // "Chains:" label row with [+] button next to it
@@ -115,17 +115,13 @@ void RackComponent::resizedContent(juce::Rectangle<int> contentArea) {
 
     for (auto& row : chainRows_) {
         int rowHeight = row->getPreferredHeight();
-        row->setBounds(contentArea.getX(), y, chainsListWidth, rowHeight);
+        row->setBounds(contentArea.getX(), y, contentArea.getWidth(), rowHeight);
         y += rowHeight + 2;
     }
 
-    // Position chain panel if visible - extend to FULL HEIGHT for header/footer alignment
-    // This aligns the ChainPanel's X and G buttons with the RackComponent's
+    // Position chain panel if visible
     if (chainPanel_ && chainPanel_->isVisible()) {
-        // Calculate x position: align right edge with main node area (after gain panel if any)
-        int alignedRight = getWidth() - getRightPanelsWidth();
-        int chainPanelX = alignedRight - CHAIN_PANEL_WIDTH;
-        chainPanel_->setBounds(chainPanelX, 0, CHAIN_PANEL_WIDTH, getHeight());
+        chainPanel_->setBounds(chainPanelArea);
     }
 }
 
