@@ -102,11 +102,12 @@ class ChainPanel::DeviceSlotComponent : public NodeComponent {
         contentArea.removeFromTop(12);
         contentArea = contentArea.reduced(2, 0);
 
-        // Layout params in a 4-column grid
+        // Layout params in a 4-column grid, scaled to fit available space
+        int numRows = (NUM_PARAMS + PARAMS_PER_ROW - 1) / PARAMS_PER_ROW;
         int cellWidth = contentArea.getWidth() / PARAMS_PER_ROW;
-        int labelHeight = 10;
-        int sliderHeight = 14;
-        int cellHeight = labelHeight + sliderHeight + 2;
+        int cellHeight = contentArea.getHeight() / numRows;
+        int labelHeight = juce::jmin(10, cellHeight / 3);
+        int sliderHeight = cellHeight - labelHeight - 2;
 
         for (int i = 0; i < NUM_PARAMS; ++i) {
             int row = i / PARAMS_PER_ROW;
