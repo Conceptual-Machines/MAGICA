@@ -42,18 +42,23 @@ class ChainPanel::DeviceSlotComponent : public NodeComponent {
         };
 
         onModPanelToggled = [this](bool /*visible*/) {
-            if (auto* parent = getParentComponent()) {
-                parent->resized();
-                parent->repaint();
-            }
+            // Notify ChainPanel to recalculate container size
+            owner_.onDeviceLayoutChanged();
+        };
+
+        onParamPanelToggled = [this](bool /*visible*/) {
+            // Notify ChainPanel to recalculate container size
+            owner_.onDeviceLayoutChanged();
+        };
+
+        onGainPanelToggled = [this](bool /*visible*/) {
+            // Notify ChainPanel to recalculate container size
+            owner_.onDeviceLayoutChanged();
         };
 
         onLayoutChanged = [this]() {
-            // Notify parent that our size may have changed
-            if (auto* parent = getParentComponent()) {
-                parent->resized();
-                parent->repaint();
-            }
+            // Notify ChainPanel to recalculate container size
+            owner_.onDeviceLayoutChanged();
         };
 
         // Hide param button - params shown inline instead
@@ -400,6 +405,16 @@ int ChainPanel::calculateTotalContentWidth() const {
     }
     totalWidth += 30;  // Space for add device button
     return totalWidth;
+}
+
+void ChainPanel::onDeviceLayoutChanged() {
+    // Recalculate container size and relayout
+    resized();
+    repaint();
+    // Notify parent (RackComponent) that our preferred width may have changed
+    if (onLayoutChanged) {
+        onLayoutChanged();
+    }
 }
 
 void ChainPanel::showChain(magda::TrackId trackId, magda::RackId rackId, magda::ChainId chainId) {

@@ -22,6 +22,7 @@ class ChainPanel : public NodeComponent {
     void showChain(magda::TrackId trackId, magda::RackId rackId, magda::ChainId chainId);
     void refresh();  // Rebuild device slots without resetting panel state
     void clear();
+    void onDeviceLayoutChanged();  // Called when a device slot's size changes (panel toggle)
 
     // Callback when close button is clicked
     std::function<void()> onClose;
