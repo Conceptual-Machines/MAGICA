@@ -2,6 +2,7 @@
 
 #include "NodeComponent.hpp"
 #include "ui/components/common/TextSlider.hpp"
+#include "ui/debug/DebugSettings.hpp"
 #include "ui/themes/DarkTheme.hpp"
 #include "ui/themes/FontManager.hpp"
 #include "ui/themes/SmallButtonLookAndFeel.hpp"
@@ -102,6 +103,16 @@ class ChainPanel::DeviceSlotComponent : public NodeComponent {
         contentArea.removeFromTop(12);
         contentArea = contentArea.reduced(2, 0);
 
+        // Update param fonts from debug settings
+        auto labelFont = FontManager::getInstance().getUIFont(
+            DebugSettings::getInstance().getParamLabelFontSize());
+        auto valueFont = FontManager::getInstance().getUIFont(
+            DebugSettings::getInstance().getParamValueFontSize());
+        for (int i = 0; i < NUM_PARAMS; ++i) {
+            paramLabels_[i]->setFont(labelFont);
+            paramSliders_[i]->setFont(valueFont);
+        }
+
         // Layout params in a 4-column grid, scaled to fit available space
         int numRows = (NUM_PARAMS + PARAMS_PER_ROW - 1) / PARAMS_PER_ROW;
         int cellWidth = contentArea.getWidth() / PARAMS_PER_ROW;
@@ -139,6 +150,17 @@ class ChainPanel::DeviceSlotComponent : public NodeComponent {
 
 ChainPanel::ChainPanel() {
     // No header - controls are on the chain row
+
+    // Listen for debug settings changes
+    DebugSettings::getInstance().addListener([this]() {
+        // Force all device slots to update their fonts
+        for (auto& slot : deviceSlots_) {
+            slot->resized();
+            slot->repaint();
+        }
+        resized();
+        repaint();
+    });
 
     onLayoutChanged = [this]() {
         if (auto* parent = getParentComponent()) {

@@ -221,7 +221,8 @@ class DeviceButtonLookAndFeel : public juce::LookAndFeel_V4 {
 
     void drawButtonText(juce::Graphics& g, juce::TextButton& button, bool /*isMouseOver*/,
                         bool /*isButtonDown*/) override {
-        auto font = FontManager::getInstance().getUIFont(10.0f);
+        auto font =
+            FontManager::getInstance().getUIFont(DebugSettings::getInstance().getButtonFontSize());
         g.setFont(font);
         g.setColour(button.findColour(button.getToggleState() ? juce::TextButton::textColourOnId
                                                               : juce::TextButton::textColourOffId));
@@ -342,7 +343,8 @@ class TrackChainContent::DeviceSlotComponent : public NodeComponent {
         for (int i = 0; i < NUM_PARAMS; ++i) {
             paramLabels_[i] = std::make_unique<juce::Label>();
             paramLabels_[i]->setText(mockParamNames[i], juce::dontSendNotification);
-            paramLabels_[i]->setFont(FontManager::getInstance().getUIFont(9.0f));
+            paramLabels_[i]->setFont(FontManager::getInstance().getUIFont(
+                DebugSettings::getInstance().getParamLabelFontSize()));
             paramLabels_[i]->setColour(juce::Label::textColourId,
                                        DarkTheme::getSecondaryTextColour());
             paramLabels_[i]->setJustificationType(juce::Justification::centredLeft);
@@ -389,6 +391,16 @@ class TrackChainContent::DeviceSlotComponent : public NodeComponent {
         // Skip manufacturer label area
         contentArea.removeFromTop(12);
         contentArea = contentArea.reduced(2, 0);
+
+        // Update param label fonts from debug settings
+        auto labelFont = FontManager::getInstance().getUIFont(
+            DebugSettings::getInstance().getParamLabelFontSize());
+        auto valueFont = FontManager::getInstance().getUIFont(
+            DebugSettings::getInstance().getParamValueFontSize());
+        for (int i = 0; i < NUM_PARAMS; ++i) {
+            paramLabels_[i]->setFont(labelFont);
+            paramSliders_[i]->setFont(valueFont);
+        }
 
         // Layout params in a 4-column grid, scaled to fit available space
         int numRows = (NUM_PARAMS + PARAMS_PER_ROW - 1) / PARAMS_PER_ROW;
@@ -470,6 +482,11 @@ TrackChainContent::TrackChainContent() {
 
     // Listen for debug settings changes
     DebugSettings::getInstance().addListener([this]() {
+        // Force all device slots to update their fonts
+        for (auto& slot : deviceSlots_) {
+            slot->resized();
+            slot->repaint();
+        }
         resized();
         repaint();
     });

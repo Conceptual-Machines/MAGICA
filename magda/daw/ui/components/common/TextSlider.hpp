@@ -19,7 +19,7 @@ class TextSlider : public juce::Component, public juce::Label::Listener {
     enum class Format { Decimal, Decibels, Pan };
 
     TextSlider(Format format = Format::Decimal) : format_(format) {
-        label_.setFont(FontManager::getInstance().getUIFont(9.0f));
+        label_.setFont(FontManager::getInstance().getUIFont(12.0f));
         label_.setColour(juce::Label::textColourId, DarkTheme::getTextColour());
         label_.setColour(juce::Label::backgroundColourId, DarkTheme::getColour(DarkTheme::SURFACE));
         label_.setColour(juce::Label::outlineColourId, DarkTheme::getColour(DarkTheme::BORDER));
@@ -66,6 +66,10 @@ class TextSlider : public juce::Component, public juce::Label::Listener {
     void setFormat(Format format) {
         format_ = format;
         updateLabel();
+    }
+
+    void setFont(const juce::Font& font) {
+        label_.setFont(font);
     }
 
     std::function<void(double)> onValueChanged;

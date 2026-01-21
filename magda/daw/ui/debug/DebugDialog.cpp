@@ -52,7 +52,55 @@ class DebugDialog::Content : public juce::Component {
         };
         addAndMakeVisible(deviceWidthSlider_);
 
-        setSize(300, 150);
+        // Button font size
+        buttonFontLabel_.setText("Button Font Size:", juce::dontSendNotification);
+        buttonFontLabel_.setFont(FontManager::getInstance().getUIFont(12.0f));
+        buttonFontLabel_.setColour(juce::Label::textColourId, DarkTheme::getTextColour());
+        addAndMakeVisible(buttonFontLabel_);
+
+        buttonFontSlider_.setRange(6, 16, 0.5);
+        buttonFontSlider_.setValue(DebugSettings::getInstance().getButtonFontSize(),
+                                   juce::dontSendNotification);
+        buttonFontSlider_.setTextBoxStyle(juce::Slider::TextBoxRight, false, 50, 20);
+        buttonFontSlider_.onValueChange = [this]() {
+            DebugSettings::getInstance().setButtonFontSize(
+                static_cast<float>(buttonFontSlider_.getValue()));
+        };
+        addAndMakeVisible(buttonFontSlider_);
+
+        // Param label font size
+        paramFontLabel_.setText("Param Label Font Size:", juce::dontSendNotification);
+        paramFontLabel_.setFont(FontManager::getInstance().getUIFont(12.0f));
+        paramFontLabel_.setColour(juce::Label::textColourId, DarkTheme::getTextColour());
+        addAndMakeVisible(paramFontLabel_);
+
+        paramFontSlider_.setRange(6, 14, 0.5);
+        paramFontSlider_.setValue(DebugSettings::getInstance().getParamLabelFontSize(),
+                                  juce::dontSendNotification);
+        paramFontSlider_.setTextBoxStyle(juce::Slider::TextBoxRight, false, 50, 20);
+        paramFontSlider_.onValueChange = [this]() {
+            DebugSettings::getInstance().setParamLabelFontSize(
+                static_cast<float>(paramFontSlider_.getValue()));
+        };
+        addAndMakeVisible(paramFontSlider_);
+
+        // Param value font size
+        paramValueFontLabel_.setText("Param Value Font Size:", juce::dontSendNotification);
+        paramValueFontLabel_.setFont(FontManager::getInstance().getUIFont(12.0f));
+        paramValueFontLabel_.setColour(juce::Label::textColourId, DarkTheme::getTextColour());
+        addAndMakeVisible(paramValueFontLabel_);
+
+        paramValueFontSlider_.setRange(6, 14, 0.5);
+        paramValueFontSlider_.setValue(DebugSettings::getInstance().getParamValueFontSize(),
+                                       juce::dontSendNotification);
+        paramValueFontSlider_.setTextBoxStyle(juce::Slider::TextBoxRight, false, 50, 20);
+        paramValueFontSlider_.onValueChange = [this]() {
+            DebugSettings::getInstance().setParamValueFontSize(
+                static_cast<float>(paramValueFontSlider_.getValue()));
+        };
+        addAndMakeVisible(paramValueFontSlider_);
+
+        setSize(300, 240);
     }
 
     void paint(juce::Graphics& g) override {
@@ -75,6 +123,24 @@ class DebugDialog::Content : public juce::Component {
         row = bounds.removeFromTop(24);
         deviceWidthLabel_.setBounds(row.removeFromLeft(140));
         deviceWidthSlider_.setBounds(row);
+        bounds.removeFromTop(6);
+
+        // Button font size row
+        row = bounds.removeFromTop(24);
+        buttonFontLabel_.setBounds(row.removeFromLeft(140));
+        buttonFontSlider_.setBounds(row);
+        bounds.removeFromTop(6);
+
+        // Param font size row
+        row = bounds.removeFromTop(24);
+        paramFontLabel_.setBounds(row.removeFromLeft(140));
+        paramFontSlider_.setBounds(row);
+        bounds.removeFromTop(6);
+
+        // Param value font size row
+        row = bounds.removeFromTop(24);
+        paramValueFontLabel_.setBounds(row.removeFromLeft(140));
+        paramValueFontSlider_.setBounds(row);
     }
 
   private:
@@ -83,6 +149,12 @@ class DebugDialog::Content : public juce::Component {
     juce::Slider bottomPanelSlider_;
     juce::Label deviceWidthLabel_;
     juce::Slider deviceWidthSlider_;
+    juce::Label buttonFontLabel_;
+    juce::Slider buttonFontSlider_;
+    juce::Label paramFontLabel_;
+    juce::Slider paramFontSlider_;
+    juce::Label paramValueFontLabel_;
+    juce::Slider paramValueFontSlider_;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(Content)
 };
