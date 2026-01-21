@@ -5,7 +5,9 @@
 #include "../../themes/DarkTheme.hpp"
 #include "../../themes/FontManager.hpp"
 #include "../../themes/MixerMetrics.hpp"
+#include "../../themes/SmallButtonLookAndFeel.hpp"
 #include "core/DeviceInfo.hpp"
+#include "ui/components/chain/NodeComponent.hpp"
 #include "ui/components/chain/RackComponent.hpp"
 
 namespace magda::daw::ui {
@@ -225,141 +227,80 @@ class DeviceButtonLookAndFeel : public juce::LookAndFeel_V4 {
 };
 
 //==============================================================================
-// DeviceSlotComponent - Interactive device display
+// DeviceSlotComponent - Interactive device display (inherits from NodeComponent)
 //==============================================================================
-class TrackChainContent::DeviceSlotComponent : public juce::Component {
+class TrackChainContent::DeviceSlotComponent : public NodeComponent {
   public:
-    static constexpr int GAIN_SLIDER_WIDTH = 28;
-    static constexpr int MODULATOR_PANEL_WIDTH = 60;
-    static constexpr int PARAM_PANEL_WIDTH = 80;
-
-    static DeviceButtonLookAndFeel& getDeviceButtonLookAndFeel() {
-        static DeviceButtonLookAndFeel laf;
-        return laf;
-    }
+    static constexpr int BASE_WIDTH = 130;
 
     DeviceSlotComponent(TrackChainContent& owner, magda::TrackId trackId,
                         const magda::DeviceInfo& device)
-        : owner_(owner),
-          trackId_(trackId),
-          device_(device),
-          gainSliderVisible_(device.gainPanelOpen),
-          modPanelVisible_(device.modPanelOpen),
-          paramPanelVisible_(device.paramPanelOpen),
-          collapsed_(!device.expanded) {
-        // Bypass button
-        bypassButton_.setButtonText("B");
-        bypassButton_.setColour(juce::TextButton::buttonColourId,
-                                DarkTheme::getColour(DarkTheme::SURFACE));
-        bypassButton_.setColour(juce::TextButton::buttonOnColourId,
-                                DarkTheme::getColour(DarkTheme::STATUS_WARNING));
-        bypassButton_.setColour(juce::TextButton::textColourOffId,
-                                DarkTheme::getSecondaryTextColour());
-        bypassButton_.setColour(juce::TextButton::textColourOnId,
-                                DarkTheme::getColour(DarkTheme::BACKGROUND));
-        bypassButton_.setClickingTogglesState(true);
-        bypassButton_.setToggleState(device_.bypassed, juce::dontSendNotification);
-        bypassButton_.onClick = [this]() {
-            magda::TrackManager::getInstance().setDeviceBypassed(trackId_, device_.id,
-                                                                 bypassButton_.getToggleState());
-        };
-        addAndMakeVisible(bypassButton_);
+        : owner_(owner), trackId_(trackId), device_(device) {
+        setNodeName(device.name);
+        setBypassed(device.bypassed);
 
-        // Modulator toggle button
-        modToggleButton_.setButtonText("M");
-        modToggleButton_.setColour(juce::TextButton::buttonColourId,
-                                   DarkTheme::getColour(DarkTheme::SURFACE));
-        modToggleButton_.setColour(juce::TextButton::buttonOnColourId,
-                                   DarkTheme::getColour(DarkTheme::ACCENT_ORANGE));
-        modToggleButton_.setColour(juce::TextButton::textColourOffId,
-                                   DarkTheme::getSecondaryTextColour());
-        modToggleButton_.setColour(juce::TextButton::textColourOnId,
-                                   DarkTheme::getColour(DarkTheme::TEXT_PRIMARY));
-        modToggleButton_.setClickingTogglesState(true);
-        modToggleButton_.setToggleState(modPanelVisible_, juce::dontSendNotification);
-        modToggleButton_.onClick = [this]() {
-            modPanelVisible_ = modToggleButton_.getToggleState();
-            // Save state to TrackManager
+        // Restore panel visibility from device state
+        modPanelVisible_ = device.modPanelOpen;
+        paramPanelVisible_ = device.paramPanelOpen;
+        gainPanelVisible_ = device.gainPanelOpen;
+
+        // Set up NodeComponent callbacks
+        onBypassChanged = [this](bool bypassed) {
+            magda::TrackManager::getInstance().setDeviceBypassed(trackId_, device_.id, bypassed);
+        };
+
+        onDeleteClicked = [this]() {
+            magda::TrackManager::getInstance().removeDeviceFromTrack(trackId_, device_.id);
+        };
+
+        onModPanelToggled = [this](bool visible) {
             if (auto* dev = magda::TrackManager::getInstance().getDevice(trackId_, device_.id)) {
-                dev->modPanelOpen = modPanelVisible_;
+                dev->modPanelOpen = visible;
             }
-            resized();
-            repaint();
-            // Notify parent to re-layout all slots
             owner_.resized();
             owner_.repaint();
         };
-        addAndMakeVisible(modToggleButton_);
 
-        // Gain toggle button
-        gainToggleButton_.setButtonText("G");
-        gainToggleButton_.setColour(juce::TextButton::buttonColourId,
-                                    DarkTheme::getColour(DarkTheme::SURFACE));
-        gainToggleButton_.setColour(juce::TextButton::buttonOnColourId,
-                                    DarkTheme::getColour(DarkTheme::ACCENT_BLUE));
-        gainToggleButton_.setColour(juce::TextButton::textColourOffId,
-                                    DarkTheme::getSecondaryTextColour());
-        gainToggleButton_.setColour(juce::TextButton::textColourOnId,
-                                    DarkTheme::getColour(DarkTheme::TEXT_PRIMARY));
-        gainToggleButton_.setClickingTogglesState(true);
-        gainToggleButton_.setToggleState(gainSliderVisible_, juce::dontSendNotification);
-        gainToggleButton_.onClick = [this]() {
-            gainSliderVisible_ = gainToggleButton_.getToggleState();
-            gainMeter_.setVisible(gainSliderVisible_);
-            // Save state to TrackManager
+        onParamPanelToggled = [this](bool visible) {
             if (auto* dev = magda::TrackManager::getInstance().getDevice(trackId_, device_.id)) {
-                dev->gainPanelOpen = gainSliderVisible_;
+                dev->paramPanelOpen = visible;
             }
-            resized();
-            repaint();
-            // Notify parent to re-layout all slots
             owner_.resized();
             owner_.repaint();
         };
-        addAndMakeVisible(gainToggleButton_);
 
-        // Gain meter with text slider - restore dB value from device
+        onGainPanelToggled = [this](bool visible) {
+            if (auto* dev = magda::TrackManager::getInstance().getDevice(trackId_, device_.id)) {
+                dev->gainPanelOpen = visible;
+            }
+            owner_.resized();
+            owner_.repaint();
+        };
+
+        onLayoutChanged = [this]() {
+            owner_.resized();
+            owner_.repaint();
+        };
+
+        // UI button (extra header button)
+        uiButton_.setButtonText("U");
+        uiButton_.setColour(juce::TextButton::buttonColourId,
+                            DarkTheme::getColour(DarkTheme::SURFACE));
+        uiButton_.setColour(juce::TextButton::textColourOffId, DarkTheme::getSecondaryTextColour());
+        uiButton_.onClick = [this]() { DBG("Open plugin UI for: " << device_.name); };
+        uiButton_.setLookAndFeel(&SmallButtonLookAndFeel::getInstance());
+        addAndMakeVisible(uiButton_);
+
+        // Gain meter with text slider
         gainMeter_.setGainDb(device_.gainDb, juce::dontSendNotification);
-        gainMeter_.setVisible(gainSliderVisible_);
         gainMeter_.onGainChanged = [this](double db) {
-            // Save gain dB value to TrackManager
             if (auto* dev = magda::TrackManager::getInstance().getDevice(trackId_, device_.id)) {
                 dev->gainDb = static_cast<float>(db);
             }
         };
-        if (gainSliderVisible_) {
-            addAndMakeVisible(gainMeter_);
-        } else {
-            addChildComponent(gainMeter_);
-        }
+        addAndMakeVisible(gainMeter_);
 
-        // Parameter toggle button
-        paramToggleButton_.setButtonText("P");
-        paramToggleButton_.setColour(juce::TextButton::buttonColourId,
-                                     DarkTheme::getColour(DarkTheme::SURFACE));
-        paramToggleButton_.setColour(juce::TextButton::buttonOnColourId,
-                                     DarkTheme::getColour(DarkTheme::ACCENT_PURPLE));
-        paramToggleButton_.setColour(juce::TextButton::textColourOffId,
-                                     DarkTheme::getSecondaryTextColour());
-        paramToggleButton_.setColour(juce::TextButton::textColourOnId,
-                                     DarkTheme::getColour(DarkTheme::TEXT_PRIMARY));
-        paramToggleButton_.setClickingTogglesState(true);
-        paramToggleButton_.setToggleState(paramPanelVisible_, juce::dontSendNotification);
-        paramToggleButton_.onClick = [this]() {
-            paramPanelVisible_ = paramToggleButton_.getToggleState();
-            // Save state to TrackManager
-            if (auto* dev = magda::TrackManager::getInstance().getDevice(trackId_, device_.id)) {
-                dev->paramPanelOpen = paramPanelVisible_;
-            }
-            resized();
-            repaint();
-            // Notify parent to re-layout all slots
-            owner_.resized();
-            owner_.repaint();
-        };
-        addAndMakeVisible(paramToggleButton_);
-
-        // Mock parameter knobs (will be replaced with real params later)
+        // Mock parameter knobs
         for (int i = 0; i < 4; ++i) {
             auto knob = std::make_unique<juce::Slider>();
             knob->setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
@@ -374,7 +315,7 @@ class TrackChainContent::DeviceSlotComponent : public juce::Component {
             paramKnobs_.push_back(std::move(knob));
         }
 
-        // Modulator slot buttons (mock - 3 slots)
+        // Modulator slot buttons
         for (int i = 0; i < 3; ++i) {
             auto& btn = modSlotButtons_[i];
             btn = std::make_unique<juce::TextButton>("+");
@@ -382,7 +323,6 @@ class TrackChainContent::DeviceSlotComponent : public juce::Component {
                            DarkTheme::getColour(DarkTheme::SURFACE));
             btn->setColour(juce::TextButton::textColourOffId, DarkTheme::getSecondaryTextColour());
             btn->onClick = [this, i]() {
-                // Show modulator type menu
                 juce::PopupMenu menu;
                 menu.addItem(1, "LFO");
                 menu.addItem(2, "Bezier LFO");
@@ -392,289 +332,111 @@ class TrackChainContent::DeviceSlotComponent : public juce::Component {
                     if (result > 0) {
                         juce::StringArray types = {"", "LFO", "BEZ", "ADSR", "ENV"};
                         modSlotButtons_[i]->setButtonText(types[result]);
-                        DBG("Added modulator type " << result << " to slot " << i);
                     }
                 });
             };
             addChildComponent(*btn);
         }
-
-        // UI button (opens plugin editor window)
-        uiButton_.setButtonText("U");
-        uiButton_.setColour(juce::TextButton::buttonColourId,
-                            DarkTheme::getColour(DarkTheme::SURFACE));
-        uiButton_.setColour(juce::TextButton::textColourOffId, DarkTheme::getSecondaryTextColour());
-        uiButton_.onClick = [this]() {
-            // TODO: Open plugin UI window
-            DBG("Open plugin UI for: " << device_.name);
-        };
-        addAndMakeVisible(uiButton_);
-
-        // Delete button
-        deleteButton_.setButtonText(juce::String::fromUTF8("✕"));
-        deleteButton_.setColour(juce::TextButton::buttonColourId,
-                                DarkTheme::getColour(DarkTheme::SURFACE));
-        deleteButton_.setColour(juce::TextButton::textColourOffId,
-                                DarkTheme::getSecondaryTextColour());
-        deleteButton_.onClick = [this]() {
-            magda::TrackManager::getInstance().removeDeviceFromTrack(trackId_, device_.id);
-        };
-        addAndMakeVisible(deleteButton_);
-
-        // Apply square button look and feel to all buttons
-        bypassButton_.setLookAndFeel(&getDeviceButtonLookAndFeel());
-        modToggleButton_.setLookAndFeel(&getDeviceButtonLookAndFeel());
-        paramToggleButton_.setLookAndFeel(&getDeviceButtonLookAndFeel());
-        gainToggleButton_.setLookAndFeel(&getDeviceButtonLookAndFeel());
-        uiButton_.setLookAndFeel(&getDeviceButtonLookAndFeel());
-        deleteButton_.setLookAndFeel(&getDeviceButtonLookAndFeel());
     }
 
     ~DeviceSlotComponent() override {
-        // Clear LookAndFeel references
-        bypassButton_.setLookAndFeel(nullptr);
-        modToggleButton_.setLookAndFeel(nullptr);
-        paramToggleButton_.setLookAndFeel(nullptr);
-        gainToggleButton_.setLookAndFeel(nullptr);
         uiButton_.setLookAndFeel(nullptr);
-        deleteButton_.setLookAndFeel(nullptr);
     }
 
-    void paint(juce::Graphics& g) override {
-        auto bounds = getLocalBounds();
-
-        // Mod panel on left (visible even when collapsed)
-        if (modPanelVisible_) {
-            auto modArea = bounds.removeFromLeft(MODULATOR_PANEL_WIDTH);
-            g.setColour(DarkTheme::getColour(DarkTheme::BACKGROUND));
-            g.fillRoundedRectangle(modArea.toFloat(), 4.0f);
-            g.setColour(DarkTheme::getColour(DarkTheme::BORDER));
-            g.drawRoundedRectangle(modArea.toFloat(), 4.0f, 1.0f);
-
-            // Draw "Mod" label at top
-            g.setColour(DarkTheme::getSecondaryTextColour());
-            g.setFont(FontManager::getInstance().getUIFont(8.0f));
-            g.drawText("Mod", modArea.removeFromTop(14), juce::Justification::centred);
-        }
-
-        // Param panel (between mod and main, visible even when collapsed)
-        if (paramPanelVisible_) {
-            auto paramArea = bounds.removeFromLeft(PARAM_PANEL_WIDTH);
-            g.setColour(DarkTheme::getColour(DarkTheme::BACKGROUND));
-            g.fillRoundedRectangle(paramArea.toFloat(), 4.0f);
-            g.setColour(DarkTheme::getColour(DarkTheme::BORDER));
-            g.drawRoundedRectangle(paramArea.toFloat(), 4.0f, 1.0f);
-
-            // Draw "Params" label at top
-            g.setColour(DarkTheme::getSecondaryTextColour());
-            g.setFont(FontManager::getInstance().getUIFont(8.0f));
-            g.drawText("Params", paramArea.removeFromTop(14), juce::Justification::centred);
-        }
-
-        // Gain panel on right (visible even when collapsed)
-        if (gainSliderVisible_) {
-            bounds.removeFromRight(GAIN_SLIDER_WIDTH);
-        }
-
-        // Background for main area
-        auto bgColour = device_.bypassed ? DarkTheme::getColour(DarkTheme::SURFACE).withAlpha(0.5f)
-                                         : DarkTheme::getColour(DarkTheme::SURFACE);
-        g.setColour(bgColour);
-        g.fillRoundedRectangle(bounds.toFloat(), 4.0f);
-
-        // Border
-        g.setColour(DarkTheme::getColour(DarkTheme::BORDER));
-        g.drawRoundedRectangle(bounds.toFloat(), 4.0f, 1.0f);
-
-        if (!collapsed_) {
-            // Device name
-            auto textBounds = bounds.reduced(6);
-            textBounds.removeFromTop(20);     // Skip header row
-            textBounds.removeFromBottom(20);  // Skip footer row
-
-            auto textColour = device_.bypassed ? DarkTheme::getSecondaryTextColour().withAlpha(0.5f)
-                                               : DarkTheme::getTextColour();
-            g.setColour(textColour);
-            g.setFont(FontManager::getInstance().getUIFontBold(11.0f));
-            g.drawText(device_.name, textBounds, juce::Justification::centred);
-
-            // Manufacturer + format
-            auto mfrBounds = textBounds;
-            mfrBounds.removeFromTop(16);
-            g.setColour(DarkTheme::getSecondaryTextColour());
-            g.setFont(FontManager::getInstance().getUIFont(9.0f));
-            g.drawText(device_.manufacturer + " - " + device_.getFormatString(), mfrBounds,
-                       juce::Justification::centred);
-        }
-    }
-
-    void mouseDoubleClick(const juce::MouseEvent&) override {
-        collapsed_ = !collapsed_;
-        // Save state to TrackManager
-        if (auto* dev = magda::TrackManager::getInstance().getDevice(trackId_, device_.id)) {
-            dev->expanded = !collapsed_;
-        }
-        resized();
-        repaint();
-        // Notify parent to re-layout all slots
-        owner_.resized();
-        owner_.repaint();
-    }
-
-    void resized() override {
-        auto bounds = getLocalBounds().reduced(4);
-
-        // Modulator panel on the left if visible (always, even when collapsed)
-        if (modPanelVisible_) {
-            auto modArea = bounds.removeFromLeft(MODULATOR_PANEL_WIDTH - 4);
-            modArea.removeFromTop(14);  // Skip "Mod" label
-            modArea = modArea.reduced(2);
-
-            int slotHeight = (modArea.getHeight() - 4) / 3;
-            for (int i = 0; i < 3; ++i) {
-                modSlotButtons_[i]->setBounds(modArea.removeFromTop(slotHeight).reduced(0, 1));
-                modSlotButtons_[i]->setVisible(true);
-            }
-        } else {
-            for (auto& btn : modSlotButtons_) {
-                btn->setVisible(false);
-            }
-        }
-
-        // Parameter panel (always, even when collapsed)
-        if (paramPanelVisible_) {
-            auto paramArea = bounds.removeFromLeft(PARAM_PANEL_WIDTH - 4);
-            paramArea.removeFromTop(14);  // Skip "Params" label
-            paramArea = paramArea.reduced(2);
-
-            // Layout knobs in a 2x2 grid
-            int knobSize = (paramArea.getWidth() - 2) / 2;
-            int row = 0, col = 0;
-            for (auto& knob : paramKnobs_) {
-                int x = paramArea.getX() + col * (knobSize + 2);
-                int y = paramArea.getY() + row * (knobSize + 2);
-                knob->setBounds(x, y, knobSize, knobSize);
-                knob->setVisible(true);
-                col++;
-                if (col >= 2) {
-                    col = 0;
-                    row++;
-                }
-            }
-        } else {
-            for (auto& knob : paramKnobs_) {
-                knob->setVisible(false);
-            }
-        }
-
-        // Gain meter on the right if visible (always, even when collapsed)
-        if (gainSliderVisible_) {
-            auto meterArea = bounds.removeFromRight(GAIN_SLIDER_WIDTH - 4);
-            gainMeter_.setBounds(meterArea.reduced(2, 2));
-            gainMeter_.setVisible(true);
-        } else {
-            gainMeter_.setVisible(false);
-        }
-
-        // Layout buttons for main plugin area
-        if (collapsed_) {
-            // Collapsed mode: vertical column of buttons
-            // Top group: ON, U, X (device controls)
-            // Bottom group: M, P, G (panel toggles)
-            int buttonSize = 16;
-            int spacing = 2;
-            int x = bounds.getX() + (bounds.getWidth() - buttonSize) / 2;  // Center horizontally
-            int y = bounds.getY();
-
-            // Device controls at top
-            bypassButton_.setBounds(x, y, buttonSize, buttonSize);
-            y += buttonSize + spacing;
-            uiButton_.setBounds(x, y, buttonSize, buttonSize);
-            y += buttonSize + spacing;
-            deleteButton_.setBounds(x, y, buttonSize, buttonSize);
-            y += buttonSize + spacing + 4;  // Extra gap between groups
-
-            // Panel toggles at bottom
-            modToggleButton_.setBounds(x, y, buttonSize, buttonSize);
-            y += buttonSize + spacing;
-            paramToggleButton_.setBounds(x, y, buttonSize, buttonSize);
-            y += buttonSize + spacing;
-            gainToggleButton_.setBounds(x, y, buttonSize, buttonSize);
-        } else {
-            // Expanded mode: header and footer layout
-            int btnSize = 16;
-            int btnSpacing = 2;
-
-            // Calculate inset dynamically based on visible panel widths
-            int leftPanelWidth = 0;
-            if (modPanelVisible_)
-                leftPanelWidth += MODULATOR_PANEL_WIDTH;
-            if (paramPanelVisible_)
-                leftPanelWidth += PARAM_PANEL_WIDTH;
-            int rightPanelWidth = gainSliderVisible_ ? GAIN_SLIDER_WIDTH : 0;
-
-            int leftInset = leftPanelWidth > 0 ? leftPanelWidth / 15 : 0;
-            int rightInset = rightPanelWidth > 0 ? rightPanelWidth / 7 : 0;
-
-            // Header: [ON] [U] ... [X]
-            auto headerRow = bounds.removeFromTop(18);
-            headerRow.removeFromLeft(leftInset);
-            headerRow.removeFromRight(rightInset);
-            bypassButton_.setBounds(headerRow.removeFromLeft(btnSize));
-            headerRow.removeFromLeft(btnSpacing);
-            uiButton_.setBounds(headerRow.removeFromLeft(btnSize));
-            deleteButton_.setBounds(headerRow.removeFromRight(btnSize));
-
-            // Footer: [M] [P] ... [G]
-            auto footerRow = bounds.removeFromBottom(18);
-            footerRow.removeFromLeft(leftInset);
-            footerRow.removeFromRight(rightInset);
-            modToggleButton_.setBounds(footerRow.removeFromLeft(btnSize));
-            footerRow.removeFromLeft(btnSpacing);
-            paramToggleButton_.setBounds(footerRow.removeFromLeft(btnSize));
-            gainToggleButton_.setBounds(footerRow.removeFromRight(btnSize));
-        }
+    int getExpandedWidth() const {
+        return getTotalWidth(BASE_WIDTH);
     }
 
     bool isGainSliderVisible() const {
-        return gainSliderVisible_;
+        return gainPanelVisible_;
     }
     bool isModPanelVisible() const {
         return modPanelVisible_;
     }
+    bool isCollapsed() const {
+        return false;
+    }  // No longer support collapsed mode
 
-    int getExpandedWidth() const {
-        int width = collapsed_ ? 36 : 130;  // Collapsed = vertical buttons only, expanded = full
-        if (modPanelVisible_)
-            width += MODULATOR_PANEL_WIDTH;
-        if (paramPanelVisible_)
-            width += PARAM_PANEL_WIDTH;
-        if (gainSliderVisible_)
-            width += GAIN_SLIDER_WIDTH;
-        return width;
+  protected:
+    void paintContent(juce::Graphics& g, juce::Rectangle<int> contentArea) override {
+        // Device name and manufacturer
+        auto textColour = isBypassed() ? DarkTheme::getSecondaryTextColour().withAlpha(0.5f)
+                                       : DarkTheme::getTextColour();
+        g.setColour(textColour);
+        g.setFont(FontManager::getInstance().getUIFontBold(11.0f));
+        g.drawText(device_.name, contentArea, juce::Justification::centred);
+
+        auto mfrBounds = contentArea;
+        mfrBounds.removeFromTop(16);
+        g.setColour(DarkTheme::getSecondaryTextColour());
+        g.setFont(FontManager::getInstance().getUIFont(9.0f));
+        g.drawText(device_.manufacturer + " - " + device_.getFormatString(), mfrBounds,
+                   juce::Justification::centred);
     }
 
-    bool isCollapsed() const {
-        return collapsed_;
+    void resizedContent(juce::Rectangle<int> /*contentArea*/) override {
+        // Content area doesn't need child layout - just painted text
+    }
+
+    void resizedHeaderExtra(juce::Rectangle<int>& headerArea) override {
+        // Add UI button after bypass button
+        uiButton_.setBounds(headerArea.removeFromLeft(BUTTON_SIZE));
+        headerArea.removeFromLeft(4);
+    }
+
+    void resizedModPanel(juce::Rectangle<int> panelArea) override {
+        panelArea.removeFromTop(16);  // Skip label
+        panelArea = panelArea.reduced(2);
+
+        int slotHeight = (panelArea.getHeight() - 4) / 3;
+        for (int i = 0; i < 3; ++i) {
+            modSlotButtons_[i]->setBounds(panelArea.removeFromTop(slotHeight).reduced(0, 1));
+            modSlotButtons_[i]->setVisible(true);
+        }
+    }
+
+    void resizedParamPanel(juce::Rectangle<int> panelArea) override {
+        panelArea.removeFromTop(16);  // Skip label
+        panelArea = panelArea.reduced(2);
+
+        int knobSize = (panelArea.getWidth() - 2) / 2;
+        int row = 0, col = 0;
+        for (auto& knob : paramKnobs_) {
+            int x = panelArea.getX() + col * (knobSize + 2);
+            int y = panelArea.getY() + row * (knobSize + 2);
+            knob->setBounds(x, y, knobSize, knobSize);
+            knob->setVisible(true);
+            col++;
+            if (col >= 2) {
+                col = 0;
+                row++;
+            }
+        }
+    }
+
+    void resizedGainPanel(juce::Rectangle<int> panelArea) override {
+        gainMeter_.setBounds(panelArea.reduced(2, 4));
+        gainMeter_.setVisible(true);
+    }
+
+    int getModPanelWidth() const override {
+        return 60;
+    }
+    int getParamPanelWidth() const override {
+        return 80;
+    }
+    int getGainPanelWidth() const override {
+        return 28;
     }
 
   private:
     TrackChainContent& owner_;
     magda::TrackId trackId_;
     magda::DeviceInfo device_;
-    juce::TextButton bypassButton_;
-    juce::TextButton modToggleButton_;
-    juce::TextButton paramToggleButton_;
-    juce::TextButton gainToggleButton_;
     juce::TextButton uiButton_;
-    juce::TextButton deleteButton_;
     GainMeterComponent gainMeter_;
     std::unique_ptr<juce::TextButton> modSlotButtons_[3];
     std::vector<std::unique_ptr<juce::Slider>> paramKnobs_;
-    bool gainSliderVisible_ = false;
-    bool modPanelVisible_ = false;
-    bool paramPanelVisible_ = false;
-    bool collapsed_ = false;
 };
 
 // dB conversion helpers

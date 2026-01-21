@@ -129,32 +129,32 @@ NodeComponent::~NodeComponent() = default;
 void NodeComponent::paint(juce::Graphics& g) {
     auto bounds = getLocalBounds();
 
-    // === LEFT SIDE PANELS: [Mods][Params] ===
+    // === LEFT SIDE PANELS: [Mods][Params] (squared corners) ===
     if (modPanelVisible_) {
         auto modArea = bounds.removeFromLeft(getModPanelWidth());
         g.setColour(DarkTheme::getColour(DarkTheme::BACKGROUND).brighter(0.02f));
-        g.fillRoundedRectangle(modArea.toFloat(), 4.0f);
+        g.fillRect(modArea);
         g.setColour(DarkTheme::getColour(DarkTheme::BORDER));
-        g.drawRoundedRectangle(modArea.toFloat(), 4.0f, 1.0f);
+        g.drawRect(modArea);
         paintModPanel(g, modArea);
     }
 
     if (paramPanelVisible_) {
         auto paramArea = bounds.removeFromLeft(getParamPanelWidth());
         g.setColour(DarkTheme::getColour(DarkTheme::BACKGROUND).brighter(0.02f));
-        g.fillRoundedRectangle(paramArea.toFloat(), 4.0f);
+        g.fillRect(paramArea);
         g.setColour(DarkTheme::getColour(DarkTheme::BORDER));
-        g.drawRoundedRectangle(paramArea.toFloat(), 4.0f, 1.0f);
+        g.drawRect(paramArea);
         paintParamPanel(g, paramArea);
     }
 
-    // === RIGHT SIDE PANEL: [Gain] ===
+    // === RIGHT SIDE PANEL: [Gain] (squared corners) ===
     if (gainPanelVisible_) {
         auto gainArea = bounds.removeFromRight(getGainPanelWidth());
         g.setColour(DarkTheme::getColour(DarkTheme::BACKGROUND).brighter(0.02f));
-        g.fillRoundedRectangle(gainArea.toFloat(), 4.0f);
+        g.fillRect(gainArea);
         g.setColour(DarkTheme::getColour(DarkTheme::BORDER));
-        g.drawRoundedRectangle(gainArea.toFloat(), 4.0f, 1.0f);
+        g.drawRect(gainArea);
         paintGainPanel(g, gainArea);
     }
 
