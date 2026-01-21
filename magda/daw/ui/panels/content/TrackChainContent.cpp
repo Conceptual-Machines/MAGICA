@@ -190,14 +190,15 @@ class GainMeterComponent : public juce::Component,
 };
 
 //==============================================================================
-// SquareButtonLookAndFeel - Square corners for device slot buttons
+// DeviceButtonLookAndFeel - Small rounded buttons for device slots
 //==============================================================================
-class SquareButtonLookAndFeel : public juce::LookAndFeel_V4 {
+class DeviceButtonLookAndFeel : public juce::LookAndFeel_V4 {
   public:
     void drawButtonBackground(juce::Graphics& g, juce::Button& button, const juce::Colour& bgColour,
                               bool shouldDrawButtonAsHighlighted,
                               bool shouldDrawButtonAsDown) override {
-        auto bounds = button.getLocalBounds().toFloat();
+        auto bounds = button.getLocalBounds().toFloat().reduced(0.5f);
+        float cornerRadius = 3.0f;
 
         auto baseColour = bgColour;
         if (shouldDrawButtonAsDown)
@@ -206,10 +207,19 @@ class SquareButtonLookAndFeel : public juce::LookAndFeel_V4 {
             baseColour = baseColour.brighter(0.1f);
 
         g.setColour(baseColour);
-        g.fillRect(bounds);
+        g.fillRoundedRectangle(bounds, cornerRadius);
 
         g.setColour(DarkTheme::getColour(DarkTheme::BORDER));
-        g.drawRect(bounds, 1.0f);
+        g.drawRoundedRectangle(bounds, cornerRadius, 1.0f);
+    }
+
+    void drawButtonText(juce::Graphics& g, juce::TextButton& button, bool /*isMouseOver*/,
+                        bool /*isButtonDown*/) override {
+        auto font = FontManager::getInstance().getUIFont(9.0f);
+        g.setFont(font);
+        g.setColour(button.findColour(button.getToggleState() ? juce::TextButton::textColourOnId
+                                                              : juce::TextButton::textColourOffId));
+        g.drawText(button.getButtonText(), button.getLocalBounds(), juce::Justification::centred);
     }
 };
 
@@ -222,8 +232,8 @@ class TrackChainContent::DeviceSlotComponent : public juce::Component {
     static constexpr int MODULATOR_PANEL_WIDTH = 60;
     static constexpr int PARAM_PANEL_WIDTH = 80;
 
-    static SquareButtonLookAndFeel& getSquareButtonLookAndFeel() {
-        static SquareButtonLookAndFeel laf;
+    static DeviceButtonLookAndFeel& getDeviceButtonLookAndFeel() {
+        static DeviceButtonLookAndFeel laf;
         return laf;
     }
 
@@ -411,12 +421,12 @@ class TrackChainContent::DeviceSlotComponent : public juce::Component {
         addAndMakeVisible(deleteButton_);
 
         // Apply square button look and feel to all buttons
-        bypassButton_.setLookAndFeel(&getSquareButtonLookAndFeel());
-        modToggleButton_.setLookAndFeel(&getSquareButtonLookAndFeel());
-        paramToggleButton_.setLookAndFeel(&getSquareButtonLookAndFeel());
-        gainToggleButton_.setLookAndFeel(&getSquareButtonLookAndFeel());
-        uiButton_.setLookAndFeel(&getSquareButtonLookAndFeel());
-        deleteButton_.setLookAndFeel(&getSquareButtonLookAndFeel());
+        bypassButton_.setLookAndFeel(&getDeviceButtonLookAndFeel());
+        modToggleButton_.setLookAndFeel(&getDeviceButtonLookAndFeel());
+        paramToggleButton_.setLookAndFeel(&getDeviceButtonLookAndFeel());
+        gainToggleButton_.setLookAndFeel(&getDeviceButtonLookAndFeel());
+        uiButton_.setLookAndFeel(&getDeviceButtonLookAndFeel());
+        deleteButton_.setLookAndFeel(&getDeviceButtonLookAndFeel());
     }
 
     ~DeviceSlotComponent() override {
@@ -593,12 +603,22 @@ class TrackChainContent::DeviceSlotComponent : public juce::Component {
             // Expanded mode: header and footer layout
             int btnSize = 16;
             int btnSpacing = 2;
-            int inset = 6;  // Inset from edges
+
+            // Calculate inset dynamically based on visible panel widths
+            int leftPanelWidth = 0;
+            if (modPanelVisible_)
+                leftPanelWidth += MODULATOR_PANEL_WIDTH;
+            if (paramPanelVisible_)
+                leftPanelWidth += PARAM_PANEL_WIDTH;
+            int rightPanelWidth = gainSliderVisible_ ? GAIN_SLIDER_WIDTH : 0;
+
+            int leftInset = leftPanelWidth > 0 ? leftPanelWidth / 15 : 0;
+            int rightInset = rightPanelWidth > 0 ? rightPanelWidth / 7 : 0;
 
             // Header: [ON] [U] ... [X]
             auto headerRow = bounds.removeFromTop(18);
-            headerRow.removeFromLeft(inset);
-            headerRow.removeFromRight(inset);
+            headerRow.removeFromLeft(leftInset);
+            headerRow.removeFromRight(rightInset);
             bypassButton_.setBounds(headerRow.removeFromLeft(btnSize));
             headerRow.removeFromLeft(btnSpacing);
             uiButton_.setBounds(headerRow.removeFromLeft(btnSize));
@@ -606,8 +626,8 @@ class TrackChainContent::DeviceSlotComponent : public juce::Component {
 
             // Footer: [M] [P] ... [G]
             auto footerRow = bounds.removeFromBottom(18);
-            footerRow.removeFromLeft(inset);
-            footerRow.removeFromRight(inset);
+            footerRow.removeFromLeft(leftInset);
+            footerRow.removeFromRight(rightInset);
             modToggleButton_.setBounds(footerRow.removeFromLeft(btnSize));
             footerRow.removeFromLeft(btnSpacing);
             paramToggleButton_.setBounds(footerRow.removeFromLeft(btnSize));
