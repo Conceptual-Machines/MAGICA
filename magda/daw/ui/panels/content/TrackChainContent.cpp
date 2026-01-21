@@ -233,7 +233,7 @@ class DeviceButtonLookAndFeel : public juce::LookAndFeel_V4 {
 //==============================================================================
 class TrackChainContent::DeviceSlotComponent : public NodeComponent {
   public:
-    static constexpr int BASE_WIDTH = 160;
+    static constexpr int BASE_WIDTH = 200;
     static constexpr int NUM_PARAMS = 16;
     static constexpr int PARAMS_PER_ROW = 4;
 

@@ -13,7 +13,7 @@ namespace magda::daw::ui {
 //==============================================================================
 class ChainPanel::DeviceSlotComponent : public NodeComponent {
   public:
-    static constexpr int BASE_SLOT_WIDTH = 160;  // Base width without panels
+    static constexpr int BASE_SLOT_WIDTH = 200;  // Base width without panels
     static constexpr int NUM_PARAMS = 16;
     static constexpr int PARAMS_PER_ROW = 4;
 
