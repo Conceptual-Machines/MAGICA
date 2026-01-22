@@ -148,11 +148,7 @@ void RackComponent::initializeCommon(const magda::RackInfo& rack) {
 RackComponent::~RackComponent() = default;
 
 void RackComponent::mouseDown(const juce::MouseEvent& e) {
-    // Select this rack when clicking anywhere in the content area
-    if (e.mods.isLeftButtonDown() && rackPath_.isValid()) {
-        magda::SelectionManager::getInstance().selectChainNode(rackPath_);
-    }
-    // Let the base class also handle it for consistency
+    // Let the base class handle selection - it will call selectChainNode in mouseUp
     NodeComponent::mouseDown(e);
 }
 

@@ -677,15 +677,16 @@ void NodeComponent::mouseUp(const juce::MouseEvent& e) {
         // Check if mouse is still within bounds (not a drag-away)
         if (getLocalBounds().contains(e.getPosition())) {
             if (nodePath_.isValid()) {
-                // Check selected state BEFORE calling selectChainNode
-                // (the callback will change selected_ synchronously)
+                // Capture state BEFORE calling selectChainNode
+                // (callbacks may change these values synchronously)
                 bool wasAlreadySelected = selected_;
+                bool wasCollapsed = collapsed_;
 
                 magda::SelectionManager::getInstance().selectChainNode(nodePath_);
 
-                // If was already selected, toggle collapse
+                // If was already selected, toggle collapse using captured state
                 if (wasAlreadySelected) {
-                    setCollapsed(!collapsed_);
+                    setCollapsed(!wasCollapsed);
                 }
             }
 
