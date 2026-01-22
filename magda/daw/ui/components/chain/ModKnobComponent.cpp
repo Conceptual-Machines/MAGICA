@@ -36,8 +36,41 @@ ModKnobComponent::ModKnobComponent(int modIndex) : modIndex_(modIndex) {
 void ModKnobComponent::setModInfo(const magda::ModInfo& mod) {
     currentMod_ = mod;
     nameLabel_.setText(mod.name, juce::dontSendNotification);
-    amountSlider_.setValue(mod.amount, juce::dontSendNotification);
+    updateAmountDisplay();
     repaint();  // Update link indicator
+}
+
+void ModKnobComponent::setSelectedParam(const magda::ModTarget& param) {
+    selectedParam_ = param;
+    updateAmountDisplay();
+    repaint();
+}
+
+void ModKnobComponent::clearSelectedParam() {
+    selectedParam_ = magda::ModTarget{};
+    updateAmountDisplay();
+    repaint();
+}
+
+void ModKnobComponent::updateAmountDisplay() {
+    // If a param is selected, show the link amount for that param (if linked)
+    if (selectedParam_.isValid()) {
+        if (const auto* link = currentMod_.getLink(selectedParam_)) {
+            amountSlider_.setValue(link->amount, juce::dontSendNotification);
+            return;
+        }
+        // Legacy check
+        if (currentMod_.target.deviceId == selectedParam_.deviceId &&
+            currentMod_.target.paramIndex == selectedParam_.paramIndex) {
+            amountSlider_.setValue(currentMod_.amount, juce::dontSendNotification);
+            return;
+        }
+        // Not linked to selected param - show 0
+        amountSlider_.setValue(0.0, juce::dontSendNotification);
+    } else {
+        // No param selected - show the mod's global amount
+        amountSlider_.setValue(currentMod_.amount, juce::dontSendNotification);
+    }
 }
 
 void ModKnobComponent::setAvailableTargets(
@@ -113,8 +146,20 @@ void ModKnobComponent::paintLinkIndicator(juce::Graphics& g, juce::Rectangle<int
     int dotSize = 4;
     auto dotBounds = area.withSizeKeepingCentre(dotSize, dotSize);
 
-    if (currentMod_.isLinked()) {
-        // Purple filled dot when linked
+    // Check if linked to the selected param
+    bool linkedToSelectedParam = false;
+    if (selectedParam_.isValid()) {
+        linkedToSelectedParam = currentMod_.getLink(selectedParam_) != nullptr ||
+                                (currentMod_.target.deviceId == selectedParam_.deviceId &&
+                                 currentMod_.target.paramIndex == selectedParam_.paramIndex);
+    }
+
+    if (linkedToSelectedParam) {
+        // Orange filled dot when linked to selected param
+        g.setColour(DarkTheme::getColour(DarkTheme::ACCENT_ORANGE));
+        g.fillEllipse(dotBounds.toFloat());
+    } else if (currentMod_.isLinked()) {
+        // Purple filled dot when linked (but not to selected param)
         g.setColour(DarkTheme::getColour(DarkTheme::ACCENT_PURPLE));
         g.fillEllipse(dotBounds.toFloat());
     } else {
@@ -127,6 +172,11 @@ void ModKnobComponent::paintLinkIndicator(juce::Graphics& g, juce::Rectangle<int
 void ModKnobComponent::showLinkMenu() {
     juce::PopupMenu menu;
 
+    // Mock param names (same as DeviceSlotComponent)
+    static const char* mockParamNames[16] = {
+        "Cutoff",   "Resonance", "Drive",    "Mix",   "Attack", "Decay", "Sustain", "Release",
+        "LFO Rate", "LFO Depth", "Feedback", "Width", "Low",    "Mid",   "High",    "Output"};
+
     menu.addSectionHeader("Link to Parameter...");
     menu.addSeparator();
 
@@ -135,9 +185,9 @@ void ModKnobComponent::showLinkMenu() {
     for (const auto& [deviceId, deviceName] : availableTargets_) {
         juce::PopupMenu deviceMenu;
 
-        // Mock parameters (Param 1-16) for now
+        // Use proper param names
         for (int paramIdx = 0; paramIdx < 16; ++paramIdx) {
-            juce::String paramName = "Param " + juce::String(paramIdx + 1);
+            juce::String paramName = mockParamNames[paramIdx];
 
             // Check if this is the currently linked target
             bool isCurrentTarget = currentMod_.target.deviceId == deviceId &&

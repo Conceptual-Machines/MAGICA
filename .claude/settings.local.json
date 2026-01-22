@@ -1,4 +1,8 @@
 {
+  "attribution": {
+    "commit": "",
+    "pr": ""
+  },
   "permissions": {
     "allow": [
       "Bash(git -C /Users/lucaromagnoli/Dropbox/Code/Projects/magica show feature/sequential-commands:daw/interfaces/daw_mode_interface_impl.hpp)",
@@ -21,7 +25,11 @@
       "Bash(ls:*)",
       "Bash(wc:*)",
       "mcp__tracktion-engine__search_te_classes",
-      "mcp__tracktion-engine__get_te_class_docs"
+      "mcp__tracktion-engine__get_te_class_docs",
+      "Bash(gh label create:*)",
+      "Bash(open:*)",
+      "Bash(make run-console:*)",
+      "Bash(gh label list:*)"
     ]
   },
   "enableAllProjectMcpServers": true,

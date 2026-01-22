@@ -41,6 +41,10 @@ class ModsPanelComponent : public PagedControlPanel {
     // Set available devices for linking (devices in this rack/chain)
     void setAvailableDevices(const std::vector<std::pair<magda::DeviceId, juce::String>>& devices);
 
+    // Contextual selection - when set, knobs show amounts for this param
+    void setSelectedParam(const magda::ModTarget& param);
+    void clearSelectedParam();
+
     // Callbacks
     std::function<void(int modIndex, float amount)> onModAmountChanged;
     std::function<void(int modIndex, magda::ModTarget target)> onModTargetChanged;

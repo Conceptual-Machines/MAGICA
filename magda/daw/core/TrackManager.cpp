@@ -1048,9 +1048,24 @@ void TrackManager::removeDeviceFromChainByPath(const ChainNodePath& devicePath) 
 }
 
 DeviceInfo* TrackManager::getDeviceInChainByPath(const ChainNodePath& devicePath) {
-    // devicePath ends with a Device step
-    if (devicePath.steps.empty())
+    // Handle top-level device (legacy path format with topLevelDeviceId)
+    if (devicePath.topLevelDeviceId != INVALID_DEVICE_ID) {
+        auto* track = getTrack(devicePath.trackId);
+        if (!track)
+            return nullptr;
+        for (auto& element : track->chainElements) {
+            if (magda::isDevice(element) &&
+                magda::getDevice(element).id == devicePath.topLevelDeviceId) {
+                return &magda::getDevice(element);
+            }
+        }
         return nullptr;
+    }
+
+    // devicePath ends with a Device step
+    if (devicePath.steps.empty()) {
+        return nullptr;
+    }
 
     DeviceId deviceId = INVALID_DEVICE_ID;
     if (devicePath.steps.back().type == ChainStepType::Device) {
@@ -1059,13 +1074,27 @@ DeviceInfo* TrackManager::getDeviceInChainByPath(const ChainNodePath& devicePath
         return nullptr;
     }
 
-    // Build chain path
+    // Build chain path (all steps except the last Device step)
     ChainNodePath chainPath;
     chainPath.trackId = devicePath.trackId;
     for (size_t i = 0; i < devicePath.steps.size() - 1; ++i) {
         chainPath.steps.push_back(devicePath.steps[i]);
     }
 
+    // If chainPath is empty, device is at top-level of track
+    if (chainPath.steps.empty()) {
+        auto* track = getTrack(devicePath.trackId);
+        if (!track)
+            return nullptr;
+        for (auto& element : track->chainElements) {
+            if (magda::isDevice(element) && magda::getDevice(element).id == deviceId) {
+                return &magda::getDevice(element);
+            }
+        }
+        return nullptr;
+    }
+
+    // Otherwise, device is inside a chain
     if (auto* chain = getChainFromPath(*this, chainPath)) {
         for (auto& element : chain->elements) {
             if (magda::isDevice(element) && magda::getDevice(element).id == deviceId) {
@@ -1397,8 +1426,44 @@ void TrackManager::setDeviceModTarget(const ChainNodePath& devicePath, int modIn
         if (modIndex < 0 || modIndex >= static_cast<int>(device->mods.size())) {
             return;
         }
+        if (target.isValid()) {
+            // Add link with default amount
+            device->mods[modIndex].addLink(target, 0.5f);
+        }
+        // Also set legacy target for backward compatibility
         device->mods[modIndex].target = target;
         // Don't notify - simple value change doesn't need UI rebuild
+    }
+}
+
+void TrackManager::removeDeviceModLink(const ChainNodePath& devicePath, int modIndex,
+                                       ModTarget target) {
+    if (auto* device = getDeviceInChainByPath(devicePath)) {
+        if (modIndex < 0 || modIndex >= static_cast<int>(device->mods.size())) {
+            return;
+        }
+        device->mods[modIndex].removeLink(target);
+        // Clear legacy target if it matches
+        if (device->mods[modIndex].target == target) {
+            device->mods[modIndex].target = ModTarget{};
+        }
+    }
+}
+
+void TrackManager::setDeviceModLinkAmount(const ChainNodePath& devicePath, int modIndex,
+                                          ModTarget target, float amount) {
+    if (auto* device = getDeviceInChainByPath(devicePath)) {
+        if (modIndex < 0 || modIndex >= static_cast<int>(device->mods.size())) {
+            return;
+        }
+        // Update amount in links vector
+        if (auto* link = device->mods[modIndex].getLink(target)) {
+            link->amount = amount;
+        }
+        // Also update legacy amount if target matches
+        if (device->mods[modIndex].target == target) {
+            device->mods[modIndex].amount = amount;
+        }
     }
 }
 

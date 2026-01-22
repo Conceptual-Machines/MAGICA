@@ -127,6 +127,11 @@ void MacroKnobComponent::paintLinkIndicator(juce::Graphics& g, juce::Rectangle<i
 void MacroKnobComponent::showLinkMenu() {
     juce::PopupMenu menu;
 
+    // Mock param names (same as DeviceSlotComponent)
+    static const char* mockParamNames[16] = {
+        "Cutoff",   "Resonance", "Drive",    "Mix",   "Attack", "Decay", "Sustain", "Release",
+        "LFO Rate", "LFO Depth", "Feedback", "Width", "Low",    "Mid",   "High",    "Output"};
+
     menu.addSectionHeader("Link to Parameter...");
     menu.addSeparator();
 
@@ -135,9 +140,9 @@ void MacroKnobComponent::showLinkMenu() {
     for (const auto& [deviceId, deviceName] : availableTargets_) {
         juce::PopupMenu deviceMenu;
 
-        // Mock parameters (Param 1-16) for now
+        // Use proper param names
         for (int paramIdx = 0; paramIdx < 16; ++paramIdx) {
-            juce::String paramName = "Param " + juce::String(paramIdx + 1);
+            juce::String paramName = mockParamNames[paramIdx];
 
             // Check if this is the currently linked target
             bool isCurrentTarget = currentMacro_.target.deviceId == deviceId &&

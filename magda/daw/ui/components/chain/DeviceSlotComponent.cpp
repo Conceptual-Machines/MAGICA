@@ -2,6 +2,7 @@
 
 #include <BinaryData.h>
 
+#include "ParamSlotComponent.hpp"
 #include "core/MacroInfo.hpp"
 #include "core/ModInfo.hpp"
 #include "core/SelectionManager.hpp"
@@ -152,26 +153,48 @@ DeviceSlotComponent::DeviceSlotComponent(const magda::DeviceInfo& device) : devi
     pageLabel_->setJustificationType(juce::Justification::centred);
     addAndMakeVisible(*pageLabel_);
 
-    // Create parameter sliders with labels (mock params)
+    // Create parameter slots with labels, values, and modulation support
     static const char* mockParamNames[NUM_PARAMS_PER_PAGE] = {
         "Cutoff",   "Resonance", "Drive",    "Mix",   "Attack", "Decay", "Sustain", "Release",
         "LFO Rate", "LFO Depth", "Feedback", "Width", "Low",    "Mid",   "High",    "Output"};
 
     for (int i = 0; i < NUM_PARAMS_PER_PAGE; ++i) {
-        paramLabels_[i] = std::make_unique<juce::Label>();
-        paramLabels_[i]->setText(mockParamNames[i], juce::dontSendNotification);
-        paramLabels_[i]->setFont(FontManager::getInstance().getUIFont(
-            DebugSettings::getInstance().getParamLabelFontSize()));
-        paramLabels_[i]->setColour(juce::Label::textColourId, DarkTheme::getSecondaryTextColour());
-        paramLabels_[i]->setJustificationType(juce::Justification::centredLeft);
-        paramLabels_[i]->setInterceptsMouseClicks(false, false);
-        addAndMakeVisible(*paramLabels_[i]);
+        paramSlots_[i] = std::make_unique<ParamSlotComponent>(i);
+        paramSlots_[i]->setParamName(mockParamNames[i]);
+        paramSlots_[i]->setDeviceId(device.id);
 
-        paramSliders_[i] = std::make_unique<TextSlider>(TextSlider::Format::Decimal);
-        paramSliders_[i]->setRange(0.0, 1.0, 0.01);
-        paramSliders_[i]->setValue(0.5, juce::dontSendNotification);
-        addAndMakeVisible(*paramSliders_[i]);
+        // Wire up mod/macro linking callbacks
+        paramSlots_[i]->onModLinked = [this](int modIndex, magda::ModTarget target) {
+            onModTargetChangedInternal(modIndex, target);
+            updateParamModulation();
+        };
+        paramSlots_[i]->onModLinkedWithAmount = [this](int modIndex, magda::ModTarget target,
+                                                       float amount) {
+            magda::TrackManager::getInstance().setDeviceModTarget(nodePath_, modIndex, target);
+            magda::TrackManager::getInstance().setDeviceModLinkAmount(nodePath_, modIndex, target,
+                                                                      amount);
+            updateParamModulation();
+        };
+        paramSlots_[i]->onModUnlinked = [this](int modIndex, magda::ModTarget target) {
+            magda::TrackManager::getInstance().removeDeviceModLink(nodePath_, modIndex, target);
+            updateParamModulation();
+        };
+        paramSlots_[i]->onModAmountChanged = [this](int modIndex, magda::ModTarget target,
+                                                    float amount) {
+            magda::TrackManager::getInstance().setDeviceModLinkAmount(nodePath_, modIndex, target,
+                                                                      amount);
+            updateParamModulation();
+        };
+        paramSlots_[i]->onMacroLinked = [this](int macroIndex, magda::MacroTarget target) {
+            onMacroTargetChangedInternal(macroIndex, target);
+            updateParamModulation();
+        };
+
+        addAndMakeVisible(*paramSlots_[i]);
     }
+
+    // Set initial mod/macro data for param slots
+    updateParamModulation();
 
     // Initialize pagination (mock: 4 pages)
     totalPages_ = 4;
@@ -180,6 +203,12 @@ DeviceSlotComponent::DeviceSlotComponent(const magda::DeviceInfo& device) : devi
 }
 
 DeviceSlotComponent::~DeviceSlotComponent() = default;
+
+void DeviceSlotComponent::setNodePath(const magda::ChainNodePath& path) {
+    NodeComponent::setNodePath(path);
+    // Now that nodePath_ is valid, update param slots with the device path
+    updateParamModulation();
+}
 
 int DeviceSlotComponent::getPreferredWidth() const {
     if (collapsed_) {
@@ -195,7 +224,36 @@ void DeviceSlotComponent::updateFromDevice(const magda::DeviceInfo& device) {
     onButton_->setToggleState(!device.bypassed, juce::dontSendNotification);
     onButton_->setActive(!device.bypassed);
     gainSlider_.setValue(device.gainDb, juce::dontSendNotification);
+    updateParamModulation();
     repaint();
+}
+
+void DeviceSlotComponent::updateParamModulation() {
+    // Get mods and macros data from the device
+    const auto* mods = getModsData();
+    const auto* macros = getMacrosData();
+
+    // Check if a mod is selected in SelectionManager for contextual display
+    auto& selMgr = magda::SelectionManager::getInstance();
+    int selectedModIndex = -1;
+
+    if (selMgr.hasModSelection()) {
+        const auto& modSel = selMgr.getModSelection();
+        // Only apply contextual filtering if the mod belongs to this device
+        if (modSel.parentPath == nodePath_) {
+            selectedModIndex = modSel.modIndex;
+        }
+    }
+
+    // Update each param slot with current mod/macro data
+    for (int i = 0; i < NUM_PARAMS_PER_PAGE; ++i) {
+        paramSlots_[i]->setDeviceId(device_.id);
+        paramSlots_[i]->setDevicePath(nodePath_);  // For param selection
+        paramSlots_[i]->setAvailableMods(mods);
+        paramSlots_[i]->setAvailableMacros(macros);
+        paramSlots_[i]->setSelectedModIndex(selectedModIndex);
+        paramSlots_[i]->repaint();
+    }
 }
 
 void DeviceSlotComponent::paintContent(juce::Graphics& g, juce::Rectangle<int> contentArea) {
@@ -213,8 +271,7 @@ void DeviceSlotComponent::resizedContent(juce::Rectangle<int> contentArea) {
     // When collapsed, hide content controls
     if (collapsed_) {
         for (int i = 0; i < NUM_PARAMS_PER_PAGE; ++i) {
-            paramLabels_[i]->setVisible(false);
-            paramSliders_[i]->setVisible(false);
+            paramSlots_[i]->setVisible(false);
         }
         prevPageButton_->setVisible(false);
         nextPageButton_->setVisible(false);
@@ -258,8 +315,6 @@ void DeviceSlotComponent::resizedContent(juce::Rectangle<int> contentArea) {
     int numRows = (NUM_PARAMS_PER_PAGE + PARAMS_PER_ROW - 1) / PARAMS_PER_ROW;
     int cellWidth = contentArea.getWidth() / PARAMS_PER_ROW;
     int cellHeight = contentArea.getHeight() / numRows;
-    int labelHeight = juce::jmin(12, cellHeight / 3);
-    int sliderHeight = cellHeight - labelHeight - 2;
 
     for (int i = 0; i < NUM_PARAMS_PER_PAGE; ++i) {
         int row = i / PARAMS_PER_ROW;
@@ -267,12 +322,9 @@ void DeviceSlotComponent::resizedContent(juce::Rectangle<int> contentArea) {
         int x = contentArea.getX() + col * cellWidth;
         int y = contentArea.getY() + row * cellHeight;
 
-        paramLabels_[i]->setFont(labelFont);
-        paramSliders_[i]->setFont(valueFont);
-        paramLabels_[i]->setBounds(x, y, cellWidth - 2, labelHeight);
-        paramSliders_[i]->setBounds(x, y + labelHeight, cellWidth - 2, sliderHeight);
-        paramLabels_[i]->setVisible(true);
-        paramSliders_[i]->setVisible(true);
+        paramSlots_[i]->setFonts(labelFont, valueFont);
+        paramSlots_[i]->setBounds(x, y, cellWidth - 2, cellHeight);
+        paramSlots_[i]->setVisible(true);
     }
 }
 
@@ -361,10 +413,12 @@ std::vector<std::pair<magda::DeviceId, juce::String>> DeviceSlotComponent::getAv
 
 void DeviceSlotComponent::onModAmountChangedInternal(int modIndex, float amount) {
     magda::TrackManager::getInstance().setDeviceModAmount(nodePath_, modIndex, amount);
+    updateParamModulation();  // Refresh param indicators to show new amount
 }
 
 void DeviceSlotComponent::onModTargetChangedInternal(int modIndex, magda::ModTarget target) {
     magda::TrackManager::getInstance().setDeviceModTarget(nodePath_, modIndex, target);
+    updateParamModulation();  // Refresh param indicators
 }
 
 void DeviceSlotComponent::onModNameChangedInternal(int modIndex, const juce::String& name) {
@@ -381,10 +435,12 @@ void DeviceSlotComponent::onModRateChangedInternal(int modIndex, float rate) {
 
 void DeviceSlotComponent::onMacroValueChangedInternal(int macroIndex, float value) {
     magda::TrackManager::getInstance().setDeviceMacroValue(nodePath_, macroIndex, value);
+    updateParamModulation();  // Refresh param indicators to show new value
 }
 
 void DeviceSlotComponent::onMacroTargetChangedInternal(int macroIndex, magda::MacroTarget target) {
     magda::TrackManager::getInstance().setDeviceMacroTarget(nodePath_, macroIndex, target);
+    updateParamModulation();  // Refresh param indicators
 }
 
 void DeviceSlotComponent::onMacroNameChangedInternal(int macroIndex, const juce::String& name) {
@@ -437,6 +493,34 @@ void DeviceSlotComponent::goToNextPage() {
         updatePageControls();
         // TODO: Update param labels/values for new page
         repaint();
+    }
+}
+
+// ============================================================================
+// SelectionManagerListener
+// ============================================================================
+
+void DeviceSlotComponent::selectionTypeChanged(magda::SelectionType newType) {
+    // Call base class first (handles node deselection)
+    NodeComponent::selectionTypeChanged(newType);
+    // Update param slots' contextual mod filter
+    updateParamModulation();
+}
+
+void DeviceSlotComponent::modSelectionChanged(const magda::ModSelection& /*selection*/) {
+    // Update param slots to show contextual indicators
+    updateParamModulation();
+}
+
+void DeviceSlotComponent::paramSelectionChanged(const magda::ParamSelection& selection) {
+    // Call base class first (updates mods panel)
+    NodeComponent::paramSelectionChanged(selection);
+
+    // Update param slot selection states
+    for (int i = 0; i < NUM_PARAMS_PER_PAGE; ++i) {
+        bool isSelected =
+            selection.isValid() && selection.devicePath == nodePath_ && selection.paramIndex == i;
+        paramSlots_[i]->setSelected(isSelected);
     }
 }
 

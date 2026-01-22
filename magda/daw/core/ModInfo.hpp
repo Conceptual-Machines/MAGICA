@@ -2,14 +2,13 @@
 
 #include <juce_core/juce_core.h>
 
+#include <algorithm>
 #include <vector>
 
-#include "DeviceInfo.hpp"
+#include "TypeIds.hpp"
 
 namespace magda {
 
-using ModId = int;
-constexpr ModId INVALID_MOD_ID = -1;
 constexpr int MODS_PER_PAGE = 8;
 constexpr int DEFAULT_MOD_PAGES = 2;
 constexpr int NUM_MODS = MODS_PER_PAGE * DEFAULT_MOD_PAGES;
@@ -40,18 +39,35 @@ struct ModTarget {
 };
 
 /**
+ * @brief A single mod-to-parameter link with its own amount
+ */
+struct ModLink {
+    ModTarget target;
+    float amount = 0.5f;  // 0.0 to 1.0, modulation depth for this link
+
+    bool isValid() const {
+        return target.isValid();
+    }
+};
+
+/**
  * @brief A modulator that can be linked to device parameters
  *
  * Mods provide dynamic modulation of parameters.
  * Each rack and chain has 16 mods by default.
+ * A single mod can link to multiple parameters, each with its own amount.
  */
 struct ModInfo {
     ModId id = INVALID_MOD_ID;
     juce::String name;  // e.g., "LFO 1" or user-defined
     ModType type = ModType::LFO;
-    float amount = 0.5f;  // 0.0 to 1.0, modulation depth
-    float rate = 1.0f;    // Rate/speed of modulation
-    ModTarget target;     // Optional linked parameter
+    float rate = 1.0f;           // Rate/speed of modulation
+    std::vector<ModLink> links;  // All parameter links for this mod
+
+    // Legacy single target/amount for backward compatibility
+    // TODO: Remove after migration
+    ModTarget target;     // Deprecated - use links instead
+    float amount = 0.5f;  // Deprecated - use links instead
 
     // Default constructor
     ModInfo() = default;
@@ -61,7 +77,45 @@ struct ModInfo {
         : id(index), name(getDefaultName(index, ModType::LFO)), type(ModType::LFO) {}
 
     bool isLinked() const {
-        return target.isValid();
+        return !links.empty() || target.isValid();
+    }
+
+    // Add a link to a parameter
+    void addLink(const ModTarget& t, float amt = 0.5f) {
+        // Check if already linked to this target
+        for (auto& link : links) {
+            if (link.target == t) {
+                link.amount = amt;  // Update amount if already linked
+                return;
+            }
+        }
+        links.push_back({t, amt});
+    }
+
+    // Remove a link to a parameter
+    void removeLink(const ModTarget& t) {
+        links.erase(std::remove_if(links.begin(), links.end(),
+                                   [&t](const ModLink& link) { return link.target == t; }),
+                    links.end());
+    }
+
+    // Get link for a specific target (or nullptr if not linked)
+    ModLink* getLink(const ModTarget& t) {
+        for (auto& link : links) {
+            if (link.target == t) {
+                return &link;
+            }
+        }
+        return nullptr;
+    }
+
+    const ModLink* getLink(const ModTarget& t) const {
+        for (const auto& link : links) {
+            if (link.target == t) {
+                return &link;
+            }
+        }
+        return nullptr;
     }
 
     static juce::String getDefaultName(int index, ModType t) {

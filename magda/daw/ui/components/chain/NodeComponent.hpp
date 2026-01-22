@@ -37,7 +37,7 @@ class NodeComponent : public juce::Component, public magda::SelectionManagerList
     ~NodeComponent() override;
 
     // Set the unique path for this node (required for centralized selection)
-    void setNodePath(const magda::ChainNodePath& path);
+    virtual void setNodePath(const magda::ChainNodePath& path);
     const magda::ChainNodePath& getNodePath() const {
         return nodePath_;
     }
@@ -46,6 +46,7 @@ class NodeComponent : public juce::Component, public magda::SelectionManagerList
     void selectionTypeChanged(magda::SelectionType newType) override;
     void chainNodeSelectionChanged(const magda::ChainNodePath& path) override;
     void chainNodeReselected(const magda::ChainNodePath& path) override;
+    void paramSelectionChanged(const magda::ParamSelection& selection) override;
 
     void paint(juce::Graphics& g) override;
     void resized() override;

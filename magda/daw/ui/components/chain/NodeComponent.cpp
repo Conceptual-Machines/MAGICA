@@ -765,6 +765,11 @@ void NodeComponent::selectionTypeChanged(magda::SelectionType newType) {
     if (newType != magda::SelectionType::ChainNode) {
         setSelected(false);
     }
+
+    // If selection type changed away from Param, clear contextual param in mods panel
+    if (newType != magda::SelectionType::Param && modsPanel_) {
+        modsPanel_->clearSelectedParam();
+    }
 }
 
 void NodeComponent::chainNodeSelectionChanged(const magda::ChainNodePath& path) {
@@ -775,6 +780,21 @@ void NodeComponent::chainNodeSelectionChanged(const magda::ChainNodePath& path) 
 
 void NodeComponent::chainNodeReselected(const magda::ChainNodePath& /*path*/) {
     // Not used - we handle collapse toggle directly in mouseUp
+}
+
+void NodeComponent::paramSelectionChanged(const magda::ParamSelection& selection) {
+    // When a param is selected, update mods panel to show contextual amounts
+    if (modsPanel_) {
+        if (selection.isValid()) {
+            // Create a ModTarget from the ParamSelection
+            magda::ModTarget target;
+            target.deviceId = selection.devicePath.getDeviceId();
+            target.paramIndex = selection.paramIndex;
+            modsPanel_->setSelectedParam(target);
+        } else {
+            modsPanel_->clearSelectedParam();
+        }
+    }
 }
 
 void NodeComponent::mouseDown(const juce::MouseEvent& e) {

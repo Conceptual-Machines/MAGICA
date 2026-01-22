@@ -5,13 +5,9 @@
 #include <string>
 #include <vector>
 
-namespace magda {
+#include "TypeIds.hpp"
 
-/**
- * @brief Unique identifier for tracks
- */
-using TrackId = int;
-constexpr TrackId INVALID_TRACK_ID = -1;
+namespace magda {
 
 /**
  * @brief Track types

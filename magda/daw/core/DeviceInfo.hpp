@@ -2,10 +2,11 @@
 
 #include <juce_core/juce_core.h>
 
-namespace magda {
+#include "MacroInfo.hpp"
+#include "ModInfo.hpp"
+#include "TypeIds.hpp"
 
-using DeviceId = int;
-constexpr DeviceId INVALID_DEVICE_ID = -1;
+namespace magda {
 
 /**
  * @brief Plugin format enumeration
@@ -39,7 +40,11 @@ struct DeviceInfo {
     float gainValue = 1.0f;       // Current gain value (linear)
     float gainDb = 0.0f;          // Current gain in dB for UI
 
-    // For future use: parameter state, modulation targets, etc.
+    // Macro controls for device-level parameter mapping
+    MacroArray macros = createDefaultMacros();
+
+    // Modulators for device-level modulation
+    ModArray mods = createDefaultMods();
 
     juce::String getFormatString() const {
         switch (format) {

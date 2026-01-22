@@ -74,7 +74,12 @@ class TextSlider : public juce::Component, public juce::Label::Listener {
         label_.setFont(font);
     }
 
+    void setRightClickEditsText(bool shouldEdit) {
+        rightClickEditsText_ = shouldEdit;
+    }
+
     std::function<void(double)> onValueChanged;
+    std::function<void()> onClicked;  // Called on single left-click (no drag)
 
     void resized() override {
         label_.setBounds(getLocalBounds());
@@ -110,9 +115,14 @@ class TextSlider : public juce::Component, public juce::Label::Listener {
     }
 
     void mouseUp(const juce::MouseEvent& e) override {
-        if (!hasDragged_ && e.mods.isPopupMenu()) {
-            // Right-click to edit text directly
-            label_.showEditor();
+        if (!hasDragged_) {
+            if (e.mods.isPopupMenu() && rightClickEditsText_) {
+                // Right-click to edit text directly
+                label_.showEditor();
+            } else if (!e.mods.isPopupMenu() && onClicked) {
+                // Single left-click callback
+                onClicked();
+            }
         }
         hasDragged_ = false;
     }
@@ -159,6 +169,7 @@ class TextSlider : public juce::Component, public juce::Label::Listener {
     int dragStartX_ = 0;
     int dragStartY_ = 0;
     bool hasDragged_ = false;
+    bool rightClickEditsText_ = true;
 
     void updateLabel() {
         juce::String text;

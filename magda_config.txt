@@ -6,3 +6,4 @@ zoomInSensitivity=25
 zoomOutSensitivity=40
 zoomInSensitivityShift=8
 zoomOutSensitivityShift=8
+scrollbarOnLeft=0

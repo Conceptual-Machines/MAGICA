@@ -192,6 +192,9 @@ class TrackManager {
     // Mod management for devices (path-based for nested device support)
     void setDeviceModAmount(const ChainNodePath& devicePath, int modIndex, float amount);
     void setDeviceModTarget(const ChainNodePath& devicePath, int modIndex, ModTarget target);
+    void removeDeviceModLink(const ChainNodePath& devicePath, int modIndex, ModTarget target);
+    void setDeviceModLinkAmount(const ChainNodePath& devicePath, int modIndex, ModTarget target,
+                                float amount);
     void setDeviceModName(const ChainNodePath& devicePath, int modIndex, const juce::String& name);
     void setDeviceModType(const ChainNodePath& devicePath, int modIndex, ModType type);
     void setDeviceModRate(const ChainNodePath& devicePath, int modIndex, float rate);

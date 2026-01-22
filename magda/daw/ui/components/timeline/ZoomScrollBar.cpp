@@ -206,6 +206,16 @@ void ZoomScrollBar::mouseMove(const juce::MouseEvent& event) {
     updateCursor(getPrimaryCoord(event));
 }
 
+void ZoomScrollBar::mouseEnter(const juce::MouseEvent&) {
+    isHovered_ = true;
+    repaint();
+}
+
+void ZoomScrollBar::mouseExit(const juce::MouseEvent&) {
+    isHovered_ = false;
+    repaint();
+}
+
 void ZoomScrollBar::setVisibleRange(double start, double end) {
     // Ignore external updates while user is dragging to prevent feedback loops
     if (dragMode != DragMode::None)
@@ -222,10 +232,30 @@ void ZoomScrollBar::setVisibleRange(double start, double end) {
 }
 
 juce::Rectangle<int> ZoomScrollBar::getTrackBounds() const {
+    auto bounds = getLocalBounds();
+
     if (orientation == Orientation::Horizontal) {
-        return getLocalBounds().reduced(2, 4);
+        // Horizontal: height changes based on hover
+        int fullHeight = bounds.getHeight() - 8;  // Normal padding
+        int collapsedHeight = static_cast<int>(COLLAPSED_SIZE);
+        int currentHeight =
+            collapsedHeight + static_cast<int>((fullHeight - collapsedHeight) * expandAmount_);
+
+        // Center vertically
+        int yOffset = (bounds.getHeight() - currentHeight) / 2;
+        return juce::Rectangle<int>(bounds.getX() + 2, bounds.getY() + yOffset,
+                                    bounds.getWidth() - 4, currentHeight);
     } else {
-        return getLocalBounds().reduced(4, 2);
+        // Vertical: width changes based on hover
+        int fullWidth = bounds.getWidth() - 8;  // Normal padding
+        int collapsedWidth = static_cast<int>(COLLAPSED_SIZE);
+        int currentWidth =
+            collapsedWidth + static_cast<int>((fullWidth - collapsedWidth) * expandAmount_);
+
+        // Center horizontally
+        int xOffset = (bounds.getWidth() - currentWidth) / 2;
+        return juce::Rectangle<int>(bounds.getX() + xOffset, bounds.getY() + 2, currentWidth,
+                                    bounds.getHeight() - 4);
     }
 }
 

@@ -429,7 +429,6 @@ void MainView::paint(juce::Graphics& g) {
 void MainView::resized() {
     auto bounds = getLocalBounds();
 
-    // Layout constants
     static constexpr int ZOOM_SCROLLBAR_SIZE = 20;
     auto& layout = LayoutConfig::getInstance();
 

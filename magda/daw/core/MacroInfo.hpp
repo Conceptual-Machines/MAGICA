@@ -4,12 +4,10 @@
 
 #include <vector>
 
-#include "DeviceInfo.hpp"
+#include "TypeIds.hpp"
 
 namespace magda {
 
-using MacroId = int;
-constexpr MacroId INVALID_MACRO_ID = -1;
 constexpr int MACROS_PER_PAGE = 8;
 constexpr int DEFAULT_MACRO_PAGES = 2;
 constexpr int NUM_MACROS = MACROS_PER_PAGE * DEFAULT_MACRO_PAGES;

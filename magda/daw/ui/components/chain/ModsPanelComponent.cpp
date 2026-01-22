@@ -77,6 +77,18 @@ void ModsPanelComponent::setAvailableDevices(
     }
 }
 
+void ModsPanelComponent::setSelectedParam(const magda::ModTarget& param) {
+    for (auto& knob : knobs_) {
+        knob->setSelectedParam(param);
+    }
+}
+
+void ModsPanelComponent::clearSelectedParam() {
+    for (auto& knob : knobs_) {
+        knob->clearSelectedParam();
+    }
+}
+
 int ModsPanelComponent::getTotalItemCount() const {
     return static_cast<int>(knobs_.size());
 }
