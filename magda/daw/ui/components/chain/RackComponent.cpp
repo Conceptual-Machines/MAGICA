@@ -4,6 +4,7 @@
 
 #include "ChainPanel.hpp"
 #include "ChainRowComponent.hpp"
+#include "ModsPanelComponent.hpp"
 #include "ui/themes/DarkTheme.hpp"
 #include "ui/themes/FontManager.hpp"
 #include "ui/themes/SmallButtonLookAndFeel.hpp"
@@ -160,6 +161,29 @@ void RackComponent::initializeCommon(const magda::RackInfo& rack) {
     };
     addChildComponent(*macroPanel_);
 
+    // Create mods panel (initially hidden, shown when mod button is toggled)
+    modsPanel_ = std::make_unique<ModsPanelComponent>();
+    modsPanel_->onModAmountChanged = [this](int modIndex, float amount) {
+        magda::TrackManager::getInstance().setRackModAmount(rackPath_, modIndex, amount);
+    };
+    modsPanel_->onModTargetChanged = [this](int modIndex, magda::ModTarget target) {
+        magda::TrackManager::getInstance().setRackModTarget(rackPath_, modIndex, target);
+    };
+    modsPanel_->onModNameChanged = [this](int modIndex, juce::String name) {
+        magda::TrackManager::getInstance().setRackModName(rackPath_, modIndex, name);
+    };
+    modsPanel_->onModClicked = [this](int modIndex) {
+        // TODO: Open modulator editor panel
+        DBG("Mod clicked: " << modIndex);
+    };
+    modsPanel_->onAddPageRequested = [this](int /*itemsToAdd*/) {
+        magda::TrackManager::getInstance().addRackModPage(rackPath_);
+    };
+    modsPanel_->onRemovePageRequested = [this](int /*itemsToRemove*/) {
+        magda::TrackManager::getInstance().removeRackModPage(rackPath_);
+    };
+    addChildComponent(*modsPanel_);
+
     // Build chain rows
     updateFromRack(rack);
 }
@@ -181,6 +205,7 @@ void RackComponent::paintContent(juce::Graphics& g, juce::Rectangle<int> content
 
 void RackComponent::resizedContent(juce::Rectangle<int> contentArea) {
     // When collapsed, hide content controls only (buttons handled by resizedCollapsed)
+    // NOTE: Side panels (macro/mods) visibility is managed by resizedParamPanel/resizedModPanel
     if (collapsed_) {
         chainsLabel_.setVisible(false);
         addChainButton_.setVisible(false);
@@ -188,8 +213,13 @@ void RackComponent::resizedContent(juce::Rectangle<int> contentArea) {
         if (chainPanel_) {
             chainPanel_->setVisible(false);
         }
-        if (macroPanel_) {
+        // Only hide macro panel if param panel is not visible
+        if (!paramPanelVisible_ && macroPanel_) {
             macroPanel_->setVisible(false);
+        }
+        // Only hide mods panel if mod panel is not visible
+        if (!modPanelVisible_ && modsPanel_) {
+            modsPanel_->setVisible(false);
         }
         volumeSlider_.setVisible(false);
         return;
@@ -207,6 +237,12 @@ void RackComponent::resizedContent(juce::Rectangle<int> contentArea) {
     // (resizedParamPanel will show it when visible)
     if (!paramPanelVisible_ && macroPanel_) {
         macroPanel_->setVisible(false);
+    }
+
+    // Hide mods panel if mod panel is not visible
+    // (resizedModPanel will show it when visible)
+    if (!modPanelVisible_ && modsPanel_) {
+        modsPanel_->setVisible(false);
     }
 
     // Calculate chain panel positioning
@@ -357,6 +393,11 @@ void RackComponent::updateFromRack(const magda::RackInfo& rack) {
     // Update macro panel if visible
     if (paramPanelVisible_ && macroPanel_) {
         updateMacroPanel();
+    }
+
+    // Update mods panel if visible
+    if (modPanelVisible_ && modsPanel_) {
+        updateModsPanel();
     }
 
     // Also refresh the chain panel if it's showing a chain
@@ -589,6 +630,57 @@ void RackComponent::resizedParamPanel(juce::Rectangle<int> panelArea) {
         macroPanel_->setBounds(panelArea);
         macroPanel_->setVisible(true);
         updateMacroPanel();
+    }
+}
+
+void RackComponent::updateModsPanel() {
+    if (!modsPanel_) {
+        return;
+    }
+
+    // Get the rack data via path resolution
+    const auto* rack = magda::TrackManager::getInstance().getRackByPath(rackPath_);
+    if (!rack) {
+        return;
+    }
+
+    // Update mods
+    modsPanel_->setMods(rack->mods);
+
+    // Collect available devices for linking (devices from all chains in this rack)
+    std::vector<std::pair<magda::DeviceId, juce::String>> availableDevices;
+    for (const auto& chain : rack->chains) {
+        for (const auto& element : chain.elements) {
+            if (magda::isDevice(element)) {
+                const auto& device = magda::getDevice(element);
+                availableDevices.emplace_back(device.id, device.name);
+            }
+        }
+    }
+    modsPanel_->setAvailableDevices(availableDevices);
+}
+
+int RackComponent::getModPanelWidth() const {
+    // Width for 2 columns of mod knobs (2x4 grid)
+    return 130;
+}
+
+void RackComponent::paintModPanel(juce::Graphics& g, juce::Rectangle<int> panelArea) {
+    // Draw "MODS" header
+    g.setColour(DarkTheme::getColour(DarkTheme::ACCENT_ORANGE));
+    g.setFont(FontManager::getInstance().getUIFontBold(9.0f));
+    g.drawText("MODS", panelArea.removeFromTop(16), juce::Justification::centred);
+}
+
+void RackComponent::resizedModPanel(juce::Rectangle<int> panelArea) {
+    DBG("RackComponent::resizedModPanel called, panelArea=" << panelArea.toString());
+    panelArea.removeFromTop(16);  // Skip "MODS" header
+
+    if (modsPanel_) {
+        modsPanel_->setBounds(panelArea);
+        modsPanel_->setVisible(true);
+        DBG("  modsPanel_ bounds set to " << panelArea.toString() << ", visible=true");
+        updateModsPanel();
     }
 }
 

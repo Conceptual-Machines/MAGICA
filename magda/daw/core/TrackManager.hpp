@@ -188,6 +188,20 @@ class TrackManager {
     void addChainMacroPage(const ChainNodePath& chainPath);
     void removeChainMacroPage(const ChainNodePath& chainPath);
 
+    // Mod management for racks (path-based for nested rack support)
+    void setRackModAmount(const ChainNodePath& rackPath, int modIndex, float amount);
+    void setRackModTarget(const ChainNodePath& rackPath, int modIndex, ModTarget target);
+    void setRackModName(const ChainNodePath& rackPath, int modIndex, const juce::String& name);
+    void addRackModPage(const ChainNodePath& rackPath);
+    void removeRackModPage(const ChainNodePath& rackPath);
+
+    // Mod management for chains (path-based for nested chain support)
+    void setChainModAmount(const ChainNodePath& chainPath, int modIndex, float amount);
+    void setChainModTarget(const ChainNodePath& chainPath, int modIndex, ModTarget target);
+    void setChainModName(const ChainNodePath& chainPath, int modIndex, const juce::String& name);
+    void addChainModPage(const ChainNodePath& chainPath);
+    void removeChainModPage(const ChainNodePath& chainPath);
+
     // ========================================================================
     // Path Resolution - Centralized tree traversal
     // ========================================================================

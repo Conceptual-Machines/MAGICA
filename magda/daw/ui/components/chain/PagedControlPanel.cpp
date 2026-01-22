@@ -181,20 +181,24 @@ void PagedControlPanel::resized() {
     bool showNav = totalPages > 1 || canAddPage_ || canRemovePage_;
 
     // Navigation area at top (only if multiple pages or can add/remove)
+    // Layout: - < page > +
     if (showNav) {
         auto navArea = bounds.removeFromTop(NAV_HEIGHT);
         int buttonWidth = 16;
 
-        // Add/Remove buttons on the right
+        // Remove button on the left
+        if (canRemovePage_) {
+            removePageButton_.setBounds(navArea.removeFromLeft(buttonWidth));
+            navArea.removeFromLeft(2);  // spacing
+        }
+
+        // Add button on the right
         if (canAddPage_) {
             addPageButton_.setBounds(navArea.removeFromRight(buttonWidth));
             navArea.removeFromRight(2);  // spacing
         }
-        if (canRemovePage_) {
-            removePageButton_.setBounds(navArea.removeFromRight(buttonWidth));
-            navArea.removeFromRight(2);  // spacing
-        }
 
+        // Prev/Next buttons around page label
         if (totalPages > 1) {
             prevButton_.setBounds(navArea.removeFromLeft(buttonWidth));
             nextButton_.setBounds(navArea.removeFromRight(buttonWidth));

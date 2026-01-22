@@ -181,6 +181,8 @@ set(DAW_UI_SOURCES
     ui/components/chain/PagedControlPanel.cpp
     ui/components/chain/MacroKnobComponent.cpp
     ui/components/chain/MacroPanelComponent.cpp
+    ui/components/chain/ModKnobComponent.cpp
+    ui/components/chain/ModsPanelComponent.cpp
 )
 
 # All DAW headers
@@ -302,8 +304,11 @@ set(DAW_HEADERS
     ui/components/chain/PagedControlPanel.hpp
     ui/components/chain/MacroKnobComponent.hpp
     ui/components/chain/MacroPanelComponent.hpp
-    # Core - Macro
+    ui/components/chain/ModKnobComponent.hpp
+    ui/components/chain/ModsPanelComponent.hpp
+    # Core - Macro and Mod
     core/MacroInfo.hpp
+    core/ModInfo.hpp
 )
 
 # Create DAW library (core functionality)

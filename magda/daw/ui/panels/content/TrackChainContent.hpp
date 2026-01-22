@@ -142,6 +142,7 @@ class TrackChainContent : public PanelContent,
     // State preservation during rebuild - preserves ALL nodes' states
     std::map<juce::String, bool> savedCollapsedStates_;           // path -> collapsed
     std::map<juce::String, magda::ChainId> savedExpandedChains_;  // rackPath -> expanded chainId
+    std::map<juce::String, bool> savedParamPanelStates_;          // path -> paramPanelVisible
     void saveNodeStates();
     void restoreNodeStates();
 

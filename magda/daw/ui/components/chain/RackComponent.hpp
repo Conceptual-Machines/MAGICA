@@ -5,6 +5,7 @@
 #include <functional>
 
 #include "MacroPanelComponent.hpp"
+#include "ModsPanelComponent.hpp"
 #include "NodeComponent.hpp"
 #include "core/RackInfo.hpp"
 #include "core/SelectionManager.hpp"
@@ -110,14 +111,23 @@ class RackComponent : public NodeComponent {
     magda::ChainId selectedChainId_ = magda::INVALID_CHAIN_ID;
     int availableWidth_ = 0;  // 0 = no limit
 
-    // Macro panel (shown in left side param panel when P button toggled)
+    // Macro panel (shown in left side param panel when macro button toggled)
     std::unique_ptr<MacroPanelComponent> macroPanel_;
     void updateMacroPanel();  // Update macro panel with current rack data
+
+    // Mods panel (shown in left side mod panel when mod button toggled)
+    std::unique_ptr<ModsPanelComponent> modsPanel_;
+    void updateModsPanel();  // Update mods panel with current rack data
 
     // Override param panel for macro display (left side panel)
     int getParamPanelWidth() const override;
     void resizedParamPanel(juce::Rectangle<int> panelArea) override;
     void paintParamPanel(juce::Graphics& g, juce::Rectangle<int> panelArea) override;
+
+    // Override mod panel for mods display (left side panel)
+    int getModPanelWidth() const override;
+    void resizedModPanel(juce::Rectangle<int> panelArea) override;
+    void paintModPanel(juce::Graphics& g, juce::Rectangle<int> panelArea) override;
 
     static constexpr int CHAINS_LABEL_HEIGHT = 18;
     static constexpr int MIN_CONTENT_HEIGHT = 30;

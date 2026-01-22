@@ -8,6 +8,7 @@
 
 #include "DeviceInfo.hpp"
 #include "MacroInfo.hpp"
+#include "ModInfo.hpp"
 
 namespace magda {
 
@@ -75,6 +76,9 @@ struct ChainInfo {
     // Macro controls for chain-level parameter mapping
     MacroArray macros = createDefaultMacros();
 
+    // Modulators for chain-level modulation
+    ModArray mods = createDefaultMods();
+
     // UI state
     bool expanded = true;
 
@@ -95,6 +99,7 @@ struct ChainInfo {
           volume(other.volume),
           pan(other.pan),
           macros(other.macros),
+          mods(other.mods),
           expanded(other.expanded) {
         elements.reserve(other.elements.size());
         for (const auto& element : other.elements) {
@@ -113,6 +118,7 @@ struct ChainInfo {
             volume = other.volume;
             pan = other.pan;
             macros = other.macros;
+            mods = other.mods;
             expanded = other.expanded;
             elements.clear();
             elements.reserve(other.elements.size());
@@ -165,6 +171,9 @@ struct RackInfo {
     // Macro controls for rack-wide parameter mapping
     MacroArray macros = createDefaultMacros();
 
+    // Modulators for rack-wide modulation
+    ModArray mods = createDefaultMods();
+
     // Default constructor
     RackInfo() = default;
 
@@ -181,7 +190,8 @@ struct RackInfo {
           expanded(other.expanded),
           volume(other.volume),
           pan(other.pan),
-          macros(other.macros) {}
+          macros(other.macros),
+          mods(other.mods) {}
 
     // Copy assignment
     RackInfo& operator=(const RackInfo& other) {
@@ -194,6 +204,7 @@ struct RackInfo {
             volume = other.volume;
             pan = other.pan;
             macros = other.macros;
+            mods = other.mods;
         }
         return *this;
     }

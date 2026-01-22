@@ -1350,6 +1350,103 @@ void TrackManager::removeChainMacroPage(const ChainNodePath& chainPath) {
 }
 
 // ============================================================================
+// Mod Management
+// ============================================================================
+
+void TrackManager::setRackModAmount(const ChainNodePath& rackPath, int modIndex, float amount) {
+    if (auto* rack = getRackByPath(rackPath)) {
+        if (modIndex < 0 || modIndex >= static_cast<int>(rack->mods.size())) {
+            return;
+        }
+        rack->mods[modIndex].amount = juce::jlimit(0.0f, 1.0f, amount);
+        notifyTrackDevicesChanged(rackPath.trackId);
+    }
+}
+
+void TrackManager::setRackModTarget(const ChainNodePath& rackPath, int modIndex, ModTarget target) {
+    if (auto* rack = getRackByPath(rackPath)) {
+        if (modIndex < 0 || modIndex >= static_cast<int>(rack->mods.size())) {
+            return;
+        }
+        rack->mods[modIndex].target = target;
+        notifyTrackDevicesChanged(rackPath.trackId);
+    }
+}
+
+void TrackManager::setRackModName(const ChainNodePath& rackPath, int modIndex,
+                                  const juce::String& name) {
+    if (auto* rack = getRackByPath(rackPath)) {
+        if (modIndex < 0 || modIndex >= static_cast<int>(rack->mods.size())) {
+            return;
+        }
+        rack->mods[modIndex].name = name;
+        notifyTrackDevicesChanged(rackPath.trackId);
+    }
+}
+
+void TrackManager::addRackModPage(const ChainNodePath& rackPath) {
+    if (auto* rack = getRackByPath(rackPath)) {
+        addModPage(rack->mods);
+        notifyTrackDevicesChanged(rackPath.trackId);
+    }
+}
+
+void TrackManager::removeRackModPage(const ChainNodePath& rackPath) {
+    if (auto* rack = getRackByPath(rackPath)) {
+        if (removeModPage(rack->mods)) {
+            notifyTrackDevicesChanged(rackPath.trackId);
+        }
+    }
+}
+
+void TrackManager::setChainModAmount(const ChainNodePath& chainPath, int modIndex, float amount) {
+    if (auto* chain = getChainFromPath(*this, chainPath)) {
+        if (modIndex < 0 || modIndex >= static_cast<int>(chain->mods.size())) {
+            return;
+        }
+        chain->mods[modIndex].amount = juce::jlimit(0.0f, 1.0f, amount);
+        notifyTrackDevicesChanged(chainPath.trackId);
+    }
+}
+
+void TrackManager::setChainModTarget(const ChainNodePath& chainPath, int modIndex,
+                                     ModTarget target) {
+    if (auto* chain = getChainFromPath(*this, chainPath)) {
+        if (modIndex < 0 || modIndex >= static_cast<int>(chain->mods.size())) {
+            return;
+        }
+        chain->mods[modIndex].target = target;
+        notifyTrackDevicesChanged(chainPath.trackId);
+    }
+}
+
+void TrackManager::setChainModName(const ChainNodePath& chainPath, int modIndex,
+                                   const juce::String& name) {
+    if (auto* chain = getChainFromPath(*this, chainPath)) {
+        if (modIndex < 0 || modIndex >= static_cast<int>(chain->mods.size())) {
+            return;
+        }
+        chain->mods[modIndex].name = name;
+        notifyTrackDevicesChanged(chainPath.trackId);
+    }
+}
+
+void TrackManager::addChainModPage(const ChainNodePath& chainPath) {
+    if (auto* chain = getChainFromPath(*this, chainPath)) {
+        addModPage(chain->mods);
+        notifyTrackDevicesChanged(chainPath.trackId);
+    }
+}
+
+void TrackManager::removeChainModPage(const ChainNodePath& chainPath) {
+    if (auto* chain = getChainFromPath(*this, chainPath)) {
+        if (removeModPage(chain->mods)) {
+            notifyTrackDevicesChanged(chainPath.trackId);
+        }
+    }
+}
+
+// ============================================================================
 // Path Resolution
 // ============================================================================
 

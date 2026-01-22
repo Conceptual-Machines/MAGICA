@@ -1428,12 +1428,16 @@ int TrackChainContent::calculateIndicatorX(int index) const {
 void TrackChainContent::saveNodeStates() {
     savedCollapsedStates_.clear();
     savedExpandedChains_.clear();
+    savedParamPanelStates_.clear();
 
     for (const auto& node : nodeComponents_) {
         const auto& path = node->getNodePath();
         if (path.isValid()) {
             // Save collapsed state
             savedCollapsedStates_[path.toString()] = node->isCollapsed();
+
+            // Save param panel (macro panel) visible state
+            savedParamPanelStates_[path.toString()] = node->isParamPanelVisible();
 
             // Save expanded chain for racks
             if (auto* rack = dynamic_cast<RackComponent*>(node.get())) {
@@ -1453,6 +1457,12 @@ void TrackChainContent::restoreNodeStates() {
             auto collapsedIt = savedCollapsedStates_.find(path.toString());
             if (collapsedIt != savedCollapsedStates_.end()) {
                 node->setCollapsed(collapsedIt->second);
+            }
+
+            // Restore param panel (macro panel) visible state
+            auto paramIt = savedParamPanelStates_.find(path.toString());
+            if (paramIt != savedParamPanelStates_.end() && paramIt->second) {
+                node->setParamPanelVisible(true);
             }
 
             // Restore expanded chain for racks
