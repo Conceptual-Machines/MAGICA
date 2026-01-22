@@ -80,6 +80,8 @@ class TextSlider : public juce::Component, public juce::Label::Listener {
 
     std::function<void(double)> onValueChanged;
     std::function<void()> onClicked;  // Called on single left-click (no drag)
+    std::function<void()>
+        onRightClicked;  // Called on right-click (when rightClickEditsText_ is false)
 
     void resized() override {
         label_.setBounds(getLocalBounds());
@@ -116,10 +118,15 @@ class TextSlider : public juce::Component, public juce::Label::Listener {
 
     void mouseUp(const juce::MouseEvent& e) override {
         if (!hasDragged_) {
-            if (e.mods.isPopupMenu() && rightClickEditsText_) {
-                // Right-click to edit text directly
-                label_.showEditor();
-            } else if (!e.mods.isPopupMenu() && onClicked) {
+            if (e.mods.isPopupMenu()) {
+                if (rightClickEditsText_) {
+                    // Right-click to edit text directly
+                    label_.showEditor();
+                } else if (onRightClicked) {
+                    // Right-click callback (for context menus, etc.)
+                    onRightClicked();
+                }
+            } else if (onClicked) {
                 // Single left-click callback
                 onClicked();
             }

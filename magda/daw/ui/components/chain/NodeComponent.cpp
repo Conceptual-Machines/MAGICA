@@ -918,6 +918,9 @@ void NodeComponent::initializeModsMacrosPanels() {
     modsPanel_->onRemovePageRequested = [this](int itemsToRemove) {
         onModPageRemoveRequested(itemsToRemove);
     };
+    modsPanel_->onPanelClicked = [this]() {
+        magda::SelectionManager::getInstance().selectModsPanel(nodePath_);
+    };
     addChildComponent(*modsPanel_);
 
     // Create macro panel
@@ -945,6 +948,9 @@ void NodeComponent::initializeModsMacrosPanels() {
     };
     macroPanel_->onRemovePageRequested = [this](int itemsToRemove) {
         onMacroPageRemoveRequested(itemsToRemove);
+    };
+    macroPanel_->onPanelClicked = [this]() {
+        magda::SelectionManager::getInstance().selectMacrosPanel(nodePath_);
     };
     addChildComponent(*macroPanel_);
 

@@ -24,6 +24,10 @@ ParamSlotComponent::ParamSlotComponent(int paramIndex) : paramIndex_(paramIndex)
             magda::SelectionManager::getInstance().selectParam(devicePath_, paramIndex_);
         }
     };
+    valueSlider_.onRightClicked = [this]() {
+        // Show link menu on right-click
+        showLinkMenu();
+    };
     // Disable right-click editing - we use right-click for link menu
     valueSlider_.setRightClickEditsText(false);
     addAndMakeVisible(valueSlider_);

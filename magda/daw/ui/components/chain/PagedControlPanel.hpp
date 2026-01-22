@@ -66,8 +66,12 @@ class PagedControlPanel : public juce::Component {
     std::function<void(int itemsToAdd)> onAddPageRequested;
     std::function<void(int itemsToRemove)> onRemovePageRequested;
 
+    // Callback when panel header/background is clicked (for selection)
+    std::function<void()> onPanelClicked;
+
     void paint(juce::Graphics& g) override;
     void resized() override;
+    void mouseDown(const juce::MouseEvent& e) override;
 
   protected:
     // Subclasses must implement these

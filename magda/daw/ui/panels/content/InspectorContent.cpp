@@ -726,6 +726,20 @@ void InspectorContent::paramSelectionChanged(const magda::ParamSelection& select
     }
 }
 
+void InspectorContent::modsPanelSelectionChanged(const magda::ModsPanelSelection& selection) {
+    if (selection.isValid()) {
+        currentSelectionType_ = magda::SelectionType::ModsPanel;
+        updateSelectionDisplay();
+    }
+}
+
+void InspectorContent::macrosPanelSelectionChanged(const magda::MacrosPanelSelection& selection) {
+    if (selection.isValid()) {
+        currentSelectionType_ = magda::SelectionType::MacrosPanel;
+        updateSelectionDisplay();
+    }
+}
+
 void InspectorContent::noteSelectionChanged(const magda::NoteSelection& selection) {
     if (currentSelectionType_ == magda::SelectionType::Note) {
         noteSelection_ = selection;
@@ -838,6 +852,26 @@ void InspectorContent::updateSelectionDisplay() {
             noSelectionLabel_.setText("Param " + juce::String(paramSelection.paramIndex + 1) +
                                           " selected",
                                       juce::dontSendNotification);
+            noSelectionLabel_.setVisible(true);
+            break;
+        }
+
+        case magda::SelectionType::ModsPanel: {
+            showTrackControls(false);
+            showClipControls(false);
+            showNoteControls(false);
+            showChainNodeControls(false);
+            noSelectionLabel_.setText("Mods Panel", juce::dontSendNotification);
+            noSelectionLabel_.setVisible(true);
+            break;
+        }
+
+        case magda::SelectionType::MacrosPanel: {
+            showTrackControls(false);
+            showClipControls(false);
+            showNoteControls(false);
+            showChainNodeControls(false);
+            noSelectionLabel_.setText("Macros Panel", juce::dontSendNotification);
             noSelectionLabel_.setVisible(true);
             break;
         }

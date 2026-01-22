@@ -460,6 +460,8 @@ void SelectionManager::clearSelection() {
     selectedChainNode_ = ChainNodePath{};
     modSelection_ = ModSelection{};
     macroSelection_ = MacroSelection{};
+    modsPanelSelection_ = ModsPanelSelection{};
+    macrosPanelSelection_ = MacrosPanelSelection{};
     paramSelection_ = ParamSelection{};
 
     // Sync with managers
@@ -614,6 +616,8 @@ void SelectionManager::selectMod(const ChainNodePath& parentPath, int modIndex) 
     deviceSelection_ = DeviceSelection{};
     selectedChainNode_ = ChainNodePath{};
     macroSelection_ = MacroSelection{};
+    modsPanelSelection_ = ModsPanelSelection{};
+    macrosPanelSelection_ = MacrosPanelSelection{};
     paramSelection_ = ParamSelection{};
 
     selectionType_ = SelectionType::Mod;
@@ -675,6 +679,8 @@ void SelectionManager::selectMacro(const ChainNodePath& parentPath, int macroInd
     deviceSelection_ = DeviceSelection{};
     selectedChainNode_ = ChainNodePath{};
     modSelection_ = ModSelection{};
+    modsPanelSelection_ = ModsPanelSelection{};
+    macrosPanelSelection_ = MacrosPanelSelection{};
     paramSelection_ = ParamSelection{};
 
     selectionType_ = SelectionType::Macro;
@@ -737,6 +743,8 @@ void SelectionManager::selectParam(const ChainNodePath& devicePath, int paramInd
     selectedChainNode_ = ChainNodePath{};
     modSelection_ = ModSelection{};
     macroSelection_ = MacroSelection{};
+    modsPanelSelection_ = ModsPanelSelection{};
+    macrosPanelSelection_ = MacrosPanelSelection{};
 
     selectionType_ = SelectionType::Param;
     paramSelection_.devicePath = devicePath;
@@ -773,6 +781,128 @@ void SelectionManager::clearParamSelection() {
 void SelectionManager::notifyParamSelectionChanged(const ParamSelection& selection) {
     for (auto* listener : listeners_) {
         listener->paramSelectionChanged(selection);
+    }
+}
+
+// ============================================================================
+// Mods Panel Selection
+// ============================================================================
+
+void SelectionManager::selectModsPanel(const ChainNodePath& parentPath) {
+    bool typeChanged = selectionType_ != SelectionType::ModsPanel;
+    bool selectionChanged = modsPanelSelection_.parentPath != parentPath;
+
+    if (!typeChanged && !selectionChanged) {
+        return;  // Already selected
+    }
+
+    // Clear other selection types (but keep track selection for context)
+    selectedClipId_ = INVALID_CLIP_ID;
+    selectedClipIds_.clear();
+    timeRangeSelection_ = TimeRangeSelection{};
+    noteSelection_ = NoteSelection{};
+    deviceSelection_ = DeviceSelection{};
+    selectedChainNode_ = ChainNodePath{};
+    modSelection_ = ModSelection{};
+    macroSelection_ = MacroSelection{};
+    macrosPanelSelection_ = MacrosPanelSelection{};
+    paramSelection_ = ParamSelection{};
+
+    selectionType_ = SelectionType::ModsPanel;
+    modsPanelSelection_.parentPath = parentPath;
+
+    // Sync with managers
+    ClipManager::getInstance().clearClipSelection();
+
+    if (typeChanged) {
+        notifySelectionTypeChanged(SelectionType::ModsPanel);
+    }
+    notifyModsPanelSelectionChanged(modsPanelSelection_);
+}
+
+void SelectionManager::clearModsPanelSelection() {
+    if (selectionType_ != SelectionType::ModsPanel) {
+        return;
+    }
+
+    modsPanelSelection_ = ModsPanelSelection{};
+
+    // Return to track selection if we have a track
+    if (selectedTrackId_ != INVALID_TRACK_ID) {
+        selectionType_ = SelectionType::Track;
+        notifySelectionTypeChanged(SelectionType::Track);
+    } else {
+        selectionType_ = SelectionType::None;
+        notifySelectionTypeChanged(SelectionType::None);
+    }
+
+    notifyModsPanelSelectionChanged(modsPanelSelection_);
+}
+
+void SelectionManager::notifyModsPanelSelectionChanged(const ModsPanelSelection& selection) {
+    for (auto* listener : listeners_) {
+        listener->modsPanelSelectionChanged(selection);
+    }
+}
+
+// ============================================================================
+// Macros Panel Selection
+// ============================================================================
+
+void SelectionManager::selectMacrosPanel(const ChainNodePath& parentPath) {
+    bool typeChanged = selectionType_ != SelectionType::MacrosPanel;
+    bool selectionChanged = macrosPanelSelection_.parentPath != parentPath;
+
+    if (!typeChanged && !selectionChanged) {
+        return;  // Already selected
+    }
+
+    // Clear other selection types (but keep track selection for context)
+    selectedClipId_ = INVALID_CLIP_ID;
+    selectedClipIds_.clear();
+    timeRangeSelection_ = TimeRangeSelection{};
+    noteSelection_ = NoteSelection{};
+    deviceSelection_ = DeviceSelection{};
+    selectedChainNode_ = ChainNodePath{};
+    modSelection_ = ModSelection{};
+    macroSelection_ = MacroSelection{};
+    modsPanelSelection_ = ModsPanelSelection{};
+    paramSelection_ = ParamSelection{};
+
+    selectionType_ = SelectionType::MacrosPanel;
+    macrosPanelSelection_.parentPath = parentPath;
+
+    // Sync with managers
+    ClipManager::getInstance().clearClipSelection();
+
+    if (typeChanged) {
+        notifySelectionTypeChanged(SelectionType::MacrosPanel);
+    }
+    notifyMacrosPanelSelectionChanged(macrosPanelSelection_);
+}
+
+void SelectionManager::clearMacrosPanelSelection() {
+    if (selectionType_ != SelectionType::MacrosPanel) {
+        return;
+    }
+
+    macrosPanelSelection_ = MacrosPanelSelection{};
+
+    // Return to track selection if we have a track
+    if (selectedTrackId_ != INVALID_TRACK_ID) {
+        selectionType_ = SelectionType::Track;
+        notifySelectionTypeChanged(SelectionType::Track);
+    } else {
+        selectionType_ = SelectionType::None;
+        notifySelectionTypeChanged(SelectionType::None);
+    }
+
+    notifyMacrosPanelSelectionChanged(macrosPanelSelection_);
+}
+
+void SelectionManager::notifyMacrosPanelSelectionChanged(const MacrosPanelSelection& selection) {
+    for (auto* listener : listeners_) {
+        listener->macrosPanelSelectionChanged(selection);
     }
 }
 

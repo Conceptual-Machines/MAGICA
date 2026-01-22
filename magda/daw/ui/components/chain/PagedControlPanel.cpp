@@ -241,4 +241,10 @@ void PagedControlPanel::resized() {
     }
 }
 
+void PagedControlPanel::mouseDown(const juce::MouseEvent& e) {
+    if (e.mods.isLeftButtonDown() && onPanelClicked) {
+        onPanelClicked();
+    }
+}
+
 }  // namespace magda::daw::ui

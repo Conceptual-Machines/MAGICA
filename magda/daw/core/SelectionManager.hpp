@@ -12,21 +12,83 @@
 
 namespace magda {
 
+// ============================================================================
+// SELECTION/INSPECTOR PATTERN
+// ============================================================================
+//
+// This module implements a centralized Selection/Inspector pattern (also known
+// as Master-Detail) that coordinates selection state across the entire DAW.
+//
+// ## Core Concept
+//
+// Only ONE selection type can be active at a time. When any element is selected,
+// it becomes the "focus" and the Inspector panel updates to show controls/details
+// for that element.
+//
+// ## Selection Flow
+//
+//   1. User clicks an element (track, clip, device, mod, param, etc.)
+//   2. The element calls SelectionManager::select*() method
+//   3. SelectionManager:
+//      a) Clears any previous selection
+//      b) Stores the new selection
+//      c) Notifies all listeners via SelectionManagerListener callbacks
+//   4. InspectorContent receives the callback and displays appropriate UI
+//
+// ## Selection Types
+//
+//   - Track:      Track header/row → Inspector shows track controls
+//   - Clip:       Timeline clip → Inspector shows clip properties
+//   - ChainNode:  Device/Rack/Chain → Inspector shows device/rack controls
+//   - Mod:        Individual modulator → Inspector shows mod editor
+//   - Macro:      Individual macro → Inspector shows macro editor
+//   - ModsPanel:  Mods panel header → Inspector shows mods panel settings
+//   - MacrosPanel: Macros panel header → Inspector shows macros panel settings
+//   - Param:      Device parameter → Inspector shows param info + linked mods
+//
+// ## Bidirectional Context
+//
+// Some selections provide contextual filtering in both directions:
+//
+//   Mod → Param: When a mod is selected, param cells show only that mod's
+//                indicator. This helps users see which params a mod affects.
+//
+//   Param → Mod: When a param is selected, mod knobs show the link amount
+//                for that specific param. This helps users see which mods
+//                affect a param.
+//
+// ## Listener Pattern
+//
+// Components implement SelectionManagerListener to receive selection changes:
+//
+//   class MyComponent : public SelectionManagerListener {
+//       void selectionTypeChanged(SelectionType type) override;
+//       void modSelectionChanged(const ModSelection& sel) override;
+//       // ... other callbacks as needed
+//   };
+//
+// Register in constructor: SelectionManager::getInstance().addListener(this);
+// Unregister in destructor: SelectionManager::getInstance().removeListener(this);
+//
+// ============================================================================
+
 /**
  * @brief Selection types in the DAW
  */
 enum class SelectionType {
-    None,       // Nothing selected
-    Track,      // Track selected (for mixer/inspector)
-    Clip,       // Single clip selected (backward compat)
-    MultiClip,  // Multiple clips selected
-    TimeRange,  // Time range selected (for operations)
-    Note,       // MIDI note(s) selected in piano roll
-    Device,     // Device selected in track chain
-    ChainNode,  // Any node in the chain view (rack, chain, device)
-    Mod,        // Modulator selected in mods panel
-    Macro,      // Macro selected in macros panel
-    Param       // Parameter selected on a device
+    None,         // Nothing selected
+    Track,        // Track selected (for mixer/inspector)
+    Clip,         // Single clip selected (backward compat)
+    MultiClip,    // Multiple clips selected
+    TimeRange,    // Time range selected (for operations)
+    Note,         // MIDI note(s) selected in piano roll
+    Device,       // Device selected in track chain
+    ChainNode,    // Any node in the chain view (rack, chain, device)
+    Mod,          // Individual modulator selected → show mod editor
+    Macro,        // Individual macro selected → show macro editor
+    ModsPanel,    // Mods panel selected → show mods panel settings
+    MacrosPanel,  // Macros panel selected → show macros panel settings
+    Param         // Parameter selected on a device
 };
 
 /**
@@ -346,6 +408,44 @@ struct ParamSelection {
 };
 
 /**
+ * @brief Mods panel selection data (selecting the panel itself, not an individual mod)
+ */
+struct ModsPanelSelection {
+    ChainNodePath parentPath;  // Path to the device/rack/chain containing the mods panel
+
+    bool isValid() const {
+        return parentPath.isValid();
+    }
+
+    bool operator==(const ModsPanelSelection& other) const {
+        return parentPath == other.parentPath;
+    }
+
+    bool operator!=(const ModsPanelSelection& other) const {
+        return !(*this == other);
+    }
+};
+
+/**
+ * @brief Macros panel selection data (selecting the panel itself, not an individual macro)
+ */
+struct MacrosPanelSelection {
+    ChainNodePath parentPath;  // Path to the device/rack/chain containing the macros panel
+
+    bool isValid() const {
+        return parentPath.isValid();
+    }
+
+    bool operator==(const MacrosPanelSelection& other) const {
+        return parentPath == other.parentPath;
+    }
+
+    bool operator!=(const MacrosPanelSelection& other) const {
+        return !(*this == other);
+    }
+};
+
+/**
  * @brief Listener interface for selection changes
  */
 class SelectionManagerListener {
@@ -365,6 +465,9 @@ class SelectionManagerListener {
     virtual void chainNodeReselected([[maybe_unused]] const ChainNodePath& path) {}
     virtual void modSelectionChanged([[maybe_unused]] const ModSelection& selection) {}
     virtual void macroSelectionChanged([[maybe_unused]] const MacroSelection& selection) {}
+    virtual void modsPanelSelectionChanged([[maybe_unused]] const ModsPanelSelection& selection) {}
+    virtual void macrosPanelSelectionChanged(
+        [[maybe_unused]] const MacrosPanelSelection& selection) {}
     virtual void paramSelectionChanged([[maybe_unused]] const ParamSelection& selection) {}
 };
 
@@ -706,6 +809,64 @@ class SelectionManager {
     }
 
     // ========================================================================
+    // Mods Panel Selection (the panel itself, not individual mods)
+    // ========================================================================
+
+    /**
+     * @brief Select a mods panel (to show panel settings in inspector)
+     * @param parentPath Path to the device/rack/chain containing the mods panel
+     */
+    void selectModsPanel(const ChainNodePath& parentPath);
+
+    /**
+     * @brief Clear mods panel selection
+     */
+    void clearModsPanelSelection();
+
+    /**
+     * @brief Get the current mods panel selection
+     */
+    const ModsPanelSelection& getModsPanelSelection() const {
+        return modsPanelSelection_;
+    }
+
+    /**
+     * @brief Check if there's a valid mods panel selection
+     */
+    bool hasModsPanelSelection() const {
+        return selectionType_ == SelectionType::ModsPanel && modsPanelSelection_.isValid();
+    }
+
+    // ========================================================================
+    // Macros Panel Selection (the panel itself, not individual macros)
+    // ========================================================================
+
+    /**
+     * @brief Select a macros panel (to show panel settings in inspector)
+     * @param parentPath Path to the device/rack/chain containing the macros panel
+     */
+    void selectMacrosPanel(const ChainNodePath& parentPath);
+
+    /**
+     * @brief Clear macros panel selection
+     */
+    void clearMacrosPanelSelection();
+
+    /**
+     * @brief Get the current macros panel selection
+     */
+    const MacrosPanelSelection& getMacrosPanelSelection() const {
+        return macrosPanelSelection_;
+    }
+
+    /**
+     * @brief Check if there's a valid macros panel selection
+     */
+    bool hasMacrosPanelSelection() const {
+        return selectionType_ == SelectionType::MacrosPanel && macrosPanelSelection_.isValid();
+    }
+
+    // ========================================================================
     // Clear
     // ========================================================================
 
@@ -736,6 +897,8 @@ class SelectionManager {
     ChainNodePath selectedChainNode_;  // For exclusive chain node selection
     ModSelection modSelection_;
     MacroSelection macroSelection_;
+    ModsPanelSelection modsPanelSelection_;
+    MacrosPanelSelection macrosPanelSelection_;
     ParamSelection paramSelection_;
 
     std::vector<SelectionManagerListener*> listeners_;
@@ -751,6 +914,8 @@ class SelectionManager {
     void notifyChainNodeReselected(const ChainNodePath& path);
     void notifyModSelectionChanged(const ModSelection& selection);
     void notifyMacroSelectionChanged(const MacroSelection& selection);
+    void notifyModsPanelSelectionChanged(const ModsPanelSelection& selection);
+    void notifyMacrosPanelSelectionChanged(const MacrosPanelSelection& selection);
     void notifyParamSelectionChanged(const ParamSelection& selection);
 };
 

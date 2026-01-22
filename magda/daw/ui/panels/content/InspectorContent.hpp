@@ -60,6 +60,8 @@ class InspectorContent : public PanelContent,
     void chainNodeSelectionChanged(const magda::ChainNodePath& path) override;
     void modSelectionChanged(const magda::ModSelection& selection) override;
     void macroSelectionChanged(const magda::MacroSelection& selection) override;
+    void modsPanelSelectionChanged(const magda::ModsPanelSelection& selection) override;
+    void macrosPanelSelectionChanged(const magda::MacrosPanelSelection& selection) override;
     void paramSelectionChanged(const magda::ParamSelection& selection) override;
 
   private:
@@ -130,14 +132,26 @@ class InspectorContent : public PanelContent,
     juce::Label chainNodeNameLabel_;
     juce::Label chainNodeNameValue_;
 
+    // Mods panel properties section
+    juce::Label modsPanelTitleLabel_;
+    juce::Label modsPanelPathLabel_;
+
+    // Macros panel properties section
+    juce::Label macrosPanelTitleLabel_;
+    juce::Label macrosPanelPathLabel_;
+
     void updateFromSelectedTrack();
     void updateFromSelectedClip();
     void updateFromSelectedNotes();
     void updateFromSelectedChainNode();
+    void updateFromSelectedModsPanel();
+    void updateFromSelectedMacrosPanel();
     void showTrackControls(bool show);
     void showClipControls(bool show);
     void showNoteControls(bool show);
     void showChainNodeControls(bool show);
+    void showModsPanelControls(bool show);
+    void showMacrosPanelControls(bool show);
     void updateSelectionDisplay();
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(InspectorContent)
