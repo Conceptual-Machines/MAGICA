@@ -9,7 +9,8 @@
 
 namespace magda::daw::ui {
 
-class RackComponent;  // Forward declaration for nested racks
+class RackComponent;        // Forward declaration for nested racks
+class DeviceSlotComponent;  // Forward declaration for shared device slot
 
 /**
  * @brief Panel showing device sequence for a selected chain
@@ -72,7 +73,6 @@ class ChainPanel : public NodeComponent, private juce::Timer {
     }
 
   private:
-    class DeviceSlotComponent;
     class ElementSlotsContainer;
     class ZoomableViewport;
 

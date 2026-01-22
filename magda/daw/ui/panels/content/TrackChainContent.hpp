@@ -14,6 +14,7 @@ namespace magda::daw::ui {
 
 class RackComponent;
 class NodeComponent;
+class DeviceSlotComponent;
 
 /**
  * @brief Track chain panel content
@@ -111,9 +112,6 @@ class TrackChainContent : public PanelContent,
     std::unique_ptr<ZoomableViewport> chainViewport_;
     class ChainContainer;
     std::unique_ptr<ChainContainer> chainContainer_;
-
-    // Device slot component for interactive device display
-    class DeviceSlotComponent;
 
     // All node components in signal flow order (devices and racks unified)
     std::vector<std::unique_ptr<NodeComponent>> nodeComponents_;

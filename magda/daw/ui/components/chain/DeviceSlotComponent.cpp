@@ -1,0 +1,443 @@
+#include "DeviceSlotComponent.hpp"
+
+#include <BinaryData.h>
+
+#include "core/MacroInfo.hpp"
+#include "core/ModInfo.hpp"
+#include "core/SelectionManager.hpp"
+#include "core/TrackManager.hpp"
+#include "ui/debug/DebugSettings.hpp"
+#include "ui/themes/DarkTheme.hpp"
+#include "ui/themes/FontManager.hpp"
+#include "ui/themes/SmallButtonLookAndFeel.hpp"
+
+namespace magda::daw::ui {
+
+DeviceSlotComponent::DeviceSlotComponent(const magda::DeviceInfo& device) : device_(device) {
+    setNodeName(device.name);
+    setBypassed(device.bypassed);
+
+    // Restore panel visibility from device state
+    modPanelVisible_ = device.modPanelOpen;
+    paramPanelVisible_ = device.paramPanelOpen;
+
+    // Hide built-in bypass button - we'll add our own in the header
+    setBypassButtonVisible(false);
+
+    // Set up NodeComponent callbacks
+    onDeleteClicked = [this]() {
+        // Use path-based removal for proper nesting support
+        magda::TrackManager::getInstance().removeDeviceFromChainByPath(nodePath_);
+        if (onDeviceDeleted) {
+            onDeviceDeleted();
+        }
+    };
+
+    onModPanelToggled = [this](bool visible) {
+        if (auto* dev = magda::TrackManager::getInstance().getDeviceInChainByPath(nodePath_)) {
+            dev->modPanelOpen = visible;
+        }
+        if (onDeviceLayoutChanged) {
+            onDeviceLayoutChanged();
+        }
+    };
+
+    onParamPanelToggled = [this](bool visible) {
+        if (auto* dev = magda::TrackManager::getInstance().getDeviceInChainByPath(nodePath_)) {
+            dev->paramPanelOpen = visible;
+        }
+        if (onDeviceLayoutChanged) {
+            onDeviceLayoutChanged();
+        }
+    };
+
+    onLayoutChanged = [this]() {
+        if (onDeviceLayoutChanged) {
+            onDeviceLayoutChanged();
+        }
+    };
+
+    // Mod button (toggle mod panel) - sine wave icon
+    modButton_ = std::make_unique<magda::SvgButton>("Mod", BinaryData::sinewavebright_svg,
+                                                    BinaryData::sinewavebright_svgSize);
+    modButton_->setClickingTogglesState(true);
+    modButton_->setToggleState(modPanelVisible_, juce::dontSendNotification);
+    modButton_->setNormalColor(DarkTheme::getSecondaryTextColour());
+    modButton_->setActiveColor(juce::Colours::white);
+    modButton_->setActiveBackgroundColor(DarkTheme::getColour(DarkTheme::ACCENT_ORANGE));
+    modButton_->setActive(modPanelVisible_);
+    modButton_->onClick = [this]() {
+        modButton_->setActive(modButton_->getToggleState());
+        setModPanelVisible(modButton_->getToggleState());
+    };
+    addAndMakeVisible(*modButton_);
+
+    // Macro button (toggle macro panel) - link icon
+    macroButton_ = std::make_unique<magda::SvgButton>("Macro", BinaryData::link_bright_svg,
+                                                      BinaryData::link_bright_svgSize);
+    macroButton_->setClickingTogglesState(true);
+    macroButton_->setToggleState(paramPanelVisible_, juce::dontSendNotification);
+    macroButton_->setNormalColor(DarkTheme::getSecondaryTextColour());
+    macroButton_->setActiveColor(juce::Colours::white);
+    macroButton_->setActiveBackgroundColor(DarkTheme::getColour(DarkTheme::ACCENT_PURPLE));
+    macroButton_->setActive(paramPanelVisible_);
+    macroButton_->onClick = [this]() {
+        macroButton_->setActive(macroButton_->getToggleState());
+        setParamPanelVisible(macroButton_->getToggleState());
+    };
+    addAndMakeVisible(*macroButton_);
+
+    // Initialize mods/macros panels from base class
+    initializeModsMacrosPanels();
+
+    // Gain text slider in header
+    gainSlider_.setRange(-60.0, 12.0, 0.1);
+    gainSlider_.setValue(device_.gainDb, juce::dontSendNotification);
+    gainSlider_.onValueChanged = [this](double value) {
+        if (auto* dev = magda::TrackManager::getInstance().getDeviceInChainByPath(nodePath_)) {
+            dev->gainDb = static_cast<float>(value);
+        }
+    };
+    addAndMakeVisible(gainSlider_);
+
+    // UI button (open plugin window) - open in new icon
+    uiButton_ = std::make_unique<magda::SvgButton>("UI", BinaryData::open_in_new_svg,
+                                                   BinaryData::open_in_new_svgSize);
+    uiButton_->setNormalColor(DarkTheme::getSecondaryTextColour());
+    uiButton_->onClick = [this]() { DBG("Open plugin UI for: " << device_.name); };
+    addAndMakeVisible(*uiButton_);
+
+    // Bypass/On button (power icon)
+    onButton_ = std::make_unique<magda::SvgButton>("Power", BinaryData::power_on_svg,
+                                                   BinaryData::power_on_svgSize);
+    onButton_->setClickingTogglesState(true);
+    onButton_->setToggleState(!device.bypassed, juce::dontSendNotification);
+    onButton_->setNormalColor(DarkTheme::getColour(DarkTheme::STATUS_ERROR));
+    onButton_->setActiveColor(juce::Colours::white);
+    onButton_->setActiveBackgroundColor(DarkTheme::getColour(DarkTheme::ACCENT_GREEN).darker(0.3f));
+    onButton_->setActive(!device.bypassed);
+    onButton_->onClick = [this]() {
+        bool active = onButton_->getToggleState();
+        onButton_->setActive(active);
+        setBypassed(!active);
+        magda::TrackManager::getInstance().setDeviceInChainBypassedByPath(nodePath_, !active);
+        if (onDeviceBypassChanged) {
+            onDeviceBypassChanged(!active);
+        }
+    };
+    addAndMakeVisible(*onButton_);
+
+    // Pagination controls
+    prevPageButton_ = std::make_unique<juce::TextButton>("<");
+    prevPageButton_->setColour(juce::TextButton::buttonColourId,
+                               DarkTheme::getColour(DarkTheme::SURFACE));
+    prevPageButton_->setColour(juce::TextButton::textColourOffId,
+                               DarkTheme::getSecondaryTextColour());
+    prevPageButton_->onClick = [this]() { goToPrevPage(); };
+    prevPageButton_->setLookAndFeel(&SmallButtonLookAndFeel::getInstance());
+    addAndMakeVisible(*prevPageButton_);
+
+    nextPageButton_ = std::make_unique<juce::TextButton>(">");
+    nextPageButton_->setColour(juce::TextButton::buttonColourId,
+                               DarkTheme::getColour(DarkTheme::SURFACE));
+    nextPageButton_->setColour(juce::TextButton::textColourOffId,
+                               DarkTheme::getSecondaryTextColour());
+    nextPageButton_->onClick = [this]() { goToNextPage(); };
+    nextPageButton_->setLookAndFeel(&SmallButtonLookAndFeel::getInstance());
+    addAndMakeVisible(*nextPageButton_);
+
+    pageLabel_ = std::make_unique<juce::Label>();
+    pageLabel_->setFont(FontManager::getInstance().getUIFont(9.0f));
+    pageLabel_->setColour(juce::Label::textColourId, DarkTheme::getSecondaryTextColour());
+    pageLabel_->setJustificationType(juce::Justification::centred);
+    addAndMakeVisible(*pageLabel_);
+
+    // Create parameter sliders with labels (mock params)
+    static const char* mockParamNames[NUM_PARAMS_PER_PAGE] = {
+        "Cutoff",   "Resonance", "Drive",    "Mix",   "Attack", "Decay", "Sustain", "Release",
+        "LFO Rate", "LFO Depth", "Feedback", "Width", "Low",    "Mid",   "High",    "Output"};
+
+    for (int i = 0; i < NUM_PARAMS_PER_PAGE; ++i) {
+        paramLabels_[i] = std::make_unique<juce::Label>();
+        paramLabels_[i]->setText(mockParamNames[i], juce::dontSendNotification);
+        paramLabels_[i]->setFont(FontManager::getInstance().getUIFont(
+            DebugSettings::getInstance().getParamLabelFontSize()));
+        paramLabels_[i]->setColour(juce::Label::textColourId, DarkTheme::getSecondaryTextColour());
+        paramLabels_[i]->setJustificationType(juce::Justification::centredLeft);
+        paramLabels_[i]->setInterceptsMouseClicks(false, false);
+        addAndMakeVisible(*paramLabels_[i]);
+
+        paramSliders_[i] = std::make_unique<TextSlider>(TextSlider::Format::Decimal);
+        paramSliders_[i]->setRange(0.0, 1.0, 0.01);
+        paramSliders_[i]->setValue(0.5, juce::dontSendNotification);
+        addAndMakeVisible(*paramSliders_[i]);
+    }
+
+    // Initialize pagination (mock: 4 pages)
+    totalPages_ = 4;
+    currentPage_ = 0;
+    updatePageControls();
+}
+
+DeviceSlotComponent::~DeviceSlotComponent() = default;
+
+int DeviceSlotComponent::getPreferredWidth() const {
+    if (collapsed_) {
+        return getLeftPanelsWidth() + COLLAPSED_WIDTH + getRightPanelsWidth();
+    }
+    return getTotalWidth(BASE_SLOT_WIDTH);
+}
+
+void DeviceSlotComponent::updateFromDevice(const magda::DeviceInfo& device) {
+    device_ = device;
+    setNodeName(device.name);
+    setBypassed(device.bypassed);
+    onButton_->setToggleState(!device.bypassed, juce::dontSendNotification);
+    onButton_->setActive(!device.bypassed);
+    gainSlider_.setValue(device.gainDb, juce::dontSendNotification);
+    repaint();
+}
+
+void DeviceSlotComponent::paintContent(juce::Graphics& g, juce::Rectangle<int> contentArea) {
+    // Content header: manufacturer / device name
+    auto headerArea = contentArea.removeFromTop(CONTENT_HEADER_HEIGHT);
+    auto textColour = isBypassed() ? DarkTheme::getSecondaryTextColour().withAlpha(0.5f)
+                                   : DarkTheme::getSecondaryTextColour();
+    g.setColour(textColour);
+    g.setFont(FontManager::getInstance().getUIFont(9.0f));
+    juce::String headerText = device_.manufacturer + " / " + device_.name;
+    g.drawText(headerText, headerArea.reduced(2, 0), juce::Justification::centredLeft);
+}
+
+void DeviceSlotComponent::resizedContent(juce::Rectangle<int> contentArea) {
+    // When collapsed, hide content controls
+    if (collapsed_) {
+        for (int i = 0; i < NUM_PARAMS_PER_PAGE; ++i) {
+            paramLabels_[i]->setVisible(false);
+            paramSliders_[i]->setVisible(false);
+        }
+        prevPageButton_->setVisible(false);
+        nextPageButton_->setVisible(false);
+        pageLabel_->setVisible(false);
+        gainSlider_.setVisible(false);
+        return;
+    }
+
+    // Show header controls when expanded
+    modButton_->setVisible(true);
+    macroButton_->setVisible(true);
+    uiButton_->setVisible(true);
+    onButton_->setVisible(true);
+    gainSlider_.setVisible(true);
+
+    // Content header area (manufacturer)
+    contentArea.removeFromTop(CONTENT_HEADER_HEIGHT);
+
+    // Pagination area
+    auto paginationArea = contentArea.removeFromTop(PAGINATION_HEIGHT);
+    int buttonWidth = 18;
+    prevPageButton_->setBounds(paginationArea.removeFromLeft(buttonWidth));
+    nextPageButton_->setBounds(paginationArea.removeFromRight(buttonWidth));
+    pageLabel_->setBounds(paginationArea);
+    prevPageButton_->setVisible(true);
+    nextPageButton_->setVisible(true);
+    pageLabel_->setVisible(true);
+
+    // Small gap
+    contentArea.removeFromTop(2);
+
+    // Params area - 4x4 grid spread evenly across available space
+    contentArea = contentArea.reduced(2, 0);
+
+    auto labelFont =
+        FontManager::getInstance().getUIFont(DebugSettings::getInstance().getParamLabelFontSize());
+    auto valueFont =
+        FontManager::getInstance().getUIFont(DebugSettings::getInstance().getParamValueFontSize());
+
+    // Calculate cell dimensions to fill available space evenly
+    int numRows = (NUM_PARAMS_PER_PAGE + PARAMS_PER_ROW - 1) / PARAMS_PER_ROW;
+    int cellWidth = contentArea.getWidth() / PARAMS_PER_ROW;
+    int cellHeight = contentArea.getHeight() / numRows;
+    int labelHeight = juce::jmin(12, cellHeight / 3);
+    int sliderHeight = cellHeight - labelHeight - 2;
+
+    for (int i = 0; i < NUM_PARAMS_PER_PAGE; ++i) {
+        int row = i / PARAMS_PER_ROW;
+        int col = i % PARAMS_PER_ROW;
+        int x = contentArea.getX() + col * cellWidth;
+        int y = contentArea.getY() + row * cellHeight;
+
+        paramLabels_[i]->setFont(labelFont);
+        paramSliders_[i]->setFont(valueFont);
+        paramLabels_[i]->setBounds(x, y, cellWidth - 2, labelHeight);
+        paramSliders_[i]->setBounds(x, y + labelHeight, cellWidth - 2, sliderHeight);
+        paramLabels_[i]->setVisible(true);
+        paramSliders_[i]->setVisible(true);
+    }
+}
+
+void DeviceSlotComponent::resizedHeaderExtra(juce::Rectangle<int>& headerArea) {
+    // Header layout: [M] [Macro] [Name...] [gain slider] [UI] [on]
+    // Note: delete (X) is handled by NodeComponent on the right
+
+    // Mod button on the left (before name)
+    modButton_->setBounds(headerArea.removeFromLeft(BUTTON_SIZE));
+    headerArea.removeFromLeft(4);
+
+    // Macro button
+    macroButton_->setBounds(headerArea.removeFromLeft(BUTTON_SIZE));
+    headerArea.removeFromLeft(4);
+
+    // Power button on the right (before delete which is handled by parent)
+    onButton_->setBounds(headerArea.removeFromRight(BUTTON_SIZE));
+    headerArea.removeFromRight(4);
+
+    // UI button
+    uiButton_->setBounds(headerArea.removeFromRight(BUTTON_SIZE));
+    headerArea.removeFromRight(4);
+
+    // Gain slider takes some space on the right
+    gainSlider_.setBounds(headerArea.removeFromRight(50));
+    headerArea.removeFromRight(4);
+
+    // Remaining space is for the name label (handled by NodeComponent)
+}
+
+void DeviceSlotComponent::resizedCollapsed(juce::Rectangle<int>& area) {
+    // Add device-specific buttons vertically when collapsed
+    // Order: X (from base), ON, UI, Mod, Macro
+    int buttonSize = juce::jmin(16, area.getWidth() - 4);
+
+    // On/power button (right after X)
+    onButton_->setBounds(
+        area.removeFromTop(buttonSize).withSizeKeepingCentre(buttonSize, buttonSize));
+    onButton_->setVisible(true);
+    area.removeFromTop(4);
+
+    // UI button
+    uiButton_->setBounds(
+        area.removeFromTop(buttonSize).withSizeKeepingCentre(buttonSize, buttonSize));
+    uiButton_->setVisible(true);
+    area.removeFromTop(4);
+
+    // Mod button
+    modButton_->setBounds(
+        area.removeFromTop(buttonSize).withSizeKeepingCentre(buttonSize, buttonSize));
+    modButton_->setVisible(true);
+    area.removeFromTop(4);
+
+    // Macro button
+    macroButton_->setBounds(
+        area.removeFromTop(buttonSize).withSizeKeepingCentre(buttonSize, buttonSize));
+    macroButton_->setVisible(true);
+}
+
+int DeviceSlotComponent::getModPanelWidth() const {
+    return modPanelVisible_ ? DEFAULT_PANEL_WIDTH : 0;
+}
+
+int DeviceSlotComponent::getParamPanelWidth() const {
+    return paramPanelVisible_ ? DEFAULT_PANEL_WIDTH : 0;
+}
+
+const magda::ModArray* DeviceSlotComponent::getModsData() const {
+    if (auto* dev = magda::TrackManager::getInstance().getDeviceInChainByPath(nodePath_)) {
+        return &dev->mods;
+    }
+    return nullptr;
+}
+
+const magda::MacroArray* DeviceSlotComponent::getMacrosData() const {
+    if (auto* dev = magda::TrackManager::getInstance().getDeviceInChainByPath(nodePath_)) {
+        return &dev->macros;
+    }
+    return nullptr;
+}
+
+std::vector<std::pair<magda::DeviceId, juce::String>> DeviceSlotComponent::getAvailableDevices()
+    const {
+    return {{device_.id, device_.name}};
+}
+
+void DeviceSlotComponent::onModAmountChangedInternal(int modIndex, float amount) {
+    magda::TrackManager::getInstance().setDeviceModAmount(nodePath_, modIndex, amount);
+}
+
+void DeviceSlotComponent::onModTargetChangedInternal(int modIndex, magda::ModTarget target) {
+    magda::TrackManager::getInstance().setDeviceModTarget(nodePath_, modIndex, target);
+}
+
+void DeviceSlotComponent::onModNameChangedInternal(int modIndex, const juce::String& name) {
+    magda::TrackManager::getInstance().setDeviceModName(nodePath_, modIndex, name);
+}
+
+void DeviceSlotComponent::onModTypeChangedInternal(int modIndex, magda::ModType type) {
+    magda::TrackManager::getInstance().setDeviceModType(nodePath_, modIndex, type);
+}
+
+void DeviceSlotComponent::onModRateChangedInternal(int modIndex, float rate) {
+    magda::TrackManager::getInstance().setDeviceModRate(nodePath_, modIndex, rate);
+}
+
+void DeviceSlotComponent::onMacroValueChangedInternal(int macroIndex, float value) {
+    magda::TrackManager::getInstance().setDeviceMacroValue(nodePath_, macroIndex, value);
+}
+
+void DeviceSlotComponent::onMacroTargetChangedInternal(int macroIndex, magda::MacroTarget target) {
+    magda::TrackManager::getInstance().setDeviceMacroTarget(nodePath_, macroIndex, target);
+}
+
+void DeviceSlotComponent::onMacroNameChangedInternal(int macroIndex, const juce::String& name) {
+    magda::TrackManager::getInstance().setDeviceMacroName(nodePath_, macroIndex, name);
+}
+
+void DeviceSlotComponent::onModClickedInternal(int modIndex) {
+    magda::SelectionManager::getInstance().selectMod(nodePath_, modIndex);
+}
+
+void DeviceSlotComponent::onMacroClickedInternal(int macroIndex) {
+    magda::SelectionManager::getInstance().selectMacro(nodePath_, macroIndex);
+}
+
+void DeviceSlotComponent::onModPageAddRequested(int /*itemsToAdd*/) {
+    magda::TrackManager::getInstance().addDeviceModPage(nodePath_);
+}
+
+void DeviceSlotComponent::onModPageRemoveRequested(int /*itemsToRemove*/) {
+    magda::TrackManager::getInstance().removeDeviceModPage(nodePath_);
+}
+
+void DeviceSlotComponent::onMacroPageAddRequested(int /*itemsToAdd*/) {
+    magda::TrackManager::getInstance().addDeviceMacroPage(nodePath_);
+}
+
+void DeviceSlotComponent::onMacroPageRemoveRequested(int /*itemsToRemove*/) {
+    magda::TrackManager::getInstance().removeDeviceMacroPage(nodePath_);
+}
+
+void DeviceSlotComponent::updatePageControls() {
+    pageLabel_->setText(juce::String(currentPage_ + 1) + "/" + juce::String(totalPages_),
+                        juce::dontSendNotification);
+    prevPageButton_->setEnabled(currentPage_ > 0);
+    nextPageButton_->setEnabled(currentPage_ < totalPages_ - 1);
+}
+
+void DeviceSlotComponent::goToPrevPage() {
+    if (currentPage_ > 0) {
+        currentPage_--;
+        updatePageControls();
+        // TODO: Update param labels/values for new page
+        repaint();
+    }
+}
+
+void DeviceSlotComponent::goToNextPage() {
+    if (currentPage_ < totalPages_ - 1) {
+        currentPage_++;
+        updatePageControls();
+        // TODO: Update param labels/values for new page
+        repaint();
+    }
+}
+
+}  // namespace magda::daw::ui

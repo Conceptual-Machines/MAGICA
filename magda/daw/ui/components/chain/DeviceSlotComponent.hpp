@@ -1,0 +1,112 @@
+#pragma once
+
+#include <juce_gui_basics/juce_gui_basics.h>
+
+#include "NodeComponent.hpp"
+#include "core/DeviceInfo.hpp"
+#include "ui/components/common/SvgButton.hpp"
+#include "ui/components/common/TextSlider.hpp"
+
+namespace magda::daw::ui {
+
+/**
+ * @brief Device slot component for displaying a device in a chain
+ *
+ * This is the unified device slot used by both TrackChainContent (top-level devices)
+ * and ChainPanel (nested devices within racks).
+ *
+ * Layout:
+ *   [Header: mod, macro, name, gain, ui, on, delete]
+ *   [Content header: manufacturer / device name]
+ *   [Pagination: < Page 1/4 >]
+ *   [Params: 4x4 grid]
+ */
+class DeviceSlotComponent : public NodeComponent {
+  public:
+    static constexpr int BASE_SLOT_WIDTH = 200;
+    static constexpr int NUM_PARAMS_PER_PAGE = 16;
+    static constexpr int PARAMS_PER_ROW = 4;
+    static constexpr int PARAM_CELL_WIDTH = 48;
+    static constexpr int PARAM_CELL_HEIGHT = 28;
+    static constexpr int PAGINATION_HEIGHT = 18;
+    static constexpr int CONTENT_HEADER_HEIGHT = 14;
+
+    DeviceSlotComponent(const magda::DeviceInfo& device);
+    ~DeviceSlotComponent() override;
+
+    magda::DeviceId getDeviceId() const {
+        return device_.id;
+    }
+    int getPreferredWidth() const override;
+
+    // Update device data
+    void updateFromDevice(const magda::DeviceInfo& device);
+
+    // Callbacks for owner-specific behavior
+    std::function<void()> onDeviceDeleted;
+    std::function<void()> onDeviceLayoutChanged;
+    std::function<void(bool)> onDeviceBypassChanged;
+
+  protected:
+    void paintContent(juce::Graphics& g, juce::Rectangle<int> contentArea) override;
+    void resizedContent(juce::Rectangle<int> contentArea) override;
+    void resizedHeaderExtra(juce::Rectangle<int>& headerArea) override;
+    void resizedCollapsed(juce::Rectangle<int>& area) override;
+
+    // Side panel widths
+    int getModPanelWidth() const override;
+    int getParamPanelWidth() const override;
+    int getGainPanelWidth() const override {
+        return 0;
+    }
+
+    // Mod/macro data providers
+    const magda::ModArray* getModsData() const override;
+    const magda::MacroArray* getMacrosData() const override;
+    std::vector<std::pair<magda::DeviceId, juce::String>> getAvailableDevices() const override;
+
+    // Mod/macro callbacks
+    void onModAmountChangedInternal(int modIndex, float amount) override;
+    void onModTargetChangedInternal(int modIndex, magda::ModTarget target) override;
+    void onModNameChangedInternal(int modIndex, const juce::String& name) override;
+    void onModTypeChangedInternal(int modIndex, magda::ModType type) override;
+    void onModRateChangedInternal(int modIndex, float rate) override;
+    void onMacroValueChangedInternal(int macroIndex, float value) override;
+    void onMacroTargetChangedInternal(int macroIndex, magda::MacroTarget target) override;
+    void onMacroNameChangedInternal(int macroIndex, const juce::String& name) override;
+    void onModClickedInternal(int modIndex) override;
+    void onMacroClickedInternal(int macroIndex) override;
+    void onModPageAddRequested(int itemsToAdd) override;
+    void onModPageRemoveRequested(int itemsToRemove) override;
+    void onMacroPageAddRequested(int itemsToAdd) override;
+    void onMacroPageRemoveRequested(int itemsToRemove) override;
+
+  private:
+    magda::DeviceInfo device_;
+
+    // Header controls
+    std::unique_ptr<magda::SvgButton> modButton_;
+    std::unique_ptr<magda::SvgButton> macroButton_;
+    TextSlider gainSlider_{TextSlider::Format::Decibels};
+    std::unique_ptr<magda::SvgButton> uiButton_;
+    std::unique_ptr<magda::SvgButton> onButton_;
+
+    // Pagination
+    int currentPage_ = 0;
+    int totalPages_ = 1;
+    std::unique_ptr<juce::TextButton> prevPageButton_;
+    std::unique_ptr<juce::TextButton> nextPageButton_;
+    std::unique_ptr<juce::Label> pageLabel_;
+
+    // Parameter grid
+    std::unique_ptr<juce::Label> paramLabels_[NUM_PARAMS_PER_PAGE];
+    std::unique_ptr<TextSlider> paramSliders_[NUM_PARAMS_PER_PAGE];
+
+    void updatePageControls();
+    void goToPrevPage();
+    void goToNextPage();
+
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(DeviceSlotComponent)
+};
+
+}  // namespace magda::daw::ui
