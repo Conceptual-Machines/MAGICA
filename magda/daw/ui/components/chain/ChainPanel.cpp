@@ -691,13 +691,19 @@ void ChainPanel::onAddDeviceClicked() {
     menu.addSeparator();
     menu.addItem(100, "Create Rack");
 
-    menu.showMenuAsync(juce::PopupMenu::Options(), [this](int result) {
+    // Use SafePointer to handle case where this component is destroyed before callback
+    auto safeThis = juce::Component::SafePointer<ChainPanel>(this);
+    auto chainPath = chainPath_;  // Capture by value for async safety
+
+    menu.showMenuAsync(juce::PopupMenu::Options(), [safeThis, chainPath](int result) {
         if (result == 100) {
             // Create nested rack using path-based method for proper nesting support
-            magda::TrackManager::getInstance().addRackToChainByPath(chainPath_);
-            rebuildElementSlots();
-            resized();
-            repaint();
+            magda::TrackManager::getInstance().addRackToChainByPath(chainPath);
+            if (safeThis != nullptr) {
+                safeThis->rebuildElementSlots();
+                safeThis->resized();
+                safeThis->repaint();
+            }
         } else if (result > 0 && result < 100) {
             magda::DeviceInfo device;
             switch (result) {
@@ -723,10 +729,12 @@ void ChainPanel::onAddDeviceClicked() {
                     break;
             }
             device.format = magda::PluginFormat::VST3;
-            magda::TrackManager::getInstance().addDeviceToChainByPath(chainPath_, device);
-            rebuildElementSlots();
-            resized();
-            repaint();
+            magda::TrackManager::getInstance().addDeviceToChainByPath(chainPath, device);
+            if (safeThis != nullptr) {
+                safeThis->rebuildElementSlots();
+                safeThis->resized();
+                safeThis->repaint();
+            }
         }
     });
 }

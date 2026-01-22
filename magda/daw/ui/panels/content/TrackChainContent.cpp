@@ -921,7 +921,9 @@ void TrackChainContent::layoutChainContent() {
     chainContainer_->setNodeComponents(&nodeComponents_);
 
     // Layout all node components horizontally
-    int x = 0;
+    // Start with padding to leave room for insertion indicator before first node
+    static constexpr int LEFT_PADDING = 8;
+    int x = LEFT_PADDING;
     for (auto& node : nodeComponents_) {
         // Check if it's a RackComponent to set available width
         if (auto* rack = dynamic_cast<RackComponent*>(node.get())) {
@@ -936,7 +938,8 @@ void TrackChainContent::layoutChainContent() {
 }
 
 int TrackChainContent::calculateTotalContentWidth() const {
-    int totalWidth = 0;
+    static constexpr int LEFT_PADDING = 8;
+    int totalWidth = LEFT_PADDING;
 
     // Add width for all node components
     for (const auto& node : nodeComponents_) {
@@ -1043,6 +1046,9 @@ void TrackChainContent::showHeader(bool show) {
 }
 
 void TrackChainContent::rebuildNodeComponents() {
+    // Save collapsed states BEFORE clearing components
+    saveCollapsedStates();
+
     // Clear existing components
     unfocusAllComponents();
     nodeComponents_.clear();
@@ -1180,6 +1186,9 @@ void TrackChainContent::rebuildNodeComponents() {
         }
     }
 
+    // Restore collapsed states for ALL nodes
+    restoreCollapsedStates();
+
     // Restore selection state from SelectionManager
     const auto& selectedPath = magda::SelectionManager::getInstance().getSelectedChainNode();
     if (selectedPath.isValid() && selectedPath.trackId == selectedTrackId_) {
@@ -1302,12 +1311,9 @@ int TrackChainContent::calculateInsertIndex(int mouseX) const {
 }
 
 int TrackChainContent::calculateIndicatorX(int index) const {
-    // Before first element
+    // Before first element - place in the left padding area
     if (index == 0) {
-        if (!nodeComponents_.empty()) {
-            return nodeComponents_[0]->getX() - 4;
-        }
-        return 8;  // Default padding
+        return 4;  // Center of LEFT_PADDING (8)
     }
 
     // After previous element
@@ -1317,6 +1323,28 @@ int TrackChainContent::calculateIndicatorX(int index) const {
 
     // Fallback
     return 8;
+}
+
+void TrackChainContent::saveCollapsedStates() {
+    savedCollapsedStates_.clear();
+    for (const auto& node : nodeComponents_) {
+        const auto& path = node->getNodePath();
+        if (path.isValid()) {
+            savedCollapsedStates_[path.toString()] = node->isCollapsed();
+        }
+    }
+}
+
+void TrackChainContent::restoreCollapsedStates() {
+    for (auto& node : nodeComponents_) {
+        const auto& path = node->getNodePath();
+        if (path.isValid()) {
+            auto it = savedCollapsedStates_.find(path.toString());
+            if (it != savedCollapsedStates_.end()) {
+                node->setCollapsed(it->second);
+            }
+        }
+    }
 }
 
 }  // namespace magda::daw::ui

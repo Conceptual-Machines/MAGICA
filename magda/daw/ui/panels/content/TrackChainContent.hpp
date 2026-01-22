@@ -1,5 +1,7 @@
 #pragma once
 
+#include <map>
+
 #include "../../themes/MixerLookAndFeel.hpp"
 #include "PanelContent.hpp"
 #include "core/DeviceInfo.hpp"
@@ -131,6 +133,11 @@ class TrackChainContent : public PanelContent,
     int dragInsertIndex_ = -1;
     juce::Image dragGhostImage_;
     juce::Point<int> dragMousePos_;
+
+    // Collapsed state preservation (path -> collapsed) - preserves ALL nodes' states during rebuild
+    std::map<juce::String, bool> savedCollapsedStates_;
+    void saveCollapsedStates();
+    void restoreCollapsedStates();
 
     // Helper methods for drag-to-reorder
     int findNodeIndex(NodeComponent* node) const;
