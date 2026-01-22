@@ -116,6 +116,17 @@ void NodeComponent::paint(juce::Graphics& g) {
             paintModPanel(g, modArea);
         }
 
+        // Extra left panel (e.g., modulator editor) - between mods and params
+        int extraWidthCollapsed = getExtraLeftPanelWidth();
+        if (extraWidthCollapsed > 0) {
+            auto extraArea = bounds.removeFromLeft(extraWidthCollapsed);
+            g.setColour(DarkTheme::getColour(DarkTheme::BACKGROUND).brighter(0.02f));
+            g.fillRect(extraArea);
+            g.setColour(DarkTheme::getColour(DarkTheme::BORDER));
+            g.drawRect(extraArea);
+            paintExtraLeftPanel(g, extraArea);
+        }
+
         if (paramPanelVisible_) {
             auto paramArea = bounds.removeFromLeft(getParamPanelWidth());
             g.setColour(DarkTheme::getColour(DarkTheme::BACKGROUND).brighter(0.02f));
@@ -123,6 +134,17 @@ void NodeComponent::paint(juce::Graphics& g) {
             g.setColour(DarkTheme::getColour(DarkTheme::BORDER));
             g.drawRect(paramArea);
             paintParamPanel(g, paramArea);
+        }
+
+        // Extra right panel (e.g., macro editor) - after params, before main content
+        int extraRightWidthCollapsed = getExtraRightPanelWidth();
+        if (extraRightWidthCollapsed > 0) {
+            auto extraRightArea = bounds.removeFromLeft(extraRightWidthCollapsed);
+            g.setColour(DarkTheme::getColour(DarkTheme::BACKGROUND).brighter(0.02f));
+            g.fillRect(extraRightArea);
+            g.setColour(DarkTheme::getColour(DarkTheme::BORDER));
+            g.drawRect(extraRightArea);
+            paintExtraRightPanel(g, extraRightArea);
         }
 
         // === RIGHT SIDE PANEL (even when collapsed) ===
@@ -174,7 +196,7 @@ void NodeComponent::paint(juce::Graphics& g) {
         return;
     }
 
-    // === LEFT SIDE PANELS: [Mods][Params] (squared corners) ===
+    // === LEFT SIDE PANELS: [Mods][Extra][Params] (squared corners) ===
     if (modPanelVisible_) {
         auto modArea = bounds.removeFromLeft(getModPanelWidth());
         g.setColour(DarkTheme::getColour(DarkTheme::BACKGROUND).brighter(0.02f));
@@ -184,6 +206,17 @@ void NodeComponent::paint(juce::Graphics& g) {
         paintModPanel(g, modArea);
     }
 
+    // Extra left panel (e.g., modulator editor) - between mods and params
+    int extraWidth = getExtraLeftPanelWidth();
+    if (extraWidth > 0) {
+        auto extraArea = bounds.removeFromLeft(extraWidth);
+        g.setColour(DarkTheme::getColour(DarkTheme::BACKGROUND).brighter(0.02f));
+        g.fillRect(extraArea);
+        g.setColour(DarkTheme::getColour(DarkTheme::BORDER));
+        g.drawRect(extraArea);
+        paintExtraLeftPanel(g, extraArea);
+    }
+
     if (paramPanelVisible_) {
         auto paramArea = bounds.removeFromLeft(getParamPanelWidth());
         g.setColour(DarkTheme::getColour(DarkTheme::BACKGROUND).brighter(0.02f));
@@ -191,6 +224,17 @@ void NodeComponent::paint(juce::Graphics& g) {
         g.setColour(DarkTheme::getColour(DarkTheme::BORDER));
         g.drawRect(paramArea);
         paintParamPanel(g, paramArea);
+    }
+
+    // Extra right panel (e.g., macro editor) - after params, before main content
+    int extraRightWidth = getExtraRightPanelWidth();
+    if (extraRightWidth > 0) {
+        auto extraRightArea = bounds.removeFromLeft(extraRightWidth);
+        g.setColour(DarkTheme::getColour(DarkTheme::BACKGROUND).brighter(0.02f));
+        g.fillRect(extraRightArea);
+        g.setColour(DarkTheme::getColour(DarkTheme::BORDER));
+        g.drawRect(extraRightArea);
+        paintExtraRightPanel(g, extraRightArea);
     }
 
     // === RIGHT SIDE PANEL: [Gain] (squared corners) ===
@@ -257,6 +301,13 @@ void NodeComponent::resized() {
             }
         }
 
+        // Extra left panel (e.g., modulator editor)
+        int extraWidthCollapsed = getExtraLeftPanelWidth();
+        if (extraWidthCollapsed > 0) {
+            auto extraArea = bounds.removeFromLeft(extraWidthCollapsed);
+            resizedExtraLeftPanel(extraArea);
+        }
+
         if (paramPanelVisible_) {
             auto paramArea = bounds.removeFromLeft(getParamPanelWidth());
             resizedParamPanel(paramArea);
@@ -265,6 +316,13 @@ void NodeComponent::resized() {
             for (auto& knob : paramKnobs_) {
                 knob->setVisible(false);
             }
+        }
+
+        // Extra right panel (e.g., macro editor) - after params
+        int extraRightWidthCollapsed = getExtraRightPanelWidth();
+        if (extraRightWidthCollapsed > 0) {
+            auto extraRightArea = bounds.removeFromLeft(extraRightWidthCollapsed);
+            resizedExtraRightPanel(extraRightArea);
         }
 
         // === RIGHT SIDE PANEL (even when collapsed) ===
@@ -301,7 +359,7 @@ void NodeComponent::resized() {
         return;
     }
 
-    // === LEFT SIDE PANELS: [Mods][Params] ===
+    // === LEFT SIDE PANELS: [Mods][Extra][Params] ===
     if (modPanelVisible_) {
         auto modArea = bounds.removeFromLeft(getModPanelWidth());
         resizedModPanel(modArea);
@@ -313,6 +371,13 @@ void NodeComponent::resized() {
         }
     }
 
+    // Extra left panel (e.g., modulator editor)
+    int extraWidth = getExtraLeftPanelWidth();
+    if (extraWidth > 0) {
+        auto extraArea = bounds.removeFromLeft(extraWidth);
+        resizedExtraLeftPanel(extraArea);
+    }
+
     if (paramPanelVisible_) {
         auto paramArea = bounds.removeFromLeft(getParamPanelWidth());
         resizedParamPanel(paramArea);
@@ -321,6 +386,13 @@ void NodeComponent::resized() {
         for (auto& knob : paramKnobs_) {
             knob->setVisible(false);
         }
+    }
+
+    // Extra right panel (e.g., macro editor) - after params
+    int extraRightWidth = getExtraRightPanelWidth();
+    if (extraRightWidth > 0) {
+        auto extraRightArea = bounds.removeFromLeft(extraRightWidth);
+        resizedExtraRightPanel(extraRightArea);
     }
 
     // === RIGHT SIDE PANEL: [Gain] ===
@@ -449,8 +521,11 @@ int NodeComponent::getLeftPanelsWidth() const {
     int width = 0;
     if (modPanelVisible_)
         width += getModPanelWidth();
+    width += getExtraLeftPanelWidth();  // Extra left panel (e.g., mod editor)
     if (paramPanelVisible_)
         width += getParamPanelWidth();
+    width += getExtraRightPanelWidth();  // Extra "right" panel (e.g., macro editor) - still left of
+                                         // main content
     return width;
 }
 
@@ -470,6 +545,10 @@ void NodeComponent::paintModPanel(juce::Graphics& g, juce::Rectangle<int> panelA
     g.setColour(DarkTheme::getColour(DarkTheme::ACCENT_ORANGE));
     g.setFont(FontManager::getInstance().getUIFont(8.0f));
     g.drawText("MOD", panelArea.removeFromTop(16), juce::Justification::centred);
+}
+
+void NodeComponent::paintExtraLeftPanel(juce::Graphics& /*g*/, juce::Rectangle<int> /*panelArea*/) {
+    // Default: empty - subclasses override to add extra left panel (e.g., modulator editor)
 }
 
 void NodeComponent::paintParamPanel(juce::Graphics& g, juce::Rectangle<int> panelArea) {
@@ -516,6 +595,10 @@ void NodeComponent::resizedModPanel(juce::Rectangle<int> panelArea) {
     }
 }
 
+void NodeComponent::resizedExtraLeftPanel(juce::Rectangle<int> /*panelArea*/) {
+    // Default: empty - subclasses override to layout extra left panel (e.g., modulator editor)
+}
+
 void NodeComponent::resizedParamPanel(juce::Rectangle<int> panelArea) {
     panelArea.removeFromTop(16);  // Skip label
     panelArea = panelArea.reduced(2);
@@ -537,6 +620,15 @@ void NodeComponent::resizedParamPanel(juce::Rectangle<int> panelArea) {
 
 void NodeComponent::resizedGainPanel(juce::Rectangle<int> /*panelArea*/) {
     // Default: nothing - gain meter drawn in paintGainPanel
+}
+
+void NodeComponent::paintExtraRightPanel(juce::Graphics& /*g*/,
+                                         juce::Rectangle<int> /*panelArea*/) {
+    // Default: empty - subclasses override to add extra right panel (e.g., macro editor)
+}
+
+void NodeComponent::resizedExtraRightPanel(juce::Rectangle<int> /*panelArea*/) {
+    // Default: empty - subclasses override to layout extra right panel (e.g., macro editor)
 }
 
 void NodeComponent::resizedCollapsed(juce::Rectangle<int>& /*area*/) {

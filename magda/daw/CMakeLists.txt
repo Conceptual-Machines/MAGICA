@@ -183,6 +183,8 @@ set(DAW_UI_SOURCES
     ui/components/chain/MacroPanelComponent.cpp
     ui/components/chain/ModKnobComponent.cpp
     ui/components/chain/ModsPanelComponent.cpp
+    ui/components/chain/ModulatorEditorPanel.cpp
+    ui/components/chain/MacroEditorPanel.cpp
 )
 
 # All DAW headers
@@ -306,6 +308,8 @@ set(DAW_HEADERS
     ui/components/chain/MacroPanelComponent.hpp
     ui/components/chain/ModKnobComponent.hpp
     ui/components/chain/ModsPanelComponent.hpp
+    ui/components/chain/ModulatorEditorPanel.hpp
+    ui/components/chain/MacroEditorPanel.hpp
     # Core - Macro and Mod
     core/MacroInfo.hpp
     core/ModInfo.hpp

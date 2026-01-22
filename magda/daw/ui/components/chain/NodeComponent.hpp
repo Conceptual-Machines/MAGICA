@@ -96,8 +96,8 @@ class NodeComponent : public juce::Component, public magda::SelectionManagerList
     void mouseDrag(const juce::MouseEvent& e) override;
     void mouseUp(const juce::MouseEvent& e) override;
 
-    // Get total width of left side panels (mods + params)
-    int getLeftPanelsWidth() const;
+    // Get total width of left side panels (mods + params + any extras)
+    virtual int getLeftPanelsWidth() const;
     // Get total width of right side panels (gain)
     int getRightPanelsWidth() const;
     // Get total preferred width given a base content width
@@ -125,14 +125,20 @@ class NodeComponent : public juce::Component, public magda::SelectionManagerList
 
     // Override to customize side panel content (mods/params are to the left of node)
     virtual void paintModPanel(juce::Graphics& g, juce::Rectangle<int> panelArea);
+    virtual void paintExtraLeftPanel(juce::Graphics& g,
+                                     juce::Rectangle<int> panelArea);  // Between mods and params
     virtual void paintParamPanel(juce::Graphics& g, juce::Rectangle<int> panelArea);
     virtual void paintGainPanel(juce::Graphics& g,
                                 juce::Rectangle<int> panelArea);  // Gain is below content
+    virtual void paintExtraRightPanel(juce::Graphics& g,
+                                      juce::Rectangle<int> panelArea);  // After macros
 
     // Override to layout custom panel content
     virtual void resizedModPanel(juce::Rectangle<int> panelArea);
+    virtual void resizedExtraLeftPanel(juce::Rectangle<int> panelArea);  // Between mods and params
     virtual void resizedParamPanel(juce::Rectangle<int> panelArea);
     virtual void resizedGainPanel(juce::Rectangle<int> panelArea);
+    virtual void resizedExtraRightPanel(juce::Rectangle<int> panelArea);  // After macros
 
     // Override to add extra buttons when collapsed (area is below bypass/delete)
     virtual void resizedCollapsed(juce::Rectangle<int>& area);
@@ -141,11 +147,19 @@ class NodeComponent : public juce::Component, public magda::SelectionManagerList
     virtual int getModPanelWidth() const {
         return DEFAULT_PANEL_WIDTH;
     }
+    // Extra left panel (between mods and params) - override to add custom panel
+    virtual int getExtraLeftPanelWidth() const {
+        return 0;
+    }
     virtual int getParamPanelWidth() const {
         return DEFAULT_PANEL_WIDTH;
     }
     virtual int getGainPanelWidth() const {
         return GAIN_PANEL_WIDTH;
+    }
+    // Extra right panel (after macros) - override to add custom panel
+    virtual int getExtraRightPanelWidth() const {
+        return 0;
     }
 
     // Override to hide header (return 0)

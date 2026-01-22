@@ -4,8 +4,10 @@
 
 #include <functional>
 
+#include "MacroEditorPanel.hpp"
 #include "MacroPanelComponent.hpp"
 #include "ModsPanelComponent.hpp"
+#include "ModulatorEditorPanel.hpp"
 #include "NodeComponent.hpp"
 #include "core/RackInfo.hpp"
 #include "core/SelectionManager.hpp"
@@ -119,6 +121,16 @@ class RackComponent : public NodeComponent {
     std::unique_ptr<ModsPanelComponent> modsPanel_;
     void updateModsPanel();  // Update mods panel with current rack data
 
+    // Modulator editor panel (shown when a mod is selected)
+    std::unique_ptr<ModulatorEditorPanel> modulatorEditorPanel_;
+    bool modulatorEditorVisible_ = false;
+    int selectedModIndex_ = -1;
+
+    // Macro editor panel (shown when a macro is selected)
+    std::unique_ptr<MacroEditorPanel> macroEditorPanel_;
+    bool macroEditorVisible_ = false;
+    int selectedMacroIndex_ = -1;
+
     // Override param panel for macro display (left side panel)
     int getParamPanelWidth() const override;
     void resizedParamPanel(juce::Rectangle<int> panelArea) override;
@@ -128,6 +140,31 @@ class RackComponent : public NodeComponent {
     int getModPanelWidth() const override;
     void resizedModPanel(juce::Rectangle<int> panelArea) override;
     void paintModPanel(juce::Graphics& g, juce::Rectangle<int> panelArea) override;
+
+    // Override left panels width to include modulator editor
+    int getLeftPanelsWidth() const override;
+
+    // Override extra left panel for modulator editor (between mods and macros)
+    int getExtraLeftPanelWidth() const override;
+    void resizedExtraLeftPanel(juce::Rectangle<int> panelArea) override;
+    void paintExtraLeftPanel(juce::Graphics& g, juce::Rectangle<int> panelArea) override;
+
+    // Modulator editor helpers
+    int getModulatorEditorWidth() const;
+    void showModulatorEditor(int modIndex);
+    void hideModulatorEditor();
+    void updateModulatorEditor();
+
+    // Macro editor helpers
+    int getMacroEditorWidth() const;
+    void showMacroEditor(int macroIndex);
+    void hideMacroEditor();
+    void updateMacroEditor();
+
+    // Override for extra right panel (macro editor after macros)
+    int getExtraRightPanelWidth() const override;
+    void resizedExtraRightPanel(juce::Rectangle<int> panelArea) override;
+    void paintExtraRightPanel(juce::Graphics& g, juce::Rectangle<int> panelArea) override;
 
     static constexpr int CHAINS_LABEL_HEIGHT = 18;
     static constexpr int MIN_CONTENT_HEIGHT = 30;

@@ -1261,7 +1261,7 @@ void TrackManager::setRackMacroValue(const ChainNodePath& rackPath, int macroInd
             return;
         }
         rack->macros[macroIndex].value = juce::jlimit(0.0f, 1.0f, value);
-        notifyTrackDevicesChanged(rackPath.trackId);
+        // Don't notify - simple value change doesn't need UI rebuild
     }
 }
 
@@ -1272,7 +1272,7 @@ void TrackManager::setRackMacroTarget(const ChainNodePath& rackPath, int macroIn
             return;
         }
         rack->macros[macroIndex].target = target;
-        notifyTrackDevicesChanged(rackPath.trackId);
+        // Don't notify - simple value change doesn't need UI rebuild
     }
 }
 
@@ -1283,7 +1283,7 @@ void TrackManager::setRackMacroName(const ChainNodePath& rackPath, int macroInde
             return;
         }
         rack->macros[macroIndex].name = name;
-        notifyTrackDevicesChanged(rackPath.trackId);
+        // Don't notify - simple value change doesn't need UI rebuild
     }
 }
 
@@ -1308,7 +1308,7 @@ void TrackManager::setChainMacroValue(const ChainNodePath& chainPath, int macroI
             return;
         }
         chain->macros[macroIndex].value = juce::jlimit(0.0f, 1.0f, value);
-        notifyTrackDevicesChanged(chainPath.trackId);
+        // Don't notify - simple value change doesn't need UI rebuild
     }
 }
 
@@ -1319,7 +1319,7 @@ void TrackManager::setChainMacroTarget(const ChainNodePath& chainPath, int macro
             return;
         }
         chain->macros[macroIndex].target = target;
-        notifyTrackDevicesChanged(chainPath.trackId);
+        // Don't notify - simple value change doesn't need UI rebuild
     }
 }
 
@@ -1330,7 +1330,7 @@ void TrackManager::setChainMacroName(const ChainNodePath& chainPath, int macroIn
             return;
         }
         chain->macros[macroIndex].name = name;
-        notifyTrackDevicesChanged(chainPath.trackId);
+        // Don't notify - simple value change doesn't need UI rebuild
     }
 }
 
@@ -1359,7 +1359,7 @@ void TrackManager::setRackModAmount(const ChainNodePath& rackPath, int modIndex,
             return;
         }
         rack->mods[modIndex].amount = juce::jlimit(0.0f, 1.0f, amount);
-        notifyTrackDevicesChanged(rackPath.trackId);
+        // Don't notify - simple value change doesn't need UI rebuild
     }
 }
 
@@ -1369,7 +1369,7 @@ void TrackManager::setRackModTarget(const ChainNodePath& rackPath, int modIndex,
             return;
         }
         rack->mods[modIndex].target = target;
-        notifyTrackDevicesChanged(rackPath.trackId);
+        // Don't notify - simple value change doesn't need UI rebuild
     }
 }
 
@@ -1380,7 +1380,32 @@ void TrackManager::setRackModName(const ChainNodePath& rackPath, int modIndex,
             return;
         }
         rack->mods[modIndex].name = name;
-        notifyTrackDevicesChanged(rackPath.trackId);
+        // Don't notify - simple value change doesn't need UI rebuild
+    }
+}
+
+void TrackManager::setRackModType(const ChainNodePath& rackPath, int modIndex, ModType type) {
+    if (auto* rack = getRackByPath(rackPath)) {
+        if (modIndex < 0 || modIndex >= static_cast<int>(rack->mods.size())) {
+            return;
+        }
+        rack->mods[modIndex].type = type;
+        // Update name to default for new type if it was default
+        auto defaultOldName = ModInfo::getDefaultName(modIndex, rack->mods[modIndex].type);
+        if (rack->mods[modIndex].name == defaultOldName) {
+            rack->mods[modIndex].name = ModInfo::getDefaultName(modIndex, type);
+        }
+        // Don't notify - simple value change doesn't need UI rebuild
+    }
+}
+
+void TrackManager::setRackModRate(const ChainNodePath& rackPath, int modIndex, float rate) {
+    if (auto* rack = getRackByPath(rackPath)) {
+        if (modIndex < 0 || modIndex >= static_cast<int>(rack->mods.size())) {
+            return;
+        }
+        rack->mods[modIndex].rate = rate;
+        // Don't notify - simple value change doesn't need UI rebuild
     }
 }
 
@@ -1405,7 +1430,7 @@ void TrackManager::setChainModAmount(const ChainNodePath& chainPath, int modInde
             return;
         }
         chain->mods[modIndex].amount = juce::jlimit(0.0f, 1.0f, amount);
-        notifyTrackDevicesChanged(chainPath.trackId);
+        // Don't notify - simple value change doesn't need UI rebuild
     }
 }
 
@@ -1416,7 +1441,7 @@ void TrackManager::setChainModTarget(const ChainNodePath& chainPath, int modInde
             return;
         }
         chain->mods[modIndex].target = target;
-        notifyTrackDevicesChanged(chainPath.trackId);
+        // Don't notify - simple value change doesn't need UI rebuild
     }
 }
 
@@ -1427,7 +1452,7 @@ void TrackManager::setChainModName(const ChainNodePath& chainPath, int modIndex,
             return;
         }
         chain->mods[modIndex].name = name;
-        notifyTrackDevicesChanged(chainPath.trackId);
+        // Don't notify - simple value change doesn't need UI rebuild
     }
 }
 
