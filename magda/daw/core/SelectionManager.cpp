@@ -533,9 +533,8 @@ void SelectionManager::selectChainNode(const ChainNodePath& path) {
     bool typeChanged = selectionType_ != SelectionType::ChainNode;
     bool pathChanged = selectedChainNode_ != path;
 
-    // If same node is already selected, notify reselection (for collapse toggle)
+    // If same node is already selected, just return (collapse handled by caller)
     if (!pathChanged && !typeChanged) {
-        notifyChainNodeReselected(path);
         return;
     }
 

@@ -658,11 +658,8 @@ void NodeComponent::chainNodeSelectionChanged(const magda::ChainNodePath& path) 
     setSelected(shouldBeSelected);
 }
 
-void NodeComponent::chainNodeReselected(const magda::ChainNodePath& path) {
-    // Called when clicking an already-selected node - toggle collapse
-    if (nodePath_.isValid() && nodePath_ == path) {
-        setCollapsed(!collapsed_);
-    }
+void NodeComponent::chainNodeReselected(const magda::ChainNodePath& /*path*/) {
+    // Not used - we handle collapse toggle directly in mouseUp
 }
 
 void NodeComponent::mouseDown(const juce::MouseEvent& e) {
@@ -679,11 +676,17 @@ void NodeComponent::mouseUp(const juce::MouseEvent& e) {
 
         // Check if mouse is still within bounds (not a drag-away)
         if (getLocalBounds().contains(e.getPosition())) {
-            // Always tell SelectionManager about the click
-            // It will either notify chainNodeSelectionChanged (new selection)
-            // or chainNodeReselected (same node clicked again)
             if (nodePath_.isValid()) {
+                // Check selected state BEFORE calling selectChainNode
+                // (the callback will change selected_ synchronously)
+                bool wasAlreadySelected = selected_;
+
                 magda::SelectionManager::getInstance().selectChainNode(nodePath_);
+
+                // If was already selected, toggle collapse
+                if (wasAlreadySelected) {
+                    setCollapsed(!collapsed_);
+                }
             }
 
             // Also call legacy callback for backward compatibility
