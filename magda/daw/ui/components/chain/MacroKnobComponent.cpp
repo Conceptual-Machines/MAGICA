@@ -90,22 +90,51 @@ void MacroKnobComponent::resized() {
 }
 
 void MacroKnobComponent::mouseDown(const juce::MouseEvent& e) {
-    // Left-click triggers onClicked callback for selection
     if (!e.mods.isPopupMenu()) {
-        // Check if click is not on slider (slider needs to handle its own drag)
-        if (!valueSlider_.getBounds().contains(e.getPosition())) {
-            if (onClicked) {
-                onClicked();
+        // Track drag start position
+        dragStartPos_ = e.getPosition();
+        isDragging_ = false;
+    }
+}
+
+void MacroKnobComponent::mouseDrag(const juce::MouseEvent& e) {
+    if (e.mods.isPopupMenu())
+        return;
+
+    // Check if we've moved enough to start a drag
+    if (!isDragging_) {
+        auto distance = e.getPosition().getDistanceFrom(dragStartPos_);
+        if (distance > DRAG_THRESHOLD) {
+            isDragging_ = true;
+
+            // Find a DragAndDropContainer ancestor
+            if (auto* container = juce::DragAndDropContainer::findParentDragContainerFor(this)) {
+                // Create drag description: "macro_drag:trackId:topLevelDeviceId:macroIndex"
+                juce::String desc = DRAG_PREFIX;
+                desc += juce::String(parentPath_.trackId) + ":";
+                desc += juce::String(parentPath_.topLevelDeviceId) + ":";
+                desc += juce::String(macroIndex_);
+
+                // Create a snapshot of this component for drag image
+                auto snapshot = createComponentSnapshot(getLocalBounds());
+
+                container->startDragging(desc, this, juce::ScaledImage(snapshot), true);
             }
         }
     }
 }
 
 void MacroKnobComponent::mouseUp(const juce::MouseEvent& e) {
-    // Right-click shows link menu
     if (e.mods.isPopupMenu()) {
+        // Right-click shows link menu
         showLinkMenu();
+    } else if (!isDragging_) {
+        // Left-click (no drag) - select this macro
+        if (onClicked) {
+            onClicked();
+        }
     }
+    isDragging_ = false;
 }
 
 void MacroKnobComponent::paintLinkIndicator(juce::Graphics& g, juce::Rectangle<int> area) {

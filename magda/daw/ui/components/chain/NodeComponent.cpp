@@ -759,9 +759,12 @@ void NodeComponent::setCollapsed(bool collapsed) {
 void NodeComponent::setNodePath(const magda::ChainNodePath& path) {
     nodePath_ = path;
 
-    // Update mods panel with parent path for drag-and-drop
+    // Update mods/macros panels with parent path for drag-and-drop
     if (modsPanel_) {
         modsPanel_->setParentPath(path);
+    }
+    if (macroPanel_) {
+        macroPanel_->setParentPath(path);
     }
 }
 

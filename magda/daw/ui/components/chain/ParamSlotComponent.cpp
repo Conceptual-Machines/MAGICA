@@ -479,9 +479,9 @@ void ParamSlotComponent::showLinkMenu() {
 // ============================================================================
 
 bool ParamSlotComponent::isInterestedInDragSource(const SourceDetails& details) {
-    // Accept drags from mod knobs (description starts with "mod_drag:")
+    // Accept drags from mod and macro knobs
     auto desc = details.description.toString();
-    return desc.startsWith("mod_drag:");
+    return desc.startsWith("mod_drag:") || desc.startsWith("macro_drag:");
 }
 
 void ParamSlotComponent::itemDragEnter(const SourceDetails& /*details*/) {
@@ -497,23 +497,39 @@ void ParamSlotComponent::itemDragExit(const SourceDetails& /*details*/) {
 void ParamSlotComponent::itemDropped(const SourceDetails& details) {
     isDragOver_ = false;
 
-    // Parse the drag description: "mod_drag:trackId:topLevelDeviceId:modIndex"
     auto desc = details.description.toString();
-    if (!desc.startsWith("mod_drag:")) {
-        return;
+
+    // Handle mod drops: "mod_drag:trackId:topLevelDeviceId:modIndex"
+    if (desc.startsWith("mod_drag:")) {
+        auto parts = juce::StringArray::fromTokens(desc.substring(9), ":", "");
+        if (parts.size() < 3) {
+            return;
+        }
+
+        int modIndex = parts[2].getIntValue();
+
+        // Create the link at 50% default amount
+        magda::ModTarget target{deviceId_, paramIndex_};
+        if (onModLinkedWithAmount) {
+            onModLinkedWithAmount(modIndex, target, 0.5f);
+        }
     }
+    // Handle macro drops: "macro_drag:trackId:topLevelDeviceId:macroIndex"
+    else if (desc.startsWith("macro_drag:")) {
+        auto parts = juce::StringArray::fromTokens(desc.substring(11), ":", "");
+        if (parts.size() < 3) {
+            return;
+        }
 
-    auto parts = juce::StringArray::fromTokens(desc.substring(9), ":", "");
-    if (parts.size() < 3) {
-        return;
-    }
+        int macroIndex = parts[2].getIntValue();
 
-    int modIndex = parts[2].getIntValue();
-
-    // Create the link at 50% default amount
-    magda::ModTarget target{deviceId_, paramIndex_};
-    if (onModLinkedWithAmount) {
-        onModLinkedWithAmount(modIndex, target, 0.5f);
+        // Create the macro link
+        magda::MacroTarget target;
+        target.deviceId = deviceId_;
+        target.paramIndex = paramIndex_;
+        if (onMacroLinked) {
+            onMacroLinked(macroIndex, target);
+        }
     }
 
     repaint();

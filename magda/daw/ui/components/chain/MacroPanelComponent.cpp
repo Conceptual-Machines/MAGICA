@@ -53,6 +53,7 @@ void MacroPanelComponent::ensureKnobCount(int count) {
         };
 
         knob->setAvailableTargets(availableDevices_);
+        knob->setParentPath(parentPath_);
         addAndMakeVisible(*knob);
         knobs_.push_back(std::move(knob));
     }
@@ -80,6 +81,13 @@ void MacroPanelComponent::setAvailableDevices(
 void MacroPanelComponent::setSelectedMacroIndex(int macroIndex) {
     for (size_t i = 0; i < knobs_.size(); ++i) {
         knobs_[i]->setSelected(static_cast<int>(i) == macroIndex);
+    }
+}
+
+void MacroPanelComponent::setParentPath(const magda::ChainNodePath& path) {
+    parentPath_ = path;
+    for (auto& knob : knobs_) {
+        knob->setParentPath(path);
     }
 }
 

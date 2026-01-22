@@ -42,6 +42,9 @@ class MacroPanelComponent : public PagedControlPanel {
     // Set which macro is selected (purple highlight)
     void setSelectedMacroIndex(int macroIndex);
 
+    // Set parent path for drag-and-drop (propagates to all knobs)
+    void setParentPath(const magda::ChainNodePath& path);
+
     // Callbacks
     std::function<void(int macroIndex, float value)> onMacroValueChanged;
     std::function<void(int macroIndex, magda::MacroTarget target)> onMacroTargetChanged;
@@ -59,6 +62,7 @@ class MacroPanelComponent : public PagedControlPanel {
   private:
     std::vector<std::unique_ptr<MacroKnobComponent>> knobs_;
     std::vector<std::pair<magda::DeviceId, juce::String>> availableDevices_;
+    magda::ChainNodePath parentPath_;
 
     void ensureKnobCount(int count);
 
