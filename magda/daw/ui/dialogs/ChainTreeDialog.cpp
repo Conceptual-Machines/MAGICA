@@ -64,7 +64,8 @@ class ChainTreeItemBase : public juce::TreeViewItem {
     }
 
     void itemClicked(const juce::MouseEvent&) override {
-        // Toggle open/close for containers
+        // JUCE TreeView automatically toggles open/close on click for containers.
+        // We don't want that - only double-click should toggle. So undo JUCE's toggle.
         if (mightContainSubItems()) {
             setOpen(!isOpen());
         }
@@ -72,6 +73,14 @@ class ChainTreeItemBase : public juce::TreeViewItem {
         // Select this node in the main UI if it has a valid path
         if (path_.isValid()) {
             SelectionManager::getInstance().selectChainNode(path_);
+        }
+    }
+
+    void itemDoubleClicked(const juce::MouseEvent&) override {
+        // Double-click toggles open/close for containers
+        // Note: JUCE already toggled twice (once per click), so we need to toggle once more
+        if (mightContainSubItems()) {
+            setOpen(!isOpen());
         }
     }
 
@@ -119,9 +128,15 @@ class TrackTreeItem : public ChainTreeItemBase {
     }
 
     void itemClicked(const juce::MouseEvent&) override {
-        // Toggle open/close but select the track
-        setOpen(!isOpen());
+        // Select the track (clears chain node selection)
         SelectionManager::getInstance().selectTrack(trackId_);
+        // Don't show track as selected in tree - it's just the root container
+        setSelected(false, false);
+    }
+
+    void itemDoubleClicked(const juce::MouseEvent&) override {
+        // Double-click toggles open/close
+        setOpen(!isOpen());
     }
 
   protected:

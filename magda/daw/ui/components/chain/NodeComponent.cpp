@@ -645,9 +645,11 @@ void NodeComponent::setNodePath(const magda::ChainNodePath& path) {
     nodePath_ = path;
 }
 
-void NodeComponent::selectionTypeChanged(magda::SelectionType /*newType*/) {
-    // If selection type changed away from ChainNode, we might need to deselect
-    // But chainNodeSelectionChanged handles this more precisely
+void NodeComponent::selectionTypeChanged(magda::SelectionType newType) {
+    // If selection type changed away from ChainNode, deselect this node
+    if (newType != magda::SelectionType::ChainNode) {
+        setSelected(false);
+    }
 }
 
 void NodeComponent::chainNodeSelectionChanged(const magda::ChainNodePath& path) {
@@ -670,25 +672,15 @@ void NodeComponent::mouseUp(const juce::MouseEvent& e) {
 
         // Check if mouse is still within bounds (not a drag-away)
         if (getLocalBounds().contains(e.getPosition())) {
-            DBG("NodeComponent::mouseUp - name='" + getNodeName() +
-                "' pathValid=" + juce::String(nodePath_.isValid() ? 1 : 0) + " trackId=" +
-                juce::String(nodePath_.trackId) + " selected=" + juce::String(selected_ ? 1 : 0));
+            // Single click only selects - never toggles collapsed state
+            // Use centralized selection if we have a valid path
+            if (nodePath_.isValid()) {
+                magda::SelectionManager::getInstance().selectChainNode(nodePath_);
+            }
 
-            // If already selected, toggle collapsed state
-            if (selected_) {
-                setCollapsed(!collapsed_);
-            } else {
-                // Use centralized selection if we have a valid path
-                if (nodePath_.isValid()) {
-                    magda::SelectionManager::getInstance().selectChainNode(nodePath_);
-                } else {
-                    DBG("  -> Path NOT valid, skipping centralized selection");
-                }
-
-                // Also call legacy callback for backward compatibility during transition
-                if (onSelected) {
-                    onSelected();
-                }
+            // Also call legacy callback for backward compatibility during transition
+            if (onSelected) {
+                onSelected();
             }
         }
     }
