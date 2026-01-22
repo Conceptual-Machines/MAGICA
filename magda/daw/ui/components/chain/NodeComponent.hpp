@@ -169,6 +169,7 @@ class NodeComponent : public juce::Component, public magda::SelectionManagerList
     // Selection state
     bool selected_ = false;
     bool mouseDownForSelection_ = false;
+    bool wasSelectedOnMouseDown_ = false;  // Captured at mouseDown to handle click behavior
 
     // Collapsed state (show header only)
     bool collapsed_ = false;

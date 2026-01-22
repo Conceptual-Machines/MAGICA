@@ -662,6 +662,8 @@ void NodeComponent::mouseDown(const juce::MouseEvent& e) {
     // Only handle left clicks for selection
     if (e.mods.isLeftButtonDown()) {
         mouseDownForSelection_ = true;
+        // Capture selection state NOW, before any callbacks can change it
+        wasSelectedOnMouseDown_ = selected_;
     }
 }
 
@@ -672,11 +674,12 @@ void NodeComponent::mouseUp(const juce::MouseEvent& e) {
 
         // Check if mouse is still within bounds (not a drag-away)
         if (getLocalBounds().contains(e.getPosition())) {
-            // If already selected, toggle collapsed state
-            if (selected_) {
+            // Use the selection state captured at mouseDown (before any callbacks)
+            if (wasSelectedOnMouseDown_) {
+                // Was already selected when click started - toggle collapsed state
                 setCollapsed(!collapsed_);
             } else {
-                // Use centralized selection if we have a valid path
+                // Was not selected - select it now
                 if (nodePath_.isValid()) {
                     magda::SelectionManager::getInstance().selectChainNode(nodePath_);
                 }
