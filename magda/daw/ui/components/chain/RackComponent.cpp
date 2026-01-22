@@ -387,20 +387,6 @@ void RackComponent::rebuildChainRows() {
             row->onSelected = [this](ChainRowComponent& selectedRow) {
                 onChainRowSelected(selectedRow);
             };
-            // Connect mod/macro toggle callbacks to ChainPanel
-            auto chainId = chain.id;
-            row->onModToggled = [this, chainId](bool visible) {
-                // Only affect the ChainPanel if this chain is currently selected
-                if (chainPanel_ && selectedChainId_ == chainId) {
-                    chainPanel_->setModPanelVisible(visible);
-                }
-            };
-            row->onMacroToggled = [this, chainId](bool visible) {
-                // Only affect the ChainPanel if this chain is currently selected
-                if (chainPanel_ && selectedChainId_ == chainId) {
-                    chainPanel_->setMacroPanelVisible(visible);
-                }
-            };
             chainRowsContainer_.addAndMakeVisible(*row);
             newRows.push_back(std::move(row));
         }

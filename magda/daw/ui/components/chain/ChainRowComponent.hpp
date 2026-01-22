@@ -20,6 +20,7 @@ class RackComponent;
  * Layout: [Name] [Gain] [Pan] [M] [S] [On] [X]
  *
  * Clicking the row will open a chain panel on the right side showing devices.
+ * Note: Chain-level mods/macros removed - these are handled at rack level only.
  * Implements SelectionManagerListener for centralized exclusive selection.
  */
 class ChainRowComponent : public juce::Component, public magda::SelectionManagerListener {
@@ -62,13 +63,6 @@ class ChainRowComponent : public juce::Component, public magda::SelectionManager
 
     // Callback when chain row is clicked (legacy - for RackComponent to show chain panel)
     std::function<void(ChainRowComponent&)> onSelected;
-    // Callbacks for mod/macro panel toggles
-    std::function<void(bool)> onModToggled;
-    std::function<void(bool)> onMacroToggled;
-
-    // Get toggle states
-    bool isModActive() const;
-    bool isMacroActive() const;
 
   private:
     void onMuteClicked();
@@ -83,12 +77,10 @@ class ChainRowComponent : public juce::Component, public magda::SelectionManager
     bool selected_ = false;
     magda::ChainNodePath nodePath_;  // For centralized selection
 
-    // Single row controls: Name | Gain | Pan | MOD | MACRO | M | S | On | X
+    // Single row controls: Name | Gain | Pan | M | S | On | X
     juce::Label nameLabel_;
-    TextSlider gainSlider_;                          // Will be configured in constructor
-    TextSlider panSlider_;                           // Will be configured in constructor
-    std::unique_ptr<magda::SvgButton> modButton_;    // Modulators toggle
-    std::unique_ptr<magda::SvgButton> macroButton_;  // Macros toggle
+    TextSlider gainSlider_;  // Will be configured in constructor
+    TextSlider panSlider_;   // Will be configured in constructor
     juce::TextButton muteButton_;
     juce::TextButton soloButton_;
     std::unique_ptr<magda::SvgButton> onButton_;  // Bypass/enable toggle (power icon)

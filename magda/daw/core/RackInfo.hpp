@@ -9,13 +9,9 @@
 #include "DeviceInfo.hpp"
 #include "MacroInfo.hpp"
 #include "ModInfo.hpp"
+#include "TypeIds.hpp"
 
 namespace magda {
-
-using ChainId = int;
-using RackId = int;
-constexpr ChainId INVALID_CHAIN_ID = -1;
-constexpr RackId INVALID_RACK_ID = -1;
 
 // Forward declare for recursive variant
 struct RackInfo;
@@ -73,12 +69,6 @@ struct ChainInfo {
     float volume = 0.0f;  // Chain volume in dB (0 = unity)
     float pan = 0.0f;     // Chain pan (-1 to 1)
 
-    // Macro controls for chain-level parameter mapping
-    MacroArray macros = createDefaultMacros();
-
-    // Modulators for chain-level modulation
-    ModArray mods = createDefaultMods();
-
     // UI state
     bool expanded = true;
 
@@ -98,8 +88,6 @@ struct ChainInfo {
           solo(other.solo),
           volume(other.volume),
           pan(other.pan),
-          macros(other.macros),
-          mods(other.mods),
           expanded(other.expanded) {
         elements.reserve(other.elements.size());
         for (const auto& element : other.elements) {
@@ -117,8 +105,6 @@ struct ChainInfo {
             solo = other.solo;
             volume = other.volume;
             pan = other.pan;
-            macros = other.macros;
-            mods = other.mods;
             expanded = other.expanded;
             elements.clear();
             elements.reserve(other.elements.size());

@@ -46,36 +46,6 @@ ChainRowComponent::ChainRowComponent(RackComponent& owner, magda::TrackId trackI
     };
     addAndMakeVisible(panSlider_);
 
-    // MOD button (modulators toggle) - sine wave icon
-    modButton_ = std::make_unique<magda::SvgButton>("Mod", BinaryData::sinewavebright_svg,
-                                                    BinaryData::sinewavebright_svgSize);
-    modButton_->setClickingTogglesState(true);
-    modButton_->setNormalColor(DarkTheme::getSecondaryTextColour());
-    modButton_->setActiveColor(juce::Colours::white);
-    modButton_->setActiveBackgroundColor(DarkTheme::getColour(DarkTheme::ACCENT_ORANGE));
-    modButton_->onClick = [this]() {
-        modButton_->setActive(modButton_->getToggleState());
-        if (onModToggled) {
-            onModToggled(modButton_->getToggleState());
-        }
-    };
-    addAndMakeVisible(*modButton_);
-
-    // MACRO button (macros toggle) - link icon
-    macroButton_ = std::make_unique<magda::SvgButton>("Macro", BinaryData::link_bright_svg,
-                                                      BinaryData::link_bright_svgSize);
-    macroButton_->setClickingTogglesState(true);
-    macroButton_->setNormalColor(DarkTheme::getSecondaryTextColour());
-    macroButton_->setActiveColor(juce::Colours::white);
-    macroButton_->setActiveBackgroundColor(DarkTheme::getColour(DarkTheme::ACCENT_PURPLE));
-    macroButton_->onClick = [this]() {
-        macroButton_->setActive(macroButton_->getToggleState());
-        if (onMacroToggled) {
-            onMacroToggled(macroButton_->getToggleState());
-        }
-    };
-    addAndMakeVisible(*macroButton_);
-
     // Mute button
     muteButton_.setButtonText("M");
     muteButton_.setColour(juce::TextButton::buttonColourId,
@@ -203,7 +173,7 @@ void ChainRowComponent::setSelected(bool selected) {
 void ChainRowComponent::resized() {
     auto bounds = getLocalBounds().reduced(3, 2);
 
-    // Layout: [Name] [Gain] [Pan] ... [MOD] [MACRO] [M] [S] [On] [X]
+    // Layout: [Name] [Gain] [Pan] ... [M] [S] [On] [X]
     // Spread across full width with right-side buttons anchored to the right
 
     // Right side buttons (from right to left)
@@ -217,12 +187,6 @@ void ChainRowComponent::resized() {
     bounds.removeFromRight(2);
 
     muteButton_.setBounds(bounds.removeFromRight(16));
-    bounds.removeFromRight(2);
-
-    macroButton_->setBounds(bounds.removeFromRight(16));
-    bounds.removeFromRight(2);
-
-    modButton_->setBounds(bounds.removeFromRight(16));
     bounds.removeFromRight(8);
 
     // Left side elements
@@ -277,14 +241,6 @@ void ChainRowComponent::onDeleteClicked() {
         // Fallback to flat ID removal for top-level chains
         magda::TrackManager::getInstance().removeChainFromRack(trackId_, rackId_, chainId_);
     }
-}
-
-bool ChainRowComponent::isModActive() const {
-    return modButton_ && modButton_->getToggleState();
-}
-
-bool ChainRowComponent::isMacroActive() const {
-    return macroButton_ && macroButton_->getToggleState();
 }
 
 }  // namespace magda::daw::ui

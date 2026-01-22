@@ -1302,53 +1302,6 @@ void TrackManager::removeRackMacroPage(const ChainNodePath& rackPath) {
     }
 }
 
-void TrackManager::setChainMacroValue(const ChainNodePath& chainPath, int macroIndex, float value) {
-    if (auto* chain = getChainFromPath(*this, chainPath)) {
-        if (macroIndex < 0 || macroIndex >= static_cast<int>(chain->macros.size())) {
-            return;
-        }
-        chain->macros[macroIndex].value = juce::jlimit(0.0f, 1.0f, value);
-        // Don't notify - simple value change doesn't need UI rebuild
-    }
-}
-
-void TrackManager::setChainMacroTarget(const ChainNodePath& chainPath, int macroIndex,
-                                       MacroTarget target) {
-    if (auto* chain = getChainFromPath(*this, chainPath)) {
-        if (macroIndex < 0 || macroIndex >= static_cast<int>(chain->macros.size())) {
-            return;
-        }
-        chain->macros[macroIndex].target = target;
-        // Don't notify - simple value change doesn't need UI rebuild
-    }
-}
-
-void TrackManager::setChainMacroName(const ChainNodePath& chainPath, int macroIndex,
-                                     const juce::String& name) {
-    if (auto* chain = getChainFromPath(*this, chainPath)) {
-        if (macroIndex < 0 || macroIndex >= static_cast<int>(chain->macros.size())) {
-            return;
-        }
-        chain->macros[macroIndex].name = name;
-        // Don't notify - simple value change doesn't need UI rebuild
-    }
-}
-
-void TrackManager::addChainMacroPage(const ChainNodePath& chainPath) {
-    if (auto* chain = getChainFromPath(*this, chainPath)) {
-        addMacroPage(chain->macros);
-        notifyTrackDevicesChanged(chainPath.trackId);
-    }
-}
-
-void TrackManager::removeChainMacroPage(const ChainNodePath& chainPath) {
-    if (auto* chain = getChainFromPath(*this, chainPath)) {
-        if (removeMacroPage(chain->macros)) {
-            notifyTrackDevicesChanged(chainPath.trackId);
-        }
-    }
-}
-
 // ============================================================================
 // Mod Management
 // ============================================================================
@@ -1424,49 +1377,131 @@ void TrackManager::removeRackModPage(const ChainNodePath& rackPath) {
     }
 }
 
-void TrackManager::setChainModAmount(const ChainNodePath& chainPath, int modIndex, float amount) {
-    if (auto* chain = getChainFromPath(*this, chainPath)) {
-        if (modIndex < 0 || modIndex >= static_cast<int>(chain->mods.size())) {
+// ============================================================================
+// Device Mod Management
+// ============================================================================
+
+void TrackManager::setDeviceModAmount(const ChainNodePath& devicePath, int modIndex, float amount) {
+    if (auto* device = getDeviceInChainByPath(devicePath)) {
+        if (modIndex < 0 || modIndex >= static_cast<int>(device->mods.size())) {
             return;
         }
-        chain->mods[modIndex].amount = juce::jlimit(0.0f, 1.0f, amount);
+        device->mods[modIndex].amount = juce::jlimit(0.0f, 1.0f, amount);
         // Don't notify - simple value change doesn't need UI rebuild
     }
 }
 
-void TrackManager::setChainModTarget(const ChainNodePath& chainPath, int modIndex,
-                                     ModTarget target) {
-    if (auto* chain = getChainFromPath(*this, chainPath)) {
-        if (modIndex < 0 || modIndex >= static_cast<int>(chain->mods.size())) {
+void TrackManager::setDeviceModTarget(const ChainNodePath& devicePath, int modIndex,
+                                      ModTarget target) {
+    if (auto* device = getDeviceInChainByPath(devicePath)) {
+        if (modIndex < 0 || modIndex >= static_cast<int>(device->mods.size())) {
             return;
         }
-        chain->mods[modIndex].target = target;
+        device->mods[modIndex].target = target;
         // Don't notify - simple value change doesn't need UI rebuild
     }
 }
 
-void TrackManager::setChainModName(const ChainNodePath& chainPath, int modIndex,
-                                   const juce::String& name) {
-    if (auto* chain = getChainFromPath(*this, chainPath)) {
-        if (modIndex < 0 || modIndex >= static_cast<int>(chain->mods.size())) {
+void TrackManager::setDeviceModName(const ChainNodePath& devicePath, int modIndex,
+                                    const juce::String& name) {
+    if (auto* device = getDeviceInChainByPath(devicePath)) {
+        if (modIndex < 0 || modIndex >= static_cast<int>(device->mods.size())) {
             return;
         }
-        chain->mods[modIndex].name = name;
+        device->mods[modIndex].name = name;
         // Don't notify - simple value change doesn't need UI rebuild
     }
 }
 
-void TrackManager::addChainModPage(const ChainNodePath& chainPath) {
-    if (auto* chain = getChainFromPath(*this, chainPath)) {
-        addModPage(chain->mods);
-        notifyTrackDevicesChanged(chainPath.trackId);
+void TrackManager::setDeviceModType(const ChainNodePath& devicePath, int modIndex, ModType type) {
+    if (auto* device = getDeviceInChainByPath(devicePath)) {
+        if (modIndex < 0 || modIndex >= static_cast<int>(device->mods.size())) {
+            return;
+        }
+        auto oldType = device->mods[modIndex].type;
+        device->mods[modIndex].type = type;
+        // Update name to default for new type if it was default
+        auto defaultOldName = ModInfo::getDefaultName(modIndex, oldType);
+        if (device->mods[modIndex].name == defaultOldName) {
+            device->mods[modIndex].name = ModInfo::getDefaultName(modIndex, type);
+        }
+        // Don't notify - simple value change doesn't need UI rebuild
     }
 }
 
-void TrackManager::removeChainModPage(const ChainNodePath& chainPath) {
-    if (auto* chain = getChainFromPath(*this, chainPath)) {
-        if (removeModPage(chain->mods)) {
-            notifyTrackDevicesChanged(chainPath.trackId);
+void TrackManager::setDeviceModRate(const ChainNodePath& devicePath, int modIndex, float rate) {
+    if (auto* device = getDeviceInChainByPath(devicePath)) {
+        if (modIndex < 0 || modIndex >= static_cast<int>(device->mods.size())) {
+            return;
+        }
+        device->mods[modIndex].rate = rate;
+        // Don't notify - simple value change doesn't need UI rebuild
+    }
+}
+
+void TrackManager::addDeviceModPage(const ChainNodePath& devicePath) {
+    if (auto* device = getDeviceInChainByPath(devicePath)) {
+        addModPage(device->mods);
+        notifyTrackDevicesChanged(devicePath.trackId);
+    }
+}
+
+void TrackManager::removeDeviceModPage(const ChainNodePath& devicePath) {
+    if (auto* device = getDeviceInChainByPath(devicePath)) {
+        if (removeModPage(device->mods)) {
+            notifyTrackDevicesChanged(devicePath.trackId);
+        }
+    }
+}
+
+// ============================================================================
+// Device Macro Management
+// ============================================================================
+
+void TrackManager::setDeviceMacroValue(const ChainNodePath& devicePath, int macroIndex,
+                                       float value) {
+    if (auto* device = getDeviceInChainByPath(devicePath)) {
+        if (macroIndex < 0 || macroIndex >= static_cast<int>(device->macros.size())) {
+            return;
+        }
+        device->macros[macroIndex].value = juce::jlimit(0.0f, 1.0f, value);
+        // Don't notify - simple value change doesn't need UI rebuild
+    }
+}
+
+void TrackManager::setDeviceMacroTarget(const ChainNodePath& devicePath, int macroIndex,
+                                        MacroTarget target) {
+    if (auto* device = getDeviceInChainByPath(devicePath)) {
+        if (macroIndex < 0 || macroIndex >= static_cast<int>(device->macros.size())) {
+            return;
+        }
+        device->macros[macroIndex].target = target;
+        // Don't notify - simple value change doesn't need UI rebuild
+    }
+}
+
+void TrackManager::setDeviceMacroName(const ChainNodePath& devicePath, int macroIndex,
+                                      const juce::String& name) {
+    if (auto* device = getDeviceInChainByPath(devicePath)) {
+        if (macroIndex < 0 || macroIndex >= static_cast<int>(device->macros.size())) {
+            return;
+        }
+        device->macros[macroIndex].name = name;
+        // Don't notify - simple value change doesn't need UI rebuild
+    }
+}
+
+void TrackManager::addDeviceMacroPage(const ChainNodePath& devicePath) {
+    if (auto* device = getDeviceInChainByPath(devicePath)) {
+        addMacroPage(device->macros);
+        notifyTrackDevicesChanged(devicePath.trackId);
+    }
+}
+
+void TrackManager::removeDeviceMacroPage(const ChainNodePath& devicePath) {
+    if (auto* device = getDeviceInChainByPath(devicePath)) {
+        if (removeMacroPage(device->macros)) {
+            notifyTrackDevicesChanged(devicePath.trackId);
         }
     }
 }

@@ -586,35 +586,6 @@ ChainPanel::ChainPanel() : elementSlotsContainer_(std::make_unique<ElementSlotsC
     addDeviceButton_.setLookAndFeel(&SmallButtonLookAndFeel::getInstance());
     elementSlotsContainer_->addAndMakeVisible(addDeviceButton_);
 
-    // Create macro panel (initially hidden)
-    macroPanel_ = std::make_unique<MacroPanelComponent>();
-    macroPanel_->onMacroValueChanged = [this](int macroIndex, float value) {
-        if (hasChain_) {
-            magda::TrackManager::getInstance().setChainMacroValue(chainPath_, macroIndex, value);
-        }
-    };
-    macroPanel_->onMacroTargetChanged = [this](int macroIndex, magda::MacroTarget target) {
-        if (hasChain_) {
-            magda::TrackManager::getInstance().setChainMacroTarget(chainPath_, macroIndex, target);
-        }
-    };
-    macroPanel_->onMacroNameChanged = [this](int macroIndex, juce::String name) {
-        if (hasChain_) {
-            magda::TrackManager::getInstance().setChainMacroName(chainPath_, macroIndex, name);
-        }
-    };
-    macroPanel_->onAddPageRequested = [this](int /*itemsToAdd*/) {
-        if (hasChain_) {
-            magda::TrackManager::getInstance().addChainMacroPage(chainPath_);
-        }
-    };
-    macroPanel_->onRemovePageRequested = [this](int /*itemsToRemove*/) {
-        if (hasChain_) {
-            magda::TrackManager::getInstance().removeChainMacroPage(chainPath_);
-        }
-    };
-    addChildComponent(*macroPanel_);
-
     setVisible(false);
 }
 
@@ -622,58 +593,12 @@ ChainPanel::~ChainPanel() {
     stopTimer();
 }
 
-void ChainPanel::paintContent(juce::Graphics& g, juce::Rectangle<int> contentArea) {
-    // Paint mod panel at bottom if visible (macro panel is a component, not painted)
-    if (chainModPanelVisible_) {
-        auto panelArea = contentArea;
-        // If macro panel is also visible, mod panel takes only half of the footer
-        int modPanelHeight =
-            chainMacroPanelVisible_ ? MOD_MACRO_PANEL_HEIGHT / 2 : MOD_MACRO_PANEL_HEIGHT;
-        panelArea.removeFromTop(contentArea.getHeight() - modPanelHeight);
-
-        // Background
-        g.setColour(DarkTheme::getColour(DarkTheme::BACKGROUND).brighter(0.02f));
-        g.fillRect(panelArea);
-
-        // Border on top
-        g.setColour(DarkTheme::getColour(DarkTheme::BORDER));
-        g.drawHorizontalLine(panelArea.getY(), static_cast<float>(panelArea.getX()),
-                             static_cast<float>(panelArea.getRight()));
-
-        panelArea = panelArea.reduced(8, 4);
-
-        g.setColour(DarkTheme::getColour(DarkTheme::ACCENT_ORANGE));
-        g.setFont(FontManager::getInstance().getUIFontBold(10.0f));
-        g.drawText("MODULATORS", panelArea.removeFromTop(16), juce::Justification::centredLeft);
-
-        g.setColour(DarkTheme::getSecondaryTextColour());
-        g.setFont(FontManager::getInstance().getUIFont(9.0f));
-        g.drawText("LFO, ADSR, Envelope Follower slots for this chain", panelArea.removeFromTop(14),
-                   juce::Justification::centredLeft);
-    }
+void ChainPanel::paintContent(juce::Graphics& /*g*/, juce::Rectangle<int> /*contentArea*/) {
+    // Chain panels no longer have chain-level mods/macros - these are at rack level only
 }
 
 void ChainPanel::resizedContent(juce::Rectangle<int> contentArea) {
-    // Reserve space at bottom for mod/macro panel if visible
-    if (chainMacroPanelVisible_ && macroPanel_) {
-        auto macroArea = contentArea.removeFromBottom(MOD_MACRO_PANEL_HEIGHT);
-        macroPanel_->setBounds(macroArea);
-        macroPanel_->setVisible(true);
-
-        // Update macro panel with current chain's macros and available devices
-        updateMacroPanel();
-    } else if (macroPanel_) {
-        macroPanel_->setVisible(false);
-    }
-
-    if (chainModPanelVisible_) {
-        // Mod panel is painted, so just remove the space (or half if macro also visible)
-        if (!chainMacroPanelVisible_) {
-            contentArea.removeFromBottom(MOD_MACRO_PANEL_HEIGHT);
-        }
-    }
-
-    // Viewport fills the remaining content area
+    // Viewport fills the content area
     elementViewport_.setBounds(contentArea);
 
     // Calculate total width needed for all element slots
@@ -1046,53 +971,6 @@ void ChainPanel::onAddDeviceClicked() {
             }
         }
     });
-}
-
-void ChainPanel::updateMacroPanel() {
-    if (!macroPanel_ || !hasChain_) {
-        return;
-    }
-
-    // Get the chain data via path resolution
-    auto resolved = magda::TrackManager::getInstance().resolvePath(chainPath_);
-    if (!resolved.valid || !resolved.chain) {
-        return;
-    }
-
-    // Update macros
-    macroPanel_->setMacros(resolved.chain->macros);
-
-    // Collect available devices for linking
-    std::vector<std::pair<magda::DeviceId, juce::String>> availableDevices;
-    for (const auto& element : resolved.chain->elements) {
-        if (magda::isDevice(element)) {
-            const auto& device = magda::getDevice(element);
-            availableDevices.emplace_back(device.id, device.name);
-        }
-    }
-    macroPanel_->setAvailableDevices(availableDevices);
-}
-
-void ChainPanel::setModPanelVisible(bool visible) {
-    if (chainModPanelVisible_ != visible) {
-        chainModPanelVisible_ = visible;
-        resized();
-        repaint();
-        if (onLayoutChanged) {
-            onLayoutChanged();
-        }
-    }
-}
-
-void ChainPanel::setMacroPanelVisible(bool visible) {
-    if (chainMacroPanelVisible_ != visible) {
-        chainMacroPanelVisible_ = visible;
-        resized();
-        repaint();
-        if (onLayoutChanged) {
-            onLayoutChanged();
-        }
-    }
 }
 
 void ChainPanel::clearDeviceSelection() {

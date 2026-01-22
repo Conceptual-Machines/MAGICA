@@ -6,10 +6,18 @@
 #include <memory>
 #include <vector>
 
+#include "core/MacroInfo.hpp"
+#include "core/ModInfo.hpp"
 #include "core/SelectionManager.hpp"
 #include "ui/components/common/SvgButton.hpp"
 
 namespace magda::daw::ui {
+
+// Forward declarations for panel components
+class ModsPanelComponent;
+class MacroPanelComponent;
+class ModulatorEditorPanel;
+class MacroEditorPanel;
 
 /**
  * @brief Base class for chain nodes (Device, Rack, Chain)
@@ -147,20 +155,16 @@ class NodeComponent : public juce::Component, public magda::SelectionManagerList
     virtual int getModPanelWidth() const {
         return DEFAULT_PANEL_WIDTH;
     }
-    // Extra left panel (between mods and params) - override to add custom panel
-    virtual int getExtraLeftPanelWidth() const {
-        return 0;
-    }
+    // Extra left panel (between mods and params) - returns modulator editor width when visible
+    virtual int getExtraLeftPanelWidth() const;
     virtual int getParamPanelWidth() const {
         return DEFAULT_PANEL_WIDTH;
     }
     virtual int getGainPanelWidth() const {
         return GAIN_PANEL_WIDTH;
     }
-    // Extra right panel (after macros) - override to add custom panel
-    virtual int getExtraRightPanelWidth() const {
-        return 0;
-    }
+    // Extra right panel (after macros) - returns macro editor width when visible
+    virtual int getExtraRightPanelWidth() const;
 
     // Override to hide header (return 0)
     virtual int getHeaderHeight() const {
@@ -196,8 +200,71 @@ class NodeComponent : public juce::Component, public magda::SelectionManagerList
     // Layout constants
     static constexpr int HEADER_HEIGHT = 20;
     static constexpr int BUTTON_SIZE = 16;
-    static constexpr int DEFAULT_PANEL_WIDTH = 60;  // Width for side panels (mods, params)
-    static constexpr int GAIN_PANEL_WIDTH = 32;     // Width for gain panel (right side)
+    static constexpr int DEFAULT_PANEL_WIDTH = 100;  // Width for side panels (mods, params)
+    static constexpr int GAIN_PANEL_WIDTH = 32;      // Width for gain panel (right side)
+
+    // === Mods/Macros Panel Support ===
+
+    // Virtual methods for subclasses to provide mod/macro data
+    // Return nullptr if this node type doesn't have mods/macros
+    virtual const magda::ModArray* getModsData() const {
+        return nullptr;
+    }
+    virtual const magda::MacroArray* getMacrosData() const {
+        return nullptr;
+    }
+
+    // Virtual methods for subclasses to provide available link targets
+    virtual std::vector<std::pair<magda::DeviceId, juce::String>> getAvailableDevices() const {
+        return {};
+    }
+
+    // Virtual callbacks for mod/macro changes (subclasses implement to persist changes)
+    virtual void onModAmountChangedInternal(int /*modIndex*/, float /*amount*/) {}
+    virtual void onModTargetChangedInternal(int /*modIndex*/, magda::ModTarget /*target*/) {}
+    virtual void onModNameChangedInternal(int /*modIndex*/, const juce::String& /*name*/) {}
+    virtual void onModTypeChangedInternal(int /*modIndex*/, magda::ModType /*type*/) {}
+    virtual void onModRateChangedInternal(int /*modIndex*/, float /*rate*/) {}
+    virtual void onMacroValueChangedInternal(int /*macroIndex*/, float /*value*/) {}
+    virtual void onMacroTargetChangedInternal(int /*macroIndex*/, magda::MacroTarget /*target*/) {}
+    virtual void onMacroNameChangedInternal(int /*macroIndex*/, const juce::String& /*name*/) {}
+    virtual void onModClickedInternal(int /*modIndex*/) {}
+    virtual void onMacroClickedInternal(int /*macroIndex*/) {}
+
+    // Virtual callbacks for page management (subclasses implement to persist)
+    virtual void onModPageAddRequested(int /*itemsToAdd*/) {}
+    virtual void onModPageRemoveRequested(int /*itemsToRemove*/) {}
+    virtual void onMacroPageAddRequested(int /*itemsToAdd*/) {}
+    virtual void onMacroPageRemoveRequested(int /*itemsToRemove*/) {}
+
+    // Panel components (created by NodeComponent, populated by subclass data)
+    std::unique_ptr<ModsPanelComponent> modsPanel_;
+    std::unique_ptr<MacroPanelComponent> macroPanel_;
+    std::unique_ptr<ModulatorEditorPanel> modulatorEditorPanel_;
+    std::unique_ptr<MacroEditorPanel> macroEditorPanel_;
+
+    // Editor panel state
+    bool modulatorEditorVisible_ = false;
+    bool macroEditorVisible_ = false;
+    int selectedModIndex_ = -1;
+    int selectedMacroIndex_ = -1;
+
+    // Mod/Macro panel management
+    void initializeModsMacrosPanels();
+    void updateModsPanel();
+    void updateMacroPanel();
+
+    // Editor panel management
+    void showModulatorEditor(int modIndex);
+    void hideModulatorEditor();
+    void updateModulatorEditor();
+    void showMacroEditor(int macroIndex);
+    void hideMacroEditor();
+    void updateMacroEditor();
+
+    // Width calculations for editor panels
+    int getModulatorEditorWidth() const;
+    int getMacroEditorWidth() const;
 
   private:
     // Header controls

@@ -180,27 +180,31 @@ class TrackManager {
     void addRackMacroPage(const ChainNodePath& rackPath);
     void removeRackMacroPage(const ChainNodePath& rackPath);
 
-    // Macro management for chains (path-based for nested chain support)
-    void setChainMacroValue(const ChainNodePath& chainPath, int macroIndex, float value);
-    void setChainMacroTarget(const ChainNodePath& chainPath, int macroIndex, MacroTarget target);
-    void setChainMacroName(const ChainNodePath& chainPath, int macroIndex,
-                           const juce::String& name);
-    void addChainMacroPage(const ChainNodePath& chainPath);
-    void removeChainMacroPage(const ChainNodePath& chainPath);
-
     // Mod management for racks (path-based for nested rack support)
     void setRackModAmount(const ChainNodePath& rackPath, int modIndex, float amount);
     void setRackModTarget(const ChainNodePath& rackPath, int modIndex, ModTarget target);
     void setRackModName(const ChainNodePath& rackPath, int modIndex, const juce::String& name);
+    void setRackModType(const ChainNodePath& rackPath, int modIndex, ModType type);
+    void setRackModRate(const ChainNodePath& rackPath, int modIndex, float rate);
     void addRackModPage(const ChainNodePath& rackPath);
     void removeRackModPage(const ChainNodePath& rackPath);
 
-    // Mod management for chains (path-based for nested chain support)
-    void setChainModAmount(const ChainNodePath& chainPath, int modIndex, float amount);
-    void setChainModTarget(const ChainNodePath& chainPath, int modIndex, ModTarget target);
-    void setChainModName(const ChainNodePath& chainPath, int modIndex, const juce::String& name);
-    void addChainModPage(const ChainNodePath& chainPath);
-    void removeChainModPage(const ChainNodePath& chainPath);
+    // Mod management for devices (path-based for nested device support)
+    void setDeviceModAmount(const ChainNodePath& devicePath, int modIndex, float amount);
+    void setDeviceModTarget(const ChainNodePath& devicePath, int modIndex, ModTarget target);
+    void setDeviceModName(const ChainNodePath& devicePath, int modIndex, const juce::String& name);
+    void setDeviceModType(const ChainNodePath& devicePath, int modIndex, ModType type);
+    void setDeviceModRate(const ChainNodePath& devicePath, int modIndex, float rate);
+    void addDeviceModPage(const ChainNodePath& devicePath);
+    void removeDeviceModPage(const ChainNodePath& devicePath);
+
+    // Macro management for devices (path-based for nested device support)
+    void setDeviceMacroValue(const ChainNodePath& devicePath, int macroIndex, float value);
+    void setDeviceMacroTarget(const ChainNodePath& devicePath, int macroIndex, MacroTarget target);
+    void setDeviceMacroName(const ChainNodePath& devicePath, int macroIndex,
+                            const juce::String& name);
+    void addDeviceMacroPage(const ChainNodePath& devicePath);
+    void removeDeviceMacroPage(const ChainNodePath& devicePath);
 
     // ========================================================================
     // Path Resolution - Centralized tree traversal
