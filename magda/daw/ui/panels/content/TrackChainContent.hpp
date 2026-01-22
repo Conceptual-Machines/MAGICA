@@ -67,6 +67,7 @@ class TrackChainContent : public PanelContent, public magda::TrackManagerListene
     std::unique_ptr<magda::SvgButton> globalModsButton_;  // Toggle global modulators panel
     std::unique_ptr<magda::SvgButton> linkButton_;        // Parameter linking
     std::unique_ptr<magda::SvgButton> addRackButton_;     // Add rack button
+    std::unique_ptr<magda::SvgButton> treeViewButton_;    // Show chain tree dialog
 
     // Header bar controls - RIGHT side (track info)
     juce::Label trackNameLabel_;

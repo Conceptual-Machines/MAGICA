@@ -5,6 +5,7 @@
 #include <cmath>
 
 #include "../../debug/DebugSettings.hpp"
+#include "../../dialogs/ChainTreeDialog.hpp"
 #include "../../themes/DarkTheme.hpp"
 #include "../../themes/FontManager.hpp"
 #include "../../themes/MixerMetrics.hpp"
@@ -665,6 +666,19 @@ TrackChainContent::TrackChainContent() : chainContainer_(std::make_unique<ChainC
     };
     addChildComponent(*addRackButton_);
 
+    // Tree view button (show chain tree dialog)
+    treeViewButton_ =
+        std::make_unique<magda::SvgButton>("Tree", BinaryData::tree_svg, BinaryData::tree_svgSize);
+    treeViewButton_->setNormalColor(DarkTheme::getSecondaryTextColour());
+    treeViewButton_->setHoverColor(DarkTheme::getTextColour());
+    treeViewButton_->setBorderColor(DarkTheme::getColour(DarkTheme::BORDER));
+    treeViewButton_->onClick = [this]() {
+        if (selectedTrackId_ != magda::INVALID_TRACK_ID) {
+            magda::ChainTreeDialog::show(selectedTrackId_);
+        }
+    };
+    addChildComponent(*treeViewButton_);
+
     // === HEADER BAR CONTROLS - RIGHT SIDE (track info) ===
 
     // Track name label - clicks pass through for track selection
@@ -845,6 +859,8 @@ void TrackChainContent::resized() {
         linkButton_->setBounds(headerArea.removeFromLeft(20));
         headerArea.removeFromLeft(8);
         addRackButton_->setBounds(headerArea.removeFromLeft(20));
+        headerArea.removeFromLeft(4);
+        treeViewButton_->setBounds(headerArea.removeFromLeft(20));
         headerArea.removeFromLeft(16);
 
         // RIGHT SIDE - Track info (from right to left)
@@ -1020,6 +1036,7 @@ void TrackChainContent::showHeader(bool show) {
     globalModsButton_->setVisible(show);
     linkButton_->setVisible(show);
     addRackButton_->setVisible(show);
+    treeViewButton_->setVisible(show);
     // Right side - track info
     trackNameLabel_.setVisible(show);
     muteButton_.setVisible(show);

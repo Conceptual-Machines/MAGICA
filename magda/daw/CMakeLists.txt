@@ -53,6 +53,7 @@ juce_add_binary_data(MagdaAssets
     ../../assets/icons/open_in_new.svg
     ../../assets/icons/power_on.svg
     ../../assets/icons/rack.svg
+    ../../assets/icons/tree.svg
     # Mouse cursors
     ../../assets/icons/mouse_zoom/search.svg
     ../../assets/icons/mouse_zoom/zoom_in.svg
@@ -112,6 +113,7 @@ set(DAW_UI_SOURCES
     ui/windows/MenuManager.cpp
     # Dialogs
     ui/dialogs/AudioSettingsDialog.cpp
+    ui/dialogs/ChainTreeDialog.cpp
     ui/dialogs/ParameterConfigDialog.cpp
     ui/dialogs/PreferencesDialog.cpp
     ui/dialogs/TrackManagerDialog.cpp
@@ -219,6 +221,7 @@ set(DAW_HEADERS
     ui/windows/MenuManager.hpp
     # Dialogs
     ui/dialogs/AudioSettingsDialog.hpp
+    ui/dialogs/ChainTreeDialog.hpp
     ui/dialogs/ParameterConfigDialog.hpp
     ui/dialogs/PreferencesDialog.hpp
     ui/dialogs/TrackManagerDialog.hpp
