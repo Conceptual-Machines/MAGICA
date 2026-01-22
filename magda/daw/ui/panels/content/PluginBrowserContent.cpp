@@ -39,6 +39,17 @@ class PluginBrowserContent::PluginTreeItem : public juce::TreeViewItem {
             bounds.removeFromLeft(16);
         }
 
+        // Plugin type icon: 🎹 for instruments, 🎛️ for effects
+        g.setFont(FontManager::getInstance().getUIFont(11.0f));
+        if (plugin_.category == "Instrument") {
+            g.drawText(juce::String::fromUTF8("🎹"), bounds.removeFromLeft(18),
+                       juce::Justification::centred);
+        } else {
+            g.drawText(juce::String::fromUTF8("🎛️"), bounds.removeFromLeft(18),
+                       juce::Justification::centred);
+        }
+        bounds.removeFromLeft(2);
+
         // Plugin name
         g.setColour(DarkTheme::getTextColour());
         g.setFont(FontManager::getInstance().getUIFont(12.0f));
