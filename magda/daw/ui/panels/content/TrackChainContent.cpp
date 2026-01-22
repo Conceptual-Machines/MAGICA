@@ -768,8 +768,9 @@ TrackChainContent::TrackChainContent() : chainContainer_(std::make_unique<ChainC
     };
     addChildComponent(*chainBypassButton_);
 
-    // Register as listener
+    // Register as listeners
     magda::TrackManager::getInstance().addListener(this);
+    magda::SelectionManager::getInstance().addListener(this);
 
     // Check if there's already a selected track
     selectedTrackId_ = magda::TrackManager::getInstance().getSelectedTrack();
@@ -778,6 +779,7 @@ TrackChainContent::TrackChainContent() : chainContainer_(std::make_unique<ChainC
 
 TrackChainContent::~TrackChainContent() {
     magda::TrackManager::getInstance().removeListener(this);
+    magda::SelectionManager::getInstance().removeListener(this);
 }
 
 void TrackChainContent::paint(juce::Graphics& g) {
@@ -786,9 +788,13 @@ void TrackChainContent::paint(juce::Graphics& g) {
     if (selectedTrackId_ != magda::INVALID_TRACK_ID) {
         auto bounds = getLocalBounds();
 
-        // Draw header background
+        // Draw header background - use accent color only when track itself is selected
+        // (not when a chain node is selected)
         auto headerArea = bounds.removeFromTop(HEADER_HEIGHT);
-        g.setColour(DarkTheme::getColour(DarkTheme::SURFACE));
+        bool trackIsSelected = magda::SelectionManager::getInstance().getSelectionType() ==
+                               magda::SelectionType::Track;
+        g.setColour(trackIsSelected ? DarkTheme::getColour(DarkTheme::ACCENT_CYAN).withAlpha(0.15f)
+                                    : DarkTheme::getColour(DarkTheme::SURFACE));
         g.fillRect(headerArea);
 
         // Header bottom border
@@ -987,6 +993,12 @@ void TrackChainContent::trackDevicesChanged(magda::TrackId trackId) {
         rebuildDeviceSlots();
         rebuildRackComponents();
     }
+}
+
+void TrackChainContent::selectionTypeChanged(magda::SelectionType /*newType*/) {
+    // Repaint header when selection type changes (Track vs ChainNode)
+    // to update the header background color
+    repaint();
 }
 
 void TrackChainContent::updateFromSelectedTrack() {

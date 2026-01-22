@@ -3,6 +3,7 @@
 #include "../../themes/MixerLookAndFeel.hpp"
 #include "PanelContent.hpp"
 #include "core/DeviceInfo.hpp"
+#include "core/SelectionManager.hpp"
 #include "core/TrackManager.hpp"
 #include "ui/components/common/SvgButton.hpp"
 #include "ui/components/common/TextSlider.hpp"
@@ -17,7 +18,9 @@ class RackComponent;
  * Displays a mockup of the selected track's signal chain with
  * track info (name, M/S/gain/pan) at the right border.
  */
-class TrackChainContent : public PanelContent, public magda::TrackManagerListener {
+class TrackChainContent : public PanelContent,
+                          public magda::TrackManagerListener,
+                          public magda::SelectionManagerListener {
   public:
     TrackChainContent();
     ~TrackChainContent() override;
@@ -42,6 +45,9 @@ class TrackChainContent : public PanelContent, public magda::TrackManagerListene
     void trackPropertyChanged(int trackId) override;
     void trackSelectionChanged(magda::TrackId trackId) override;
     void trackDevicesChanged(magda::TrackId trackId) override;
+
+    // SelectionManagerListener
+    void selectionTypeChanged(magda::SelectionType newType) override;
 
     // Selection state for plugin browser context menu
     bool hasSelectedTrack() const;
