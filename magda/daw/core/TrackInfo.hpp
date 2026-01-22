@@ -30,14 +30,62 @@ struct TrackInfo {
     bool soloed = false;
     bool recordArmed = false;
 
-    // FX chain - ordered list of devices/plugins on this track
-    std::vector<DeviceInfo> devices;
-
-    // Racks - containers for parallel signal chains
-    std::vector<RackInfo> racks;
+    // Signal chain - ordered list of nodes (devices or racks) on this track
+    std::vector<ChainElement> chainElements;
 
     // View settings per view mode
     TrackViewSettingsMap viewSettings;
+
+    // Default constructor
+    TrackInfo() = default;
+
+    // Move operations (default is fine)
+    TrackInfo(TrackInfo&&) = default;
+    TrackInfo& operator=(TrackInfo&&) = default;
+
+    // Copy constructor - deep copies chainElements
+    TrackInfo(const TrackInfo& other)
+        : id(other.id),
+          type(other.type),
+          name(other.name),
+          colour(other.colour),
+          parentId(other.parentId),
+          childIds(other.childIds),
+          volume(other.volume),
+          pan(other.pan),
+          muted(other.muted),
+          soloed(other.soloed),
+          recordArmed(other.recordArmed),
+          viewSettings(other.viewSettings) {
+        chainElements.reserve(other.chainElements.size());
+        for (const auto& element : other.chainElements) {
+            chainElements.push_back(deepCopyElement(element));
+        }
+    }
+
+    // Copy assignment - deep copies chainElements
+    TrackInfo& operator=(const TrackInfo& other) {
+        if (this != &other) {
+            id = other.id;
+            type = other.type;
+            name = other.name;
+            colour = other.colour;
+            parentId = other.parentId;
+            childIds = other.childIds;
+            volume = other.volume;
+            pan = other.pan;
+            muted = other.muted;
+            soloed = other.soloed;
+            recordArmed = other.recordArmed;
+            viewSettings = other.viewSettings;
+            chainElements.clear();
+            chainElements.reserve(other.chainElements.size());
+            for (const auto& element : other.chainElements) {
+                chainElements.push_back(deepCopyElement(element));
+            }
+        }
+        return *this;
+    }
 
     // Default track colors
     static inline const std::array<juce::uint32, 8> defaultColors = {

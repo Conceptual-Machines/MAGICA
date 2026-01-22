@@ -153,6 +153,8 @@ struct RackInfo {
     std::vector<ChainInfo> chains;  // Parallel chains
     bool bypassed = false;
     bool expanded = true;  // UI collapsed state
+    float volume = 0.0f;   // Rack output volume in dB (0 = unity)
+    float pan = 0.0f;      // Rack output pan (-1 to 1)
 
     // Future: Macro controls for rack-wide parameter mapping
     // std::array<float, 8> macros;
@@ -170,7 +172,9 @@ struct RackInfo {
           name(other.name),
           chains(other.chains),  // ChainInfo has its own deep copy
           bypassed(other.bypassed),
-          expanded(other.expanded) {}
+          expanded(other.expanded),
+          volume(other.volume),
+          pan(other.pan) {}
 
     // Copy assignment
     RackInfo& operator=(const RackInfo& other) {
@@ -180,6 +184,8 @@ struct RackInfo {
             chains = other.chains;  // ChainInfo has its own deep copy
             bypassed = other.bypassed;
             expanded = other.expanded;
+            volume = other.volume;
+            pan = other.pan;
         }
         return *this;
     }

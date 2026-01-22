@@ -520,10 +520,8 @@ class TrackChainContent::ChainContainer : public juce::Component {
   public:
     explicit ChainContainer(TrackChainContent& owner) : owner_(owner) {}
 
-    void setElements(const std::vector<std::unique_ptr<DeviceSlotComponent>>* devices,
-                     const std::vector<std::unique_ptr<RackComponent>>* racks) {
-        deviceSlots_ = devices;
-        rackComponents_ = racks;
+    void setNodeComponents(const std::vector<std::unique_ptr<NodeComponent>>* nodes) {
+        nodeComponents_ = nodes;
     }
 
     void mouseDown(const juce::MouseEvent& /*e*/) override {
@@ -536,24 +534,19 @@ class TrackChainContent::ChainContainer : public juce::Component {
         int arrowY = getHeight() / 2;
         g.setColour(DarkTheme::getSecondaryTextColour());
 
-        // Draw arrows after each device slot
-        if (deviceSlots_) {
-            for (const auto& slot : *deviceSlots_) {
-                int x = slot->getRight();
+        // Draw arrows after each node (except the last one)
+        if (nodeComponents_) {
+            for (size_t i = 0; i + 1 < nodeComponents_->size(); ++i) {
+                int x = (*nodeComponents_)[i]->getRight();
                 drawArrow(g, x, arrowY);
             }
         }
 
-        // Draw arrows after each rack (except the last one if there's nothing after)
-        if (rackComponents_) {
-            for (size_t i = 0; i < rackComponents_->size(); ++i) {
-                const auto& rack = (*rackComponents_)[i];
-                // Don't draw arrow after the last rack if nothing follows
-                if (i < rackComponents_->size() - 1 || (deviceSlots_ && !deviceSlots_->empty())) {
-                    int x = rack->getRight();
-                    drawArrow(g, x, arrowY);
-                }
-            }
+        // Draw insertion indicator during drag
+        if (owner_.dragInsertIndex_ >= 0) {
+            int indicatorX = owner_.calculateIndicatorX(owner_.dragInsertIndex_);
+            g.setColour(DarkTheme::getColour(DarkTheme::ACCENT_BLUE));
+            g.fillRect(indicatorX - 2, 0, 4, getHeight());
         }
     }
 
@@ -571,8 +564,7 @@ class TrackChainContent::ChainContainer : public juce::Component {
     }
 
     TrackChainContent& owner_;
-    const std::vector<std::unique_ptr<DeviceSlotComponent>>* deviceSlots_ = nullptr;
-    const std::vector<std::unique_ptr<RackComponent>>* rackComponents_ = nullptr;
+    const std::vector<std::unique_ptr<NodeComponent>>* nodeComponents_ = nullptr;
 };
 
 // dB conversion helpers
@@ -597,10 +589,10 @@ TrackChainContent::TrackChainContent() : chainContainer_(std::make_unique<ChainC
 
     // Listen for debug settings changes
     DebugSettings::getInstance().addListener([this]() {
-        // Force all device slots to update their fonts
-        for (auto& slot : deviceSlots_) {
-            slot->resized();
-            slot->repaint();
+        // Force all node components to update their fonts
+        for (auto& node : nodeComponents_) {
+            node->resized();
+            node->repaint();
         }
         resized();
         repaint();
@@ -793,7 +785,7 @@ void TrackChainContent::paint(juce::Graphics& g) {
         auto headerArea = bounds.removeFromTop(HEADER_HEIGHT);
         bool trackIsSelected = magda::SelectionManager::getInstance().getSelectionType() ==
                                magda::SelectionType::Track;
-        g.setColour(trackIsSelected ? DarkTheme::getColour(DarkTheme::ACCENT_CYAN).withAlpha(0.15f)
+        g.setColour(trackIsSelected ? DarkTheme::getColour(DarkTheme::ACCENT_CYAN).withAlpha(0.08f)
                                     : DarkTheme::getColour(DarkTheme::SURFACE));
         g.fillRect(headerArea);
 
@@ -917,42 +909,29 @@ void TrackChainContent::layoutChainContent() {
 
     // Set container size
     chainContainer_->setSize(juce::jmax(totalWidth, availableWidth), chainHeight);
-    chainContainer_->setElements(&deviceSlots_, &rackComponents_);
+    chainContainer_->setNodeComponents(&nodeComponents_);
 
-    // Layout elements inside the container
+    // Layout all node components horizontally
     int x = 0;
+    for (auto& node : nodeComponents_) {
+        // Check if it's a RackComponent to set available width
+        if (auto* rack = dynamic_cast<RackComponent*>(node.get())) {
+            int remainingWidth = juce::jmax(300, availableWidth - x - ARROW_WIDTH - SLOT_SPACING);
+            rack->setAvailableWidth(remainingWidth);
+        }
 
-    // Layout device slots horizontally
-    for (auto& slot : deviceSlots_) {
-        int slotWidth = slot->getExpandedWidth();
-        slot->setBounds(x, 0, slotWidth, chainHeight);
-        x += slotWidth + ARROW_WIDTH + SLOT_SPACING;
-    }
-
-    // Layout rack components horizontally (continuing the chain)
-    // Calculate remaining available width for each rack
-    for (auto& rack : rackComponents_) {
-        // Calculate available width: from current x to content area right edge
-        int remainingWidth = juce::jmax(300, availableWidth - x - ARROW_WIDTH - SLOT_SPACING);
-        rack->setAvailableWidth(remainingWidth);
-
-        int rackWidth = rack->getPreferredWidth();
-        rack->setBounds(x, 0, rackWidth, chainHeight);
-        x += rackWidth + ARROW_WIDTH + SLOT_SPACING;
+        int nodeWidth = node->getPreferredWidth();
+        node->setBounds(x, 0, nodeWidth, chainHeight);
+        x += nodeWidth + ARROW_WIDTH + SLOT_SPACING;
     }
 }
 
 int TrackChainContent::calculateTotalContentWidth() const {
     int totalWidth = 0;
 
-    // Add width for all device slots
-    for (const auto& slot : deviceSlots_) {
-        totalWidth += slot->getExpandedWidth() + ARROW_WIDTH + SLOT_SPACING;
-    }
-
-    // Add width for all rack components
-    for (const auto& rack : rackComponents_) {
-        totalWidth += rack->getPreferredWidth() + ARROW_WIDTH + SLOT_SPACING;
+    // Add width for all node components
+    for (const auto& node : nodeComponents_) {
+        totalWidth += node->getPreferredWidth() + ARROW_WIDTH + SLOT_SPACING;
     }
 
     return totalWidth;
@@ -990,8 +969,7 @@ void TrackChainContent::trackSelectionChanged(magda::TrackId trackId) {
 
 void TrackChainContent::trackDevicesChanged(magda::TrackId trackId) {
     if (trackId == selectedTrackId_) {
-        rebuildDeviceSlots();
-        rebuildRackComponents();
+        rebuildNodeComponents();
     }
 }
 
@@ -1005,8 +983,7 @@ void TrackChainContent::updateFromSelectedTrack() {
     if (selectedTrackId_ == magda::INVALID_TRACK_ID) {
         showHeader(false);
         noSelectionLabel_.setVisible(true);
-        deviceSlots_.clear();
-        rackComponents_.clear();
+        nodeComponents_.clear();
     } else {
         const auto* track = magda::TrackManager::getInstance().getTrack(selectedTrackId_);
         if (track) {
@@ -1029,13 +1006,11 @@ void TrackChainContent::updateFromSelectedTrack() {
 
             showHeader(true);
             noSelectionLabel_.setVisible(false);
-            rebuildDeviceSlots();
-            rebuildRackComponents();
+            rebuildNodeComponents();
         } else {
             showHeader(false);
             noSelectionLabel_.setVisible(true);
-            deviceSlots_.clear();
-            rackComponents_.clear();
+            nodeComponents_.clear();
         }
     }
 
@@ -1058,132 +1033,133 @@ void TrackChainContent::showHeader(bool show) {
     chainBypassButton_->setVisible(show);
 }
 
-void TrackChainContent::rebuildDeviceSlots() {
-    // Remove existing slots
-    deviceSlots_.clear();
+void TrackChainContent::rebuildNodeComponents() {
+    // Clear existing components
+    unfocusAllComponents();
+    nodeComponents_.clear();
 
     if (selectedTrackId_ == magda::INVALID_TRACK_ID) {
         return;
     }
 
-    const auto* devices = magda::TrackManager::getInstance().getDevices(selectedTrackId_);
-    if (!devices) {
-        return;
-    }
+    const auto& elements = magda::TrackManager::getInstance().getChainElements(selectedTrackId_);
 
-    // Create a slot component for each device (add to container for viewport scrolling)
-    for (const auto& device : *devices) {
-        auto slot = std::make_unique<DeviceSlotComponent>(*this, selectedTrackId_, device);
-        // Set node path for centralized selection (no legacy callback needed)
-        slot->setNodePath(magda::ChainNodePath::topLevelDevice(selectedTrackId_, device.id));
-        chainContainer_->addAndMakeVisible(*slot);
-        deviceSlots_.push_back(std::move(slot));
-    }
+    // Create a component for each chain element
+    for (size_t i = 0; i < elements.size(); ++i) {
+        const auto& element = elements[i];
 
-    resized();
-    repaint();
-}
+        if (magda::isDevice(element)) {
+            // Create device slot component
+            const auto& device = magda::getDevice(element);
+            auto slot = std::make_unique<DeviceSlotComponent>(*this, selectedTrackId_, device);
+            slot->setNodePath(magda::ChainNodePath::topLevelDevice(selectedTrackId_, device.id));
 
-void TrackChainContent::rebuildRackComponents() {
-    if (selectedTrackId_ == magda::INVALID_TRACK_ID) {
-        unfocusAllComponents();
-        rackComponents_.clear();
-        return;
-    }
-
-    const auto* racks = magda::TrackManager::getInstance().getRacks(selectedTrackId_);
-    if (!racks) {
-        unfocusAllComponents();
-        rackComponents_.clear();
-        return;
-    }
-
-    // Smart rebuild: preserve existing rack components, only add/remove as needed
-    std::vector<std::unique_ptr<RackComponent>> newRackComponents;
-
-    for (const auto& rack : *racks) {
-        // Check if we already have a component for this rack
-        std::unique_ptr<RackComponent> existingRack;
-        for (auto it = rackComponents_.begin(); it != rackComponents_.end(); ++it) {
-            if ((*it)->getRackId() == rack.id) {
-                // Found existing rack - preserve it and update its data
-                existingRack = std::move(*it);
-                rackComponents_.erase(it);
-                existingRack->updateFromRack(rack);
-                break;
-            }
-        }
-
-        if (existingRack) {
-            // Set node path for centralized selection
-            existingRack->setNodePath(magda::ChainNodePath::rack(selectedTrackId_, rack.id));
-            // Re-wire callbacks for preserved rack
-            existingRack->onSelected = [this]() { selectedDeviceId_ = magda::INVALID_DEVICE_ID; };
-            existingRack->onLayoutChanged = [this]() {
-                resized();
-                repaint();
+            // Wire up drag-to-reorder callbacks
+            slot->onDragStart = [this](NodeComponent* node, const juce::MouseEvent&) {
+                draggedNode_ = node;
+                dragOriginalIndex_ = findNodeIndex(node);
+                dragInsertIndex_ = dragOriginalIndex_;
             };
-            existingRack->onChainSelected = [this](magda::TrackId trackId, magda::RackId rId,
-                                                   magda::ChainId chainId) {
-                onChainSelected(trackId, rId, chainId);
+
+            slot->onDragMove = [this](NodeComponent*, const juce::MouseEvent& e) {
+                auto pos = e.getEventRelativeTo(chainContainer_.get()).getPosition();
+                dragInsertIndex_ = calculateInsertIndex(pos.x);
+                chainContainer_->repaint();
             };
-            existingRack->onDeviceSelected = [this](magda::DeviceId deviceId) {
-                if (deviceId != magda::INVALID_DEVICE_ID) {
-                    selectedDeviceId_ = magda::INVALID_DEVICE_ID;
-                    for (auto& slot : deviceSlots_) {
-                        slot->setSelected(false);
+
+            slot->onDragEnd = [this](NodeComponent*, const juce::MouseEvent&) {
+                int nodeCount = static_cast<int>(nodeComponents_.size());
+                DBG("Node onDragEnd: origIdx=" << dragOriginalIndex_ << " insertIdx="
+                                               << dragInsertIndex_ << " nodeCount=" << nodeCount);
+                if (dragOriginalIndex_ >= 0 && dragInsertIndex_ >= 0 &&
+                    dragOriginalIndex_ != dragInsertIndex_) {
+                    // Convert insert position to target index
+                    int targetIndex = dragInsertIndex_;
+                    if (dragInsertIndex_ > dragOriginalIndex_) {
+                        targetIndex = dragInsertIndex_ - 1;
                     }
-                    magda::SelectionManager::getInstance().selectDevice(
-                        selectedTrackId_, selectedRackId_, selectedChainId_, deviceId);
-                } else {
-                    magda::SelectionManager::getInstance().clearDeviceSelection();
+                    targetIndex = juce::jlimit(0, nodeCount - 1, targetIndex);
+                    DBG("Moving node from=" << dragOriginalIndex_ << " to=" << targetIndex);
+                    if (targetIndex != dragOriginalIndex_) {
+                        magda::TrackManager::getInstance().moveNode(
+                            selectedTrackId_, dragOriginalIndex_, targetIndex);
+                    }
                 }
+                draggedNode_ = nullptr;
+                dragOriginalIndex_ = -1;
+                dragInsertIndex_ = -1;
+                chainContainer_->repaint();
             };
-            newRackComponents.push_back(std::move(existingRack));
-        } else {
-            // Create new component for new rack (add to container for viewport scrolling)
+
+            chainContainer_->addAndMakeVisible(*slot);
+            nodeComponents_.push_back(std::move(slot));
+
+        } else if (magda::isRack(element)) {
+            // Create rack component
+            const auto& rack = magda::getRack(element);
             auto rackComp = std::make_unique<RackComponent>(selectedTrackId_, rack);
-            // Set node path for centralized selection
             rackComp->setNodePath(magda::ChainNodePath::rack(selectedTrackId_, rack.id));
+
             // Wire up callbacks
             rackComp->onSelected = [this]() { selectedDeviceId_ = magda::INVALID_DEVICE_ID; };
             rackComp->onLayoutChanged = [this]() {
                 resized();
                 repaint();
             };
-            // Wire up chain selection callback
             rackComp->onChainSelected = [this](magda::TrackId trackId, magda::RackId rId,
                                                magda::ChainId chainId) {
                 onChainSelected(trackId, rId, chainId);
             };
-            // Wire up device selection callback - when chain device selected, clear top-level
             rackComp->onDeviceSelected = [this](magda::DeviceId deviceId) {
-                // Clear top-level device selection when chain device is selected
                 if (deviceId != magda::INVALID_DEVICE_ID) {
                     selectedDeviceId_ = magda::INVALID_DEVICE_ID;
-                    for (auto& slot : deviceSlots_) {
-                        slot->setSelected(false);
-                    }
-                    // Notify SelectionManager for chain device selection
                     magda::SelectionManager::getInstance().selectDevice(
                         selectedTrackId_, selectedRackId_, selectedChainId_, deviceId);
                 } else {
-                    // Device deselected in chain, clear global device selection
                     magda::SelectionManager::getInstance().clearDeviceSelection();
                 }
             };
+
+            // Wire up drag-to-reorder callbacks
+            rackComp->onDragStart = [this](NodeComponent* node, const juce::MouseEvent&) {
+                draggedNode_ = node;
+                dragOriginalIndex_ = findNodeIndex(node);
+                dragInsertIndex_ = dragOriginalIndex_;
+            };
+
+            rackComp->onDragMove = [this](NodeComponent*, const juce::MouseEvent& e) {
+                auto pos = e.getEventRelativeTo(chainContainer_.get()).getPosition();
+                dragInsertIndex_ = calculateInsertIndex(pos.x);
+                chainContainer_->repaint();
+            };
+
+            rackComp->onDragEnd = [this](NodeComponent*, const juce::MouseEvent&) {
+                int nodeCount = static_cast<int>(nodeComponents_.size());
+                DBG("Node onDragEnd: origIdx=" << dragOriginalIndex_ << " insertIdx="
+                                               << dragInsertIndex_ << " nodeCount=" << nodeCount);
+                if (dragOriginalIndex_ >= 0 && dragInsertIndex_ >= 0 &&
+                    dragOriginalIndex_ != dragInsertIndex_) {
+                    int targetIndex = dragInsertIndex_;
+                    if (dragInsertIndex_ > dragOriginalIndex_) {
+                        targetIndex = dragInsertIndex_ - 1;
+                    }
+                    targetIndex = juce::jlimit(0, nodeCount - 1, targetIndex);
+                    DBG("Moving node from=" << dragOriginalIndex_ << " to=" << targetIndex);
+                    if (targetIndex != dragOriginalIndex_) {
+                        magda::TrackManager::getInstance().moveNode(
+                            selectedTrackId_, dragOriginalIndex_, targetIndex);
+                    }
+                }
+                draggedNode_ = nullptr;
+                dragOriginalIndex_ = -1;
+                dragInsertIndex_ = -1;
+                chainContainer_->repaint();
+            };
+
             chainContainer_->addAndMakeVisible(*rackComp);
-            newRackComponents.push_back(std::move(rackComp));
+            nodeComponents_.push_back(std::move(rackComp));
         }
     }
-
-    // Unfocus before destroying remaining old racks (racks that were removed)
-    if (!rackComponents_.empty()) {
-        unfocusAllComponents();
-    }
-
-    // Move new components to member variable (old ones are destroyed here)
-    rackComponents_ = std::move(newRackComponents);
 
     resized();
     repaint();
@@ -1200,10 +1176,12 @@ void TrackChainContent::onChainSelected(magda::TrackId trackId, magda::RackId ra
     magda::TrackManager::getInstance().setSelectedChain(selectedTrackId_, rackId, chainId);
 
     // Clear selection in other racks (hide their chain panels)
-    for (auto& rack : rackComponents_) {
-        if (rack->getRackId() != rackId) {
-            rack->clearChainSelection();
-            rack->hideChainPanel();
+    for (auto& node : nodeComponents_) {
+        if (auto* rack = dynamic_cast<RackComponent*>(node.get())) {
+            if (rack->getRackId() != rackId) {
+                rack->clearChainSelection();
+                rack->hideChainPanel();
+            }
         }
     }
 
@@ -1239,37 +1217,76 @@ void TrackChainContent::addDeviceToSelectedChain(const magda::DeviceInfo& device
 void TrackChainContent::clearDeviceSelection() {
     DBG("TrackChainContent::clearDeviceSelection");
     selectedDeviceId_ = magda::INVALID_DEVICE_ID;
-    for (auto& slot : deviceSlots_) {
-        slot->setSelected(false);
-    }
-    // Also clear device selection in any rack components (but keep chain panel open)
-    for (auto& rack : rackComponents_) {
-        rack->clearDeviceSelection();
-        rack->setSelected(false);
+
+    // Clear selection on all node components
+    for (auto& node : nodeComponents_) {
+        node->setSelected(false);
+        // Also clear device selection in rack components (but keep chain panel open)
+        if (auto* rack = dynamic_cast<RackComponent*>(node.get())) {
+            rack->clearDeviceSelection();
+        }
     }
     // Notify SelectionManager - this will update inspector
     magda::SelectionManager::getInstance().clearDeviceSelection();
 }
 
 void TrackChainContent::onDeviceSlotSelected(magda::DeviceId deviceId) {
-    DBG("TrackChainContent::onDeviceSlotSelected deviceId=" + juce::String(deviceId) +
-        " slots=" + juce::String(static_cast<int>(deviceSlots_.size())));
-    // Deselect all first
+    DBG("TrackChainContent::onDeviceSlotSelected deviceId=" + juce::String(deviceId));
     selectedDeviceId_ = deviceId;
-    for (auto& slot : deviceSlots_) {
-        bool shouldSelect = slot->getDeviceId() == deviceId;
-        DBG("  slot " + juce::String(slot->getDeviceId()) + " -> " +
-            (shouldSelect ? "SELECT" : "deselect"));
-        slot->setSelected(shouldSelect);
-    }
-    // Also clear device selection in racks (but keep chain panel open)
-    for (auto& rack : rackComponents_) {
-        rack->clearDeviceSelection();
-        rack->clearChainSelection();  // Clear chain row selection border
-        rack->setSelected(false);     // Deselect the rack itself too
+
+    // Update selection state on all node components
+    for (auto& node : nodeComponents_) {
+        if (auto* slot = dynamic_cast<DeviceSlotComponent*>(node.get())) {
+            bool shouldSelect = slot->getDeviceId() == deviceId;
+            slot->setSelected(shouldSelect);
+        } else if (auto* rack = dynamic_cast<RackComponent*>(node.get())) {
+            // Clear device/chain selection in racks (but keep chain panel open)
+            rack->clearDeviceSelection();
+            rack->clearChainSelection();  // Clear chain row selection border
+            rack->setSelected(false);     // Deselect the rack itself too
+        }
     }
     // Notify SelectionManager - this will update inspector
     magda::SelectionManager::getInstance().selectDevice(selectedTrackId_, deviceId);
+}
+
+int TrackChainContent::findNodeIndex(NodeComponent* node) const {
+    for (size_t i = 0; i < nodeComponents_.size(); ++i) {
+        if (nodeComponents_[i].get() == node) {
+            return static_cast<int>(i);
+        }
+    }
+    return -1;
+}
+
+int TrackChainContent::calculateInsertIndex(int mouseX) const {
+    // Find insert position based on mouse X and node midpoints
+    for (size_t i = 0; i < nodeComponents_.size(); ++i) {
+        int midX = nodeComponents_[i]->getX() + nodeComponents_[i]->getWidth() / 2;
+        if (mouseX < midX) {
+            return static_cast<int>(i);
+        }
+    }
+    // After last element
+    return static_cast<int>(nodeComponents_.size());
+}
+
+int TrackChainContent::calculateIndicatorX(int index) const {
+    // Before first element
+    if (index == 0) {
+        if (!nodeComponents_.empty()) {
+            return nodeComponents_[0]->getX() - 4;
+        }
+        return 8;  // Default padding
+    }
+
+    // After previous element
+    if (index > 0 && index <= static_cast<int>(nodeComponents_.size())) {
+        return nodeComponents_[index - 1]->getRight() + ARROW_WIDTH / 2;
+    }
+
+    // Fallback
+    return 8;
 }
 
 }  // namespace magda::daw::ui

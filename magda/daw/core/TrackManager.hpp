@@ -111,20 +111,21 @@ class TrackManager {
     void setTrackCollapsed(TrackId trackId, ViewMode mode, bool collapsed);
     void setTrackHeight(TrackId trackId, ViewMode mode, int height);
 
-    // Device/FX chain management (flat device list on track)
+    // Signal chain management (unified list of devices and racks)
+    const std::vector<ChainElement>& getChainElements(TrackId trackId) const;
+    void moveNode(TrackId trackId, int fromIndex, int toIndex);
+
+    // Device management on track
     DeviceId addDeviceToTrack(TrackId trackId, const DeviceInfo& device);
     void removeDeviceFromTrack(TrackId trackId, DeviceId deviceId);
-    void moveDevice(TrackId trackId, DeviceId deviceId, int newIndex);
     void setDeviceBypassed(TrackId trackId, DeviceId deviceId, bool bypassed);
-    const std::vector<DeviceInfo>* getDevices(TrackId trackId) const;
     DeviceInfo* getDevice(TrackId trackId, DeviceId deviceId);
 
-    // Rack management
+    // Rack management on track
     RackId addRackToTrack(TrackId trackId, const juce::String& name = "Rack");
     void removeRackFromTrack(TrackId trackId, RackId rackId);
     RackInfo* getRack(TrackId trackId, RackId rackId);
     const RackInfo* getRack(TrackId trackId, RackId rackId) const;
-    const std::vector<RackInfo>* getRacks(TrackId trackId) const;
     void setRackBypassed(TrackId trackId, RackId rackId, bool bypassed);
     void setRackExpanded(TrackId trackId, RackId rackId, bool expanded);
 

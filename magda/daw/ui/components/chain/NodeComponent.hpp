@@ -87,8 +87,14 @@ class NodeComponent : public juce::Component, public magda::SelectionManagerList
     std::function<void()> onSelected;              // Called when node is clicked/selected
     std::function<void(bool)> onCollapsedChanged;  // Called when collapsed state changes
 
-    // Mouse handling for selection
+    // Drag-to-reorder callbacks (for parent container coordination)
+    std::function<void(NodeComponent*, const juce::MouseEvent&)> onDragStart;
+    std::function<void(NodeComponent*, const juce::MouseEvent&)> onDragMove;
+    std::function<void(NodeComponent*, const juce::MouseEvent&)> onDragEnd;
+
+    // Mouse handling for selection and drag-to-reorder
     void mouseDown(const juce::MouseEvent& e) override;
+    void mouseDrag(const juce::MouseEvent& e) override;
     void mouseUp(const juce::MouseEvent& e) override;
 
     // Get total width of left side panels (mods + params)
@@ -173,6 +179,13 @@ class NodeComponent : public juce::Component, public magda::SelectionManagerList
 
     // Collapsed state (show header only)
     bool collapsed_ = false;
+
+    // Drag-to-reorder state
+    bool draggable_ = true;
+    bool isDragging_ = false;
+    juce::Point<int> dragStartPos_;     // In parent coordinates
+    juce::Point<int> dragStartBounds_;  // Component position at drag start
+    static constexpr int DRAG_THRESHOLD = 5;
 
     // Unique path for centralized selection
     magda::ChainNodePath nodePath_;

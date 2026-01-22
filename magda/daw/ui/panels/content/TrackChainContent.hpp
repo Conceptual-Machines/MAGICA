@@ -11,6 +11,7 @@
 namespace magda::daw::ui {
 
 class RackComponent;
+class NodeComponent;
 
 /**
  * @brief Track chain panel content
@@ -95,8 +96,7 @@ class TrackChainContent : public PanelContent,
 
     void updateFromSelectedTrack();
     void showHeader(bool show);
-    void rebuildDeviceSlots();
-    void rebuildRackComponents();
+    void rebuildNodeComponents();
     int calculateTotalContentWidth() const;
     void layoutChainContent();
 
@@ -107,10 +107,9 @@ class TrackChainContent : public PanelContent,
 
     // Device slot component for interactive device display
     class DeviceSlotComponent;
-    std::vector<std::unique_ptr<DeviceSlotComponent>> deviceSlots_;
 
-    // Rack components for parallel chain routing
-    std::vector<std::unique_ptr<RackComponent>> rackComponents_;
+    // All node components in signal flow order (devices and racks unified)
+    std::vector<std::unique_ptr<NodeComponent>> nodeComponents_;
 
     static constexpr int ARROW_WIDTH = 20;
     static constexpr int SLOT_SPACING = 8;
@@ -125,6 +124,16 @@ class TrackChainContent : public PanelContent,
 
     static constexpr int HEADER_HEIGHT = 28;
     static constexpr int MODS_PANEL_WIDTH = 160;
+
+    // Drag-to-reorder state
+    NodeComponent* draggedNode_ = nullptr;
+    int dragOriginalIndex_ = -1;
+    int dragInsertIndex_ = -1;
+
+    // Helper methods for drag-to-reorder
+    int findNodeIndex(NodeComponent* node) const;
+    int calculateInsertIndex(int mouseX) const;
+    int calculateIndicatorX(int index) const;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(TrackChainContent)
 };

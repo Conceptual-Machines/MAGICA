@@ -333,14 +333,46 @@ void TrackManager::setTrackType(TrackId trackId, TrackType type) {
 }
 
 // ============================================================================
-// Device/FX Chain Management
+// Signal Chain Management (Unified)
+// ============================================================================
+
+const std::vector<ChainElement>& TrackManager::getChainElements(TrackId trackId) const {
+    static const std::vector<ChainElement> empty;
+    if (const auto* track = getTrack(trackId)) {
+        return track->chainElements;
+    }
+    return empty;
+}
+
+void TrackManager::moveNode(TrackId trackId, int fromIndex, int toIndex) {
+    DBG("TrackManager::moveNode trackId=" << trackId << " from=" << fromIndex << " to=" << toIndex);
+    if (auto* track = getTrack(trackId)) {
+        auto& elements = track->chainElements;
+        int size = static_cast<int>(elements.size());
+        DBG("  elements.size()=" << size);
+
+        if (fromIndex >= 0 && fromIndex < size && toIndex >= 0 && toIndex < size &&
+            fromIndex != toIndex) {
+            DBG("  performing move!");
+            ChainElement element = std::move(elements[fromIndex]);
+            elements.erase(elements.begin() + fromIndex);
+            elements.insert(elements.begin() + toIndex, std::move(element));
+            notifyTrackDevicesChanged(trackId);
+        } else {
+            DBG("  NOT moving: invalid indices or same position");
+        }
+    }
+}
+
+// ============================================================================
+// Device Management on Track
 // ============================================================================
 
 DeviceId TrackManager::addDeviceToTrack(TrackId trackId, const DeviceInfo& device) {
     if (auto* track = getTrack(trackId)) {
         DeviceInfo newDevice = device;
         newDevice.id = nextDeviceId_++;
-        track->devices.push_back(newDevice);
+        track->chainElements.push_back(makeDeviceElement(newDevice));
         notifyTrackDevicesChanged(trackId);
         DBG("Added device: " << newDevice.name << " (id=" << newDevice.id << ") to track "
                              << trackId);
@@ -351,32 +383,15 @@ DeviceId TrackManager::addDeviceToTrack(TrackId trackId, const DeviceInfo& devic
 
 void TrackManager::removeDeviceFromTrack(TrackId trackId, DeviceId deviceId) {
     if (auto* track = getTrack(trackId)) {
-        auto& devices = track->devices;
-        auto it = std::find_if(devices.begin(), devices.end(),
-                               [deviceId](const DeviceInfo& d) { return d.id == deviceId; });
-        if (it != devices.end()) {
-            DBG("Removed device: " << it->name << " (id=" << deviceId << ") from track "
-                                   << trackId);
-            devices.erase(it);
+        auto& elements = track->chainElements;
+        auto it = std::find_if(elements.begin(), elements.end(), [deviceId](const ChainElement& e) {
+            return magda::isDevice(e) && magda::getDevice(e).id == deviceId;
+        });
+        if (it != elements.end()) {
+            DBG("Removed device: " << magda::getDevice(*it).name << " (id=" << deviceId
+                                   << ") from track " << trackId);
+            elements.erase(it);
             notifyTrackDevicesChanged(trackId);
-        }
-    }
-}
-
-void TrackManager::moveDevice(TrackId trackId, DeviceId deviceId, int newIndex) {
-    if (auto* track = getTrack(trackId)) {
-        auto& devices = track->devices;
-        auto it = std::find_if(devices.begin(), devices.end(),
-                               [deviceId](const DeviceInfo& d) { return d.id == deviceId; });
-        if (it != devices.end()) {
-            int currentIndex = static_cast<int>(std::distance(devices.begin(), it));
-            if (currentIndex != newIndex && newIndex >= 0 &&
-                newIndex < static_cast<int>(devices.size())) {
-                DeviceInfo device = *it;
-                devices.erase(it);
-                devices.insert(devices.begin() + newIndex, device);
-                notifyTrackDevicesChanged(trackId);
-            }
         }
     }
 }
@@ -388,27 +403,19 @@ void TrackManager::setDeviceBypassed(TrackId trackId, DeviceId deviceId, bool by
     }
 }
 
-const std::vector<DeviceInfo>* TrackManager::getDevices(TrackId trackId) const {
-    if (const auto* track = getTrack(trackId)) {
-        return &track->devices;
-    }
-    return nullptr;
-}
-
 DeviceInfo* TrackManager::getDevice(TrackId trackId, DeviceId deviceId) {
     if (auto* track = getTrack(trackId)) {
-        auto& devices = track->devices;
-        auto it = std::find_if(devices.begin(), devices.end(),
-                               [deviceId](const DeviceInfo& d) { return d.id == deviceId; });
-        if (it != devices.end()) {
-            return &(*it);
+        for (auto& element : track->chainElements) {
+            if (magda::isDevice(element) && magda::getDevice(element).id == deviceId) {
+                return &magda::getDevice(element);
+            }
         }
     }
     return nullptr;
 }
 
 // ============================================================================
-// Rack Management
+// Rack Management on Track
 // ============================================================================
 
 RackId TrackManager::addRackToTrack(TrackId trackId, const juce::String& name) {
@@ -423,22 +430,25 @@ RackId TrackManager::addRackToTrack(TrackId trackId, const juce::String& name) {
         defaultChain.name = "Chain 1";
         rack.chains.push_back(std::move(defaultChain));
 
-        track->racks.push_back(std::move(rack));
+        RackId newRackId = rack.id;
+        track->chainElements.push_back(makeRackElement(std::move(rack)));
         notifyTrackDevicesChanged(trackId);
-        DBG("Added rack: " << rack.name << " (id=" << rack.id << ") to track " << trackId);
-        return rack.id;
+        DBG("Added rack: " << name << " (id=" << newRackId << ") to track " << trackId);
+        return newRackId;
     }
     return INVALID_RACK_ID;
 }
 
 void TrackManager::removeRackFromTrack(TrackId trackId, RackId rackId) {
     if (auto* track = getTrack(trackId)) {
-        auto& racks = track->racks;
-        auto it = std::find_if(racks.begin(), racks.end(),
-                               [rackId](const RackInfo& r) { return r.id == rackId; });
-        if (it != racks.end()) {
-            DBG("Removed rack: " << it->name << " (id=" << rackId << ") from track " << trackId);
-            racks.erase(it);
+        auto& elements = track->chainElements;
+        auto it = std::find_if(elements.begin(), elements.end(), [rackId](const ChainElement& e) {
+            return magda::isRack(e) && magda::getRack(e).id == rackId;
+        });
+        if (it != elements.end()) {
+            DBG("Removed rack: " << magda::getRack(*it).name << " (id=" << rackId << ") from track "
+                                 << trackId);
+            elements.erase(it);
             notifyTrackDevicesChanged(trackId);
         }
     }
@@ -446,11 +456,10 @@ void TrackManager::removeRackFromTrack(TrackId trackId, RackId rackId) {
 
 RackInfo* TrackManager::getRack(TrackId trackId, RackId rackId) {
     if (auto* track = getTrack(trackId)) {
-        auto& racks = track->racks;
-        auto it = std::find_if(racks.begin(), racks.end(),
-                               [rackId](const RackInfo& r) { return r.id == rackId; });
-        if (it != racks.end()) {
-            return &(*it);
+        for (auto& element : track->chainElements) {
+            if (magda::isRack(element) && magda::getRack(element).id == rackId) {
+                return &magda::getRack(element);
+            }
         }
     }
     return nullptr;
@@ -458,19 +467,11 @@ RackInfo* TrackManager::getRack(TrackId trackId, RackId rackId) {
 
 const RackInfo* TrackManager::getRack(TrackId trackId, RackId rackId) const {
     if (const auto* track = getTrack(trackId)) {
-        const auto& racks = track->racks;
-        auto it = std::find_if(racks.begin(), racks.end(),
-                               [rackId](const RackInfo& r) { return r.id == rackId; });
-        if (it != racks.end()) {
-            return &(*it);
+        for (const auto& element : track->chainElements) {
+            if (magda::isRack(element) && magda::getRack(element).id == rackId) {
+                return &magda::getRack(element);
+            }
         }
-    }
-    return nullptr;
-}
-
-const std::vector<RackInfo>* TrackManager::getRacks(TrackId trackId) const {
-    if (const auto* track = getTrack(trackId)) {
-        return &track->racks;
     }
     return nullptr;
 }
@@ -513,15 +514,18 @@ RackInfo* TrackManager::getRackByPath(const ChainNodePath& rackPath) {
         switch (step.type) {
             case ChainStepType::Rack: {
                 if (currentChain == nullptr) {
-                    // Top-level rack in track
+                    // Top-level rack in track's chainElements
                     DBG("  Looking for top-level rack id=" << step.id << " in track with "
-                                                           << track->racks.size() << " racks");
-                    for (auto& rack : track->racks) {
-                        DBG("    checking rack id=" << rack.id);
-                        if (rack.id == step.id) {
-                            currentRack = &rack;
-                            DBG("    -> FOUND top-level rack");
-                            break;
+                                                           << track->chainElements.size()
+                                                           << " elements");
+                    for (auto& element : track->chainElements) {
+                        if (magda::isRack(element)) {
+                            DBG("    checking rack id=" << magda::getRack(element).id);
+                            if (magda::getRack(element).id == step.id) {
+                                currentRack = &magda::getRack(element);
+                                DBG("    -> FOUND top-level rack");
+                                break;
+                            }
                         }
                     }
                 } else {
@@ -1124,11 +1128,11 @@ TrackManager::ResolvedPath TrackManager::resolvePath(const ChainNodePath& path) 
 
     // Handle top-level device (legacy)
     if (path.topLevelDeviceId != INVALID_DEVICE_ID) {
-        for (const auto& device : track->devices) {
-            if (device.id == path.topLevelDeviceId) {
+        for (const auto& element : track->chainElements) {
+            if (magda::isDevice(element) && magda::getDevice(element).id == path.topLevelDeviceId) {
                 result.valid = true;
-                result.device = &device;
-                result.displayPath = device.name;
+                result.device = &magda::getDevice(element);
+                result.displayPath = result.device->name;
                 return result;
             }
         }
@@ -1146,11 +1150,11 @@ TrackManager::ResolvedPath TrackManager::resolvePath(const ChainNodePath& path) 
         switch (step.type) {
             case ChainStepType::Rack: {
                 if (currentChain == nullptr) {
-                    // Top-level rack in track
-                    for (const auto& rack : track->racks) {
-                        if (rack.id == step.id) {
-                            currentRack = &rack;
-                            pathNames.add(rack.name);
+                    // Top-level rack in track's chainElements
+                    for (const auto& element : track->chainElements) {
+                        if (magda::isRack(element) && magda::getRack(element).id == step.id) {
+                            currentRack = &magda::getRack(element);
+                            pathNames.add(currentRack->name);
                             break;
                         }
                     }
@@ -1337,6 +1341,39 @@ void TrackManager::createDefaultTracks(int count) {
     clearAllTracks();
     for (int i = 0; i < count; ++i) {
         createTrack();
+    }
+
+    // Add test devices and rack to track 1 for development
+    if (!tracks_.empty()) {
+        auto& track1 = tracks_[0];
+
+        // Add a device
+        DeviceInfo device;
+        device.id = nextDeviceId_++;
+        device.name = "Pro-Q 3";
+        device.manufacturer = "FabFilter";
+        device.format = PluginFormat::VST3;
+        track1.chainElements.push_back(makeDeviceElement(device));
+
+        // Add a rack with one chain
+        RackInfo rack;
+        rack.id = nextRackId_++;
+        rack.name = "FX Rack";
+
+        ChainInfo chain;
+        chain.id = nextChainId_++;
+        chain.name = "Chain 1";
+
+        // Add a device to the chain
+        DeviceInfo chainDevice;
+        chainDevice.id = nextDeviceId_++;
+        chainDevice.name = "Pro-C 2";
+        chainDevice.manufacturer = "FabFilter";
+        chainDevice.format = PluginFormat::VST3;
+        chain.elements.push_back(makeDeviceElement(chainDevice));
+
+        rack.chains.push_back(std::move(chain));
+        track1.chainElements.push_back(makeRackElement(std::move(rack)));
     }
 }
 

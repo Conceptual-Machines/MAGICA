@@ -2,6 +2,8 @@
 
 #include <BinaryData.h>
 
+#include <cstdlib>
+
 #include "core/SelectionManager.hpp"
 #include "ui/themes/DarkTheme.hpp"
 #include "ui/themes/FontManager.hpp"
@@ -666,11 +668,52 @@ void NodeComponent::mouseDown(const juce::MouseEvent& e) {
     // Only handle left clicks for selection
     if (e.mods.isLeftButtonDown()) {
         mouseDownForSelection_ = true;
+
+        // Capture drag start position in parent coordinates
+        if (draggable_) {
+            if (auto* parent = getParentComponent()) {
+                dragStartPos_ = e.getEventRelativeTo(parent).getPosition();
+            }
+            dragStartBounds_ = getBounds().getPosition();
+            isDragging_ = false;
+        }
+    }
+}
+
+void NodeComponent::mouseDrag(const juce::MouseEvent& e) {
+    if (!mouseDownForSelection_ || !draggable_)
+        return;
+
+    auto* parent = getParentComponent();
+    if (!parent)
+        return;
+
+    auto currentPos = e.getEventRelativeTo(parent).getPosition();
+    int deltaX = std::abs(currentPos.x - dragStartPos_.x);
+
+    // Check threshold before starting drag
+    if (!isDragging_ && deltaX > DRAG_THRESHOLD) {
+        isDragging_ = true;
+        if (onDragStart)
+            onDragStart(this, e);
+    }
+
+    if (isDragging_ && onDragMove) {
+        onDragMove(this, e);
     }
 }
 
 void NodeComponent::mouseUp(const juce::MouseEvent& e) {
-    // Complete selection on mouse up (click-and-release)
+    // If we were dragging, commit the drag and skip selection
+    if (isDragging_) {
+        if (onDragEnd)
+            onDragEnd(this, e);
+        isDragging_ = false;
+        mouseDownForSelection_ = false;
+        return;
+    }
+
+    // Complete selection on mouse up (click-and-release) - only if not dragging
     if (mouseDownForSelection_ && !e.mods.isPopupMenu()) {
         mouseDownForSelection_ = false;
 
@@ -696,6 +739,8 @@ void NodeComponent::mouseUp(const juce::MouseEvent& e) {
             }
         }
     }
+
+    isDragging_ = false;
 }
 
 }  // namespace magda::daw::ui

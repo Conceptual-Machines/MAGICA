@@ -332,16 +332,17 @@ class ChainTreeDialog::ContentComponent : public juce::Component,
         // Create root item for track
         auto root = std::make_unique<TrackTreeItem>(track->name, trackId_);
 
-        // Add top-level devices
-        for (const auto& device : track->devices) {
-            auto path = ChainNodePath::topLevelDevice(trackId_, device.id);
-            root->addSubItem(new DeviceTreeItem(device, path));
-        }
-
-        // Add racks with their chains
-        for (const auto& rack : track->racks) {
-            auto rackPath = ChainNodePath::rack(trackId_, rack.id);
-            root->addSubItem(buildRackItem(rack, rackPath));
+        // Add all chain elements (devices and racks in order)
+        for (const auto& element : track->chainElements) {
+            if (magda::isDevice(element)) {
+                const auto& device = magda::getDevice(element);
+                auto path = ChainNodePath::topLevelDevice(trackId_, device.id);
+                root->addSubItem(new DeviceTreeItem(device, path));
+            } else if (magda::isRack(element)) {
+                const auto& rack = magda::getRack(element);
+                auto rackPath = ChainNodePath::rack(trackId_, rack.id);
+                root->addSubItem(buildRackItem(rack, rackPath));
+            }
         }
 
         rootItem_ = std::move(root);

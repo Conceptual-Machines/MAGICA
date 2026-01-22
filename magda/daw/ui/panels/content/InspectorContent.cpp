@@ -945,10 +945,13 @@ void InspectorContent::updateFromSelectedChainNode() {
         typeName = "Device";
         const auto* track = magda::TrackManager::getInstance().getTrack(selectedChainNode_.trackId);
         if (track) {
-            for (const auto& device : track->devices) {
-                if (device.id == selectedChainNode_.topLevelDeviceId) {
-                    nodeName = device.name;
-                    break;
+            for (const auto& element : track->chainElements) {
+                if (magda::isDevice(element)) {
+                    const auto& device = magda::getDevice(element);
+                    if (device.id == selectedChainNode_.topLevelDeviceId) {
+                        nodeName = device.name;
+                        break;
+                    }
                 }
             }
         }
