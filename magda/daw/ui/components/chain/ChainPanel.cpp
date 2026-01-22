@@ -500,6 +500,16 @@ ChainPanel::ChainPanel() : elementSlotsContainer_(std::make_unique<ElementSlotsC
             magda::TrackManager::getInstance().setChainMacroName(chainPath_, macroIndex, name);
         }
     };
+    macroPanel_->onAddPageRequested = [this](int /*itemsToAdd*/) {
+        if (hasChain_) {
+            magda::TrackManager::getInstance().addChainMacroPage(chainPath_);
+        }
+    };
+    macroPanel_->onRemovePageRequested = [this](int /*itemsToRemove*/) {
+        if (hasChain_) {
+            magda::TrackManager::getInstance().removeChainMacroPage(chainPath_);
+        }
+    };
     addChildComponent(*macroPanel_);
 
     setVisible(false);

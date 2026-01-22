@@ -30,6 +30,35 @@ PagedControlPanel::PagedControlPanel(int itemsPerPage) : itemsPerPage_(itemsPerP
     pageLabel_.setColour(juce::Label::textColourId, DarkTheme::getSecondaryTextColour());
     pageLabel_.setJustificationType(juce::Justification::centred);
     addChildComponent(pageLabel_);
+
+    // Add page button
+    addPageButton_.setButtonText("+");
+    addPageButton_.setColour(juce::TextButton::buttonColourId,
+                             DarkTheme::getColour(DarkTheme::SURFACE));
+    addPageButton_.setColour(juce::TextButton::textColourOffId,
+                             DarkTheme::getColour(DarkTheme::ACCENT_PURPLE));
+    addPageButton_.onClick = [this]() {
+        onAddPage();
+        if (onAddPageRequested) {
+            onAddPageRequested(itemsPerPage_);
+        }
+    };
+    addPageButton_.setLookAndFeel(&SmallButtonLookAndFeel::getInstance());
+    addChildComponent(addPageButton_);
+
+    // Remove page button
+    removePageButton_.setButtonText("-");
+    removePageButton_.setColour(juce::TextButton::buttonColourId,
+                                DarkTheme::getColour(DarkTheme::SURFACE));
+    removePageButton_.setColour(juce::TextButton::textColourOffId,
+                                DarkTheme::getColour(DarkTheme::ACCENT_RED));
+    removePageButton_.onClick = [this]() {
+        if (onRemovePageRequested) {
+            onRemovePageRequested(itemsPerPage_);
+        }
+    };
+    removePageButton_.setLookAndFeel(&SmallButtonLookAndFeel::getInstance());
+    addChildComponent(removePageButton_);
 }
 
 int PagedControlPanel::getTotalPages() const {
@@ -90,19 +119,53 @@ void PagedControlPanel::onPageChanged() {
     // Base implementation - subclasses can override
 }
 
+void PagedControlPanel::onAddPage() {
+    // Base implementation - subclasses can override
+}
+
+void PagedControlPanel::setCanAddPage(bool canAdd) {
+    if (canAddPage_ != canAdd) {
+        canAddPage_ = canAdd;
+        updateNavButtons();
+        resized();
+        repaint();
+    }
+}
+
+void PagedControlPanel::setCanRemovePage(bool canRemove) {
+    if (canRemovePage_ != canRemove) {
+        canRemovePage_ = canRemove;
+        updateNavButtons();
+        resized();
+        repaint();
+    }
+}
+
+void PagedControlPanel::setMinPages(int minPages) {
+    if (minPages >= 1 && minPages_ != minPages) {
+        minPages_ = minPages;
+        updateNavButtons();
+    }
+}
+
 void PagedControlPanel::updateNavButtons() {
     int totalPages = getTotalPages();
-    bool showNav = totalPages > 1;
+    bool showNav = totalPages > 1 || canAddPage_ || canRemovePage_;
 
-    prevButton_.setVisible(showNav);
-    nextButton_.setVisible(showNav);
+    prevButton_.setVisible(showNav && totalPages > 1);
+    nextButton_.setVisible(showNav && totalPages > 1);
     pageLabel_.setVisible(showNav);
+    addPageButton_.setVisible(canAddPage_);
+    removePageButton_.setVisible(canRemovePage_);
 
     if (showNav) {
         prevButton_.setEnabled(currentPage_ > 0);
         nextButton_.setEnabled(currentPage_ < totalPages - 1);
         pageLabel_.setText(juce::String(currentPage_ + 1) + "/" + juce::String(totalPages),
                            juce::dontSendNotification);
+
+        // Remove button only enabled if we have more than minPages
+        removePageButton_.setEnabled(totalPages > minPages_);
     }
 }
 
@@ -115,14 +178,27 @@ void PagedControlPanel::paint(juce::Graphics& g) {
 void PagedControlPanel::resized() {
     auto bounds = getLocalBounds().reduced(2);
     int totalPages = getTotalPages();
-    bool showNav = totalPages > 1;
+    bool showNav = totalPages > 1 || canAddPage_ || canRemovePage_;
 
-    // Navigation area at top (only if multiple pages)
+    // Navigation area at top (only if multiple pages or can add/remove)
     if (showNav) {
         auto navArea = bounds.removeFromTop(NAV_HEIGHT);
         int buttonWidth = 16;
-        prevButton_.setBounds(navArea.removeFromLeft(buttonWidth));
-        nextButton_.setBounds(navArea.removeFromRight(buttonWidth));
+
+        // Add/Remove buttons on the right
+        if (canAddPage_) {
+            addPageButton_.setBounds(navArea.removeFromRight(buttonWidth));
+            navArea.removeFromRight(2);  // spacing
+        }
+        if (canRemovePage_) {
+            removePageButton_.setBounds(navArea.removeFromRight(buttonWidth));
+            navArea.removeFromRight(2);  // spacing
+        }
+
+        if (totalPages > 1) {
+            prevButton_.setBounds(navArea.removeFromLeft(buttonWidth));
+            nextButton_.setBounds(navArea.removeFromRight(buttonWidth));
+        }
         pageLabel_.setBounds(navArea);
     }
 

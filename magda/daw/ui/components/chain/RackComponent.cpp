@@ -152,6 +152,12 @@ void RackComponent::initializeCommon(const magda::RackInfo& rack) {
     macroPanel_->onMacroNameChanged = [this](int macroIndex, juce::String name) {
         magda::TrackManager::getInstance().setRackMacroName(rackPath_, macroIndex, name);
     };
+    macroPanel_->onAddPageRequested = [this](int /*itemsToAdd*/) {
+        magda::TrackManager::getInstance().addRackMacroPage(rackPath_);
+    };
+    macroPanel_->onRemovePageRequested = [this](int /*itemsToRemove*/) {
+        magda::TrackManager::getInstance().removeRackMacroPage(rackPath_);
+    };
     addChildComponent(*macroPanel_);
 
     // Build chain rows
@@ -347,6 +353,11 @@ void RackComponent::updateFromRack(const magda::RackInfo& rack) {
     setNodeName(rack.name);
     setBypassed(rack.bypassed);
     rebuildChainRows();
+
+    // Update macro panel if visible
+    if (paramPanelVisible_ && macroPanel_) {
+        updateMacroPanel();
+    }
 
     // Also refresh the chain panel if it's showing a chain
     if (chainPanel_ && chainPanel_->isVisible() && selectedChainId_ != magda::INVALID_CHAIN_ID) {

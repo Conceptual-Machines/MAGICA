@@ -5,8 +5,13 @@
 
 namespace magda::daw::ui {
 
-MacroPanelComponent::MacroPanelComponent() : PagedControlPanel(8) {
-    // Default 8 macros - will be updated when setMacros is called
+MacroPanelComponent::MacroPanelComponent() : PagedControlPanel(magda::MACROS_PER_PAGE) {
+    // Enable adding/removing macro pages
+    setCanAddPage(true);
+    setCanRemovePage(true);
+    setMinPages(2);  // Minimum 2 pages (16 macros)
+
+    // Default macros - will be updated when setMacros is called
     ensureKnobCount(magda::NUM_MACROS);
 }
 

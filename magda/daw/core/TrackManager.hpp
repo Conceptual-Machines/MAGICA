@@ -177,12 +177,16 @@ class TrackManager {
     void setRackMacroValue(const ChainNodePath& rackPath, int macroIndex, float value);
     void setRackMacroTarget(const ChainNodePath& rackPath, int macroIndex, MacroTarget target);
     void setRackMacroName(const ChainNodePath& rackPath, int macroIndex, const juce::String& name);
+    void addRackMacroPage(const ChainNodePath& rackPath);
+    void removeRackMacroPage(const ChainNodePath& rackPath);
 
     // Macro management for chains (path-based for nested chain support)
     void setChainMacroValue(const ChainNodePath& chainPath, int macroIndex, float value);
     void setChainMacroTarget(const ChainNodePath& chainPath, int macroIndex, MacroTarget target);
     void setChainMacroName(const ChainNodePath& chainPath, int macroIndex,
                            const juce::String& name);
+    void addChainMacroPage(const ChainNodePath& chainPath);
+    void removeChainMacroPage(const ChainNodePath& chainPath);
 
     // ========================================================================
     // Path Resolution - Centralized tree traversal

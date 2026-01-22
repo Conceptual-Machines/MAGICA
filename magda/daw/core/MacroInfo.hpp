@@ -2,7 +2,7 @@
 
 #include <juce_core/juce_core.h>
 
-#include <array>
+#include <vector>
 
 #include "DeviceInfo.hpp"
 
@@ -10,7 +10,9 @@ namespace magda {
 
 using MacroId = int;
 constexpr MacroId INVALID_MACRO_ID = -1;
-constexpr int NUM_MACROS = 16;
+constexpr int MACROS_PER_PAGE = 8;
+constexpr int DEFAULT_MACRO_PAGES = 2;
+constexpr int NUM_MACROS = MACROS_PER_PAGE * DEFAULT_MACRO_PAGES;
 
 /**
  * @brief Target for a macro link (which device parameter it controls)
@@ -56,19 +58,46 @@ struct MacroInfo {
 };
 
 /**
- * @brief Array of macros (used by RackInfo and ChainInfo)
+ * @brief Vector of macros (used by RackInfo and ChainInfo)
  */
-using MacroArray = std::array<MacroInfo, NUM_MACROS>;
+using MacroArray = std::vector<MacroInfo>;
 
 /**
  * @brief Initialize a MacroArray with default values
  */
-inline MacroArray createDefaultMacros() {
+inline MacroArray createDefaultMacros(int numMacros = NUM_MACROS) {
     MacroArray macros;
-    for (int i = 0; i < NUM_MACROS; ++i) {
-        macros[i] = MacroInfo(i);
+    macros.reserve(numMacros);
+    for (int i = 0; i < numMacros; ++i) {
+        macros.push_back(MacroInfo(i));
     }
     return macros;
+}
+
+/**
+ * @brief Add a page of macros (8 macros) to an existing array
+ */
+inline void addMacroPage(MacroArray& macros) {
+    int startIndex = static_cast<int>(macros.size());
+    for (int i = 0; i < MACROS_PER_PAGE; ++i) {
+        macros.push_back(MacroInfo(startIndex + i));
+    }
+}
+
+/**
+ * @brief Remove a page of macros (8 macros) from an existing array
+ * @return true if page was removed, false if at minimum size
+ */
+inline bool removeMacroPage(MacroArray& macros, int minMacros = NUM_MACROS) {
+    if (static_cast<int>(macros.size()) <= minMacros) {
+        return false;  // At minimum size
+    }
+
+    int toRemove = juce::jmin(MACROS_PER_PAGE, static_cast<int>(macros.size()) - minMacros);
+    for (int i = 0; i < toRemove; ++i) {
+        macros.pop_back();
+    }
+    return true;
 }
 
 }  // namespace magda

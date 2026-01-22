@@ -45,6 +45,27 @@ class PagedControlPanel : public juce::Component {
         return itemsPerPage_;
     }
 
+    // Enable/disable add/remove page buttons
+    void setCanAddPage(bool canAdd);
+    bool canAddPage() const {
+        return canAddPage_;
+    }
+
+    void setCanRemovePage(bool canRemove);
+    bool canRemovePage() const {
+        return canRemovePage_;
+    }
+
+    // Minimum pages required (remove button disabled if at this count)
+    void setMinPages(int minPages);
+    int getMinPages() const {
+        return minPages_;
+    }
+
+    // Callbacks for page management (pass number of items to add/remove)
+    std::function<void(int itemsToAdd)> onAddPageRequested;
+    std::function<void(int itemsToRemove)> onRemovePageRequested;
+
     void paint(juce::Graphics& g) override;
     void resized() override;
 
@@ -56,6 +77,9 @@ class PagedControlPanel : public juce::Component {
 
     // Called when page changes - subclasses can update item visibility
     virtual void onPageChanged();
+
+    // Called when add page is requested - subclasses can add items
+    virtual void onAddPage();
 
     // Layout helpers
     int getFirstVisibleIndex() const;
@@ -72,10 +96,15 @@ class PagedControlPanel : public juce::Component {
 
     int itemsPerPage_;
     int currentPage_ = 0;
+    bool canAddPage_ = false;
+    bool canRemovePage_ = false;
+    int minPages_ = 2;  // Minimum pages before remove is disabled
 
     // Navigation controls
     juce::TextButton prevButton_;
     juce::TextButton nextButton_;
+    juce::TextButton addPageButton_;
+    juce::TextButton removePageButton_;
     juce::Label pageLabel_;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PagedControlPanel)
