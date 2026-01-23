@@ -153,8 +153,11 @@ using ModArray = std::vector<ModInfo>;
 
 /**
  * @brief Initialize a ModArray with default values
+ *
+ * By default, creates an empty array. Users add mods via + button.
+ * Pass numMods > 0 to pre-populate (for testing or legacy support).
  */
-inline ModArray createDefaultMods(int numMods = NUM_MODS) {
+inline ModArray createDefaultMods(int numMods = 0) {
     ModArray mods;
     mods.reserve(numMods);
     for (int i = 0; i < numMods; ++i) {
