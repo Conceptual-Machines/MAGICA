@@ -216,7 +216,8 @@ void ModsPanelComponent::paint(juce::Graphics& g) {
         bounds.removeFromTop(NAV_HEIGHT);
     }
 
-    // Draw grid cells
+    // Draw grid cells (with padding to match resized layout)
+    bounds = bounds.reduced(CELL_PADDING, 0);  // Horizontal padding only
     int visibleCount = getVisibleItemCount();
     if (visibleCount <= 0)
         return;
