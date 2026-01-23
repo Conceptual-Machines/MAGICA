@@ -222,6 +222,33 @@ DeviceSlotComponent::DeviceSlotComponent(const magda::DeviceInfo& device) : devi
                 }
             }
         };
+        paramSlots_[i]->onMacroLinkedWithAmount = [this](int macroIndex, magda::MacroTarget target,
+                                                         float amount) {
+            magda::TrackManager::getInstance().setDeviceMacroTarget(nodePath_, macroIndex, target);
+            magda::TrackManager::getInstance().setDeviceMacroLinkAmount(nodePath_, macroIndex,
+                                                                        target, amount);
+            updateParamModulation();
+            updateMacroPanel();  // Refresh macro knobs with new link data
+
+            // Auto-expand macros panel and select the linked macro
+            // BUT only if this device's macro is in link mode (not a parent rack's macro)
+            auto activeMacroSelection = magda::LinkModeManager::getInstance().getMacroInLinkMode();
+            if (activeMacroSelection.isValid() && activeMacroSelection.parentPath == nodePath_) {
+                if (!paramPanelVisible_) {
+                    macroButton_->setToggleState(true, juce::dontSendNotification);
+                    macroButton_->setActive(true);
+                    setParamPanelVisible(true);
+                }
+                magda::SelectionManager::getInstance().selectMacro(nodePath_, macroIndex);
+            }
+        };
+        paramSlots_[i]->onMacroAmountChanged = [this](int macroIndex, magda::MacroTarget target,
+                                                      float amount) {
+            magda::TrackManager::getInstance().setDeviceMacroLinkAmount(nodePath_, macroIndex,
+                                                                        target, amount);
+            updateParamModulation();
+            updateMacroPanel();  // Refresh macro knob to show new amount
+        };
         paramSlots_[i]->onMacroValueChanged = [this](int macroIndex, float value) {
             // Update macro's global value (shown on macro knob)
             magda::TrackManager::getInstance().setDeviceMacroValue(nodePath_, macroIndex, value);

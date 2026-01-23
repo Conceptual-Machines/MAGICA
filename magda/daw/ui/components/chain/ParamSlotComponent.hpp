@@ -90,6 +90,11 @@ class ParamSlotComponent : public juce::Component,
     std::function<void(int modIndex, magda::ModTarget target)> onModUnlinked;
     std::function<void(int modIndex, magda::ModTarget target, float amount)> onModAmountChanged;
     std::function<void(int macroIndex, magda::MacroTarget target)> onMacroLinked;
+    std::function<void(int macroIndex, magda::MacroTarget target, float amount)>
+        onMacroLinkedWithAmount;
+    std::function<void(int macroIndex, magda::MacroTarget target)> onMacroUnlinked;
+    std::function<void(int macroIndex, magda::MacroTarget target, float amount)>
+        onMacroAmountChanged;
     std::function<void(int macroIndex, float value)> onMacroValueChanged;
 
     void paint(juce::Graphics& g) override;

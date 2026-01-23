@@ -248,20 +248,22 @@ void ParamSlotComponent::handleLinkModeClick() {
         const auto& macro = (*availableMacros_)[static_cast<size_t>(activeMacro_.macroIndex)];
         magda::MacroTarget thisTarget{deviceId_, paramIndex_};
 
-        // Check if already linked
-        bool isLinked =
-            macro.target.deviceId == deviceId_ && macro.target.paramIndex == paramIndex_;
+        // Check if already linked (check both legacy target and new links vector)
+        const auto* existingLink = macro.getLink(thisTarget);
+        bool isLinked = existingLink != nullptr || (macro.target.deviceId == deviceId_ &&
+                                                    macro.target.paramIndex == paramIndex_);
+
+        float initialAmount = isLinked ? (existingLink ? existingLink->amount : 0.5f) : 0.5f;
 
         if (!isLinked) {
-            // Create new link
-            if (onMacroLinked) {
-                onMacroLinked(activeMacro_.macroIndex, thisTarget);
+            // Create new link with initial amount
+            if (onMacroLinkedWithAmount) {
+                onMacroLinkedWithAmount(activeMacro_.macroIndex, thisTarget, initialAmount);
             }
         }
 
-        // For macros, we don't show a slider since they don't have per-link amounts
-        // Just exit link mode
-        magda::LinkModeManager::getInstance().exitMacroLinkMode();
+        // Show overlay slider (just like mods)
+        showLinkModeSlider(!isLinked, initialAmount);
     }
 }
 
@@ -273,10 +275,6 @@ void ParamSlotComponent::showLinkModeSlider(bool /*isNewLink*/, float initialAmo
         linkModeSlider_->setTextValueSuffix("%");
         linkModeSlider_->setColour(juce::Slider::backgroundColourId,
                                    DarkTheme::getColour(DarkTheme::SURFACE));
-        linkModeSlider_->setColour(juce::Slider::thumbColourId,
-                                   DarkTheme::getColour(DarkTheme::ACCENT_ORANGE));
-        linkModeSlider_->setColour(juce::Slider::trackColourId,
-                                   DarkTheme::getColour(DarkTheme::ACCENT_ORANGE).withAlpha(0.5f));
 
         auto safeThis = juce::Component::SafePointer<ParamSlotComponent>(this);
         linkModeSlider_->onValueChange = [safeThis]() {
@@ -288,11 +286,21 @@ void ParamSlotComponent::showLinkModeSlider(bool /*isNewLink*/, float initialAmo
             if (safeThis->activeMod_.isValid() && safeThis->onModAmountChanged) {
                 magda::ModTarget thisTarget{safeThis->deviceId_, safeThis->paramIndex_};
                 safeThis->onModAmountChanged(safeThis->activeMod_.modIndex, thisTarget, amount);
+            } else if (safeThis->activeMacro_.isValid() && safeThis->onMacroAmountChanged) {
+                magda::MacroTarget thisTarget{safeThis->deviceId_, safeThis->paramIndex_};
+                safeThis->onMacroAmountChanged(safeThis->activeMacro_.macroIndex, thisTarget,
+                                               amount);
             }
         };
 
         addAndMakeVisible(*linkModeSlider_);
     }
+
+    // Update slider colors based on whether it's a mod or macro
+    auto accentColor = activeMod_.isValid() ? DarkTheme::getColour(DarkTheme::ACCENT_ORANGE)
+                                            : DarkTheme::getColour(DarkTheme::ACCENT_PURPLE);
+    linkModeSlider_->setColour(juce::Slider::thumbColourId, accentColor);
+    linkModeSlider_->setColour(juce::Slider::trackColourId, accentColor.withAlpha(0.5f));
 
     linkModeSlider_->setValue(initialAmount * 100.0, juce::dontSendNotification);
     linkModeSlider_->setBounds(getLocalBounds().reduced(2));
