@@ -11,41 +11,14 @@ AddModButton::AddModButton() = default;
 void AddModButton::paint(juce::Graphics& g) {
     auto bounds = getLocalBounds();
 
-    // Always show subtle outline for empty slot
+    // Only show content on hover (grid is drawn by parent)
     if (!isMouseOver()) {
-        // Very subtle dashed border to indicate empty slot
-        g.setColour(DarkTheme::getColour(DarkTheme::BORDER).withAlpha(0.3f));
-        float dashLengths[2] = {4.0f, 4.0f};
-        g.drawDashedLine(
-            juce::Line<float>(bounds.getX(), bounds.getY(), bounds.getRight(), bounds.getY()),
-            dashLengths, 2, 0.5f);
-        g.drawDashedLine(juce::Line<float>(bounds.getRight(), bounds.getY(), bounds.getRight(),
-                                           bounds.getBottom()),
-                         dashLengths, 2, 0.5f);
-        g.drawDashedLine(juce::Line<float>(bounds.getRight(), bounds.getBottom(), bounds.getX(),
-                                           bounds.getBottom()),
-                         dashLengths, 2, 0.5f);
-        g.drawDashedLine(
-            juce::Line<float>(bounds.getX(), bounds.getBottom(), bounds.getX(), bounds.getY()),
-            dashLengths, 2, 0.5f);
         return;
     }
 
-    // Hover state - bright dashed border
-    g.setColour(DarkTheme::getColour(DarkTheme::BORDER).brighter(0.2f));
-    float dashLengths[2] = {4.0f, 4.0f};
-    g.drawDashedLine(
-        juce::Line<float>(bounds.getX(), bounds.getY(), bounds.getRight(), bounds.getY()),
-        dashLengths, 2, 1.0f);
-    g.drawDashedLine(
-        juce::Line<float>(bounds.getRight(), bounds.getY(), bounds.getRight(), bounds.getBottom()),
-        dashLengths, 2, 1.0f);
-    g.drawDashedLine(
-        juce::Line<float>(bounds.getRight(), bounds.getBottom(), bounds.getX(), bounds.getBottom()),
-        dashLengths, 2, 1.0f);
-    g.drawDashedLine(
-        juce::Line<float>(bounds.getX(), bounds.getBottom(), bounds.getX(), bounds.getY()),
-        dashLengths, 2, 1.0f);
+    // Hover state - highlight background
+    g.setColour(DarkTheme::getColour(DarkTheme::SURFACE).brighter(0.08f));
+    g.fillRoundedRectangle(bounds.toFloat(), 3.0f);
 
     // + icon
     g.setColour(DarkTheme::getColour(DarkTheme::ACCENT_PURPLE));
@@ -216,6 +189,41 @@ void ModsPanelComponent::setParentPath(const magda::ChainNodePath& path) {
 void ModsPanelComponent::setSelectedModIndex(int modIndex) {
     for (size_t i = 0; i < knobs_.size(); ++i) {
         knobs_[i]->setSelected(static_cast<int>(i) == modIndex);
+    }
+}
+
+void ModsPanelComponent::paint(juce::Graphics& g) {
+    // Call base class paint for background
+    PagedControlPanel::paint(g);
+
+    // Calculate grid area (same as resized() logic in PagedControlPanel)
+    auto bounds = getLocalBounds().reduced(2);
+    int totalPages = getTotalPages();
+    bool showNav = totalPages > 1 || canAddPage() || canRemovePage();
+    if (showNav) {
+        bounds.removeFromTop(NAV_HEIGHT);
+    }
+
+    // Draw grid cells
+    int visibleCount = getVisibleItemCount();
+    if (visibleCount <= 0)
+        return;
+
+    int rows = (visibleCount + GRID_COLUMNS - 1) / GRID_COLUMNS;
+    int itemWidth = (bounds.getWidth() - GRID_SPACING) / GRID_COLUMNS;
+    int itemHeight = (bounds.getHeight() - (rows - 1) * GRID_SPACING) / rows;
+
+    // Draw subtle grid cell outlines for all slots
+    g.setColour(DarkTheme::getColour(DarkTheme::BORDER).withAlpha(0.2f));
+
+    for (int i = 0; i < visibleCount; ++i) {
+        int col = i % GRID_COLUMNS;
+        int row = i / GRID_COLUMNS;
+        int x = bounds.getX() + col * (itemWidth + GRID_SPACING);
+        int y = bounds.getY() + row * (itemHeight + GRID_SPACING);
+
+        auto cellBounds = juce::Rectangle<int>(x, y, itemWidth, itemHeight).toFloat();
+        g.drawRoundedRectangle(cellBounds.reduced(0.5f), 3.0f, 1.0f);
     }
 }
 

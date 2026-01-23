@@ -70,6 +70,8 @@ class ModsPanelComponent : public PagedControlPanel {
     std::function<void(int modIndex)> onModClicked;  // Opens modulator editor
     std::function<void(int slotIndex, magda::ModType type)> onAddModRequested;  // Add mod in slot
 
+    void paint(juce::Graphics& g) override;
+
   protected:
     // PagedControlPanel overrides
     int getTotalItemCount() const override;
