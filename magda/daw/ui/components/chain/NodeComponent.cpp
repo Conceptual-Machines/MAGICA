@@ -110,27 +110,7 @@ void NodeComponent::paint(juce::Graphics& g) {
     // When collapsed, draw a narrow vertical strip with rotated name
     // BUT still draw side panels if visible
     if (collapsed_) {
-        // === LEFT SIDE PANELS (even when collapsed) ===
-        if (modPanelVisible_) {
-            auto modArea = bounds.removeFromLeft(getModPanelWidth());
-            g.setColour(DarkTheme::getColour(DarkTheme::BACKGROUND).brighter(0.02f));
-            g.fillRect(modArea);
-            g.setColour(DarkTheme::getColour(DarkTheme::BORDER));
-            g.drawRect(modArea);
-            paintModPanel(g, modArea);
-        }
-
-        // Extra left panel (e.g., modulator editor) - between mods and params
-        int extraWidthCollapsed = getExtraLeftPanelWidth();
-        if (extraWidthCollapsed > 0) {
-            auto extraArea = bounds.removeFromLeft(extraWidthCollapsed);
-            g.setColour(DarkTheme::getColour(DarkTheme::BACKGROUND).brighter(0.02f));
-            g.fillRect(extraArea);
-            g.setColour(DarkTheme::getColour(DarkTheme::BORDER));
-            g.drawRect(extraArea);
-            paintExtraLeftPanel(g, extraArea);
-        }
-
+        // === LEFT SIDE PANELS (even when collapsed): [Macros][MacroEditor][Mods][ModEditor] ===
         if (paramPanelVisible_) {
             auto paramArea = bounds.removeFromLeft(getParamPanelWidth());
             g.setColour(DarkTheme::getColour(DarkTheme::BACKGROUND).brighter(0.02f));
@@ -140,7 +120,7 @@ void NodeComponent::paint(juce::Graphics& g) {
             paintParamPanel(g, paramArea);
         }
 
-        // Extra right panel (e.g., macro editor) - after params, before main content
+        // Macro editor panel - after macros, before mods
         int extraRightWidthCollapsed = getExtraRightPanelWidth();
         if (extraRightWidthCollapsed > 0) {
             auto extraRightArea = bounds.removeFromLeft(extraRightWidthCollapsed);
@@ -149,6 +129,26 @@ void NodeComponent::paint(juce::Graphics& g) {
             g.setColour(DarkTheme::getColour(DarkTheme::BORDER));
             g.drawRect(extraRightArea);
             paintExtraRightPanel(g, extraRightArea);
+        }
+
+        if (modPanelVisible_) {
+            auto modArea = bounds.removeFromLeft(getModPanelWidth());
+            g.setColour(DarkTheme::getColour(DarkTheme::BACKGROUND).brighter(0.02f));
+            g.fillRect(modArea);
+            g.setColour(DarkTheme::getColour(DarkTheme::BORDER));
+            g.drawRect(modArea);
+            paintModPanel(g, modArea);
+        }
+
+        // Mod editor panel - after mods, before main content
+        int extraWidthCollapsed = getExtraLeftPanelWidth();
+        if (extraWidthCollapsed > 0) {
+            auto extraArea = bounds.removeFromLeft(extraWidthCollapsed);
+            g.setColour(DarkTheme::getColour(DarkTheme::BACKGROUND).brighter(0.02f));
+            g.fillRect(extraArea);
+            g.setColour(DarkTheme::getColour(DarkTheme::BORDER));
+            g.drawRect(extraArea);
+            paintExtraLeftPanel(g, extraArea);
         }
 
         // === RIGHT SIDE PANEL (even when collapsed) ===
@@ -200,27 +200,7 @@ void NodeComponent::paint(juce::Graphics& g) {
         return;
     }
 
-    // === LEFT SIDE PANELS: [Mods][Extra][Params] (squared corners) ===
-    if (modPanelVisible_) {
-        auto modArea = bounds.removeFromLeft(getModPanelWidth());
-        g.setColour(DarkTheme::getColour(DarkTheme::BACKGROUND).brighter(0.02f));
-        g.fillRect(modArea);
-        g.setColour(DarkTheme::getColour(DarkTheme::BORDER));
-        g.drawRect(modArea);
-        paintModPanel(g, modArea);
-    }
-
-    // Extra left panel (e.g., modulator editor) - between mods and params
-    int extraWidth = getExtraLeftPanelWidth();
-    if (extraWidth > 0) {
-        auto extraArea = bounds.removeFromLeft(extraWidth);
-        g.setColour(DarkTheme::getColour(DarkTheme::BACKGROUND).brighter(0.02f));
-        g.fillRect(extraArea);
-        g.setColour(DarkTheme::getColour(DarkTheme::BORDER));
-        g.drawRect(extraArea);
-        paintExtraLeftPanel(g, extraArea);
-    }
-
+    // === LEFT SIDE PANELS: [Macros][MacroEditor][Mods][ModEditor] (squared corners) ===
     if (paramPanelVisible_) {
         auto paramArea = bounds.removeFromLeft(getParamPanelWidth());
         g.setColour(DarkTheme::getColour(DarkTheme::BACKGROUND).brighter(0.02f));
@@ -230,7 +210,7 @@ void NodeComponent::paint(juce::Graphics& g) {
         paintParamPanel(g, paramArea);
     }
 
-    // Extra right panel (e.g., macro editor) - after params, before main content
+    // Macro editor panel - after macros, before mods
     int extraRightWidth = getExtraRightPanelWidth();
     if (extraRightWidth > 0) {
         auto extraRightArea = bounds.removeFromLeft(extraRightWidth);
@@ -239,6 +219,26 @@ void NodeComponent::paint(juce::Graphics& g) {
         g.setColour(DarkTheme::getColour(DarkTheme::BORDER));
         g.drawRect(extraRightArea);
         paintExtraRightPanel(g, extraRightArea);
+    }
+
+    if (modPanelVisible_) {
+        auto modArea = bounds.removeFromLeft(getModPanelWidth());
+        g.setColour(DarkTheme::getColour(DarkTheme::BACKGROUND).brighter(0.02f));
+        g.fillRect(modArea);
+        g.setColour(DarkTheme::getColour(DarkTheme::BORDER));
+        g.drawRect(modArea);
+        paintModPanel(g, modArea);
+    }
+
+    // Mod editor panel - after mods, before main content
+    int extraWidth = getExtraLeftPanelWidth();
+    if (extraWidth > 0) {
+        auto extraArea = bounds.removeFromLeft(extraWidth);
+        g.setColour(DarkTheme::getColour(DarkTheme::BACKGROUND).brighter(0.02f));
+        g.fillRect(extraArea);
+        g.setColour(DarkTheme::getColour(DarkTheme::BORDER));
+        g.drawRect(extraArea);
+        paintExtraLeftPanel(g, extraArea);
     }
 
     // === RIGHT SIDE PANEL: [Gain] (squared corners) ===
@@ -293,7 +293,27 @@ void NodeComponent::resized() {
     // When collapsed (narrow width), arrange key icons vertically
     // BUT still layout side panels if visible
     if (collapsed_) {
-        // === LEFT SIDE PANELS (even when collapsed) ===
+        // === LEFT SIDE PANELS (even when collapsed): [Macros][MacroEditor][Mods][ModEditor] ===
+        if (paramPanelVisible_) {
+            auto paramArea = bounds.removeFromLeft(getParamPanelWidth());
+            resizedParamPanel(paramArea);
+        } else {
+            // Hide param knobs when panel is not visible
+            for (auto& knob : paramKnobs_) {
+                knob->setVisible(false);
+            }
+            // Hide the real macro panel if it exists
+            if (macroPanel_)
+                macroPanel_->setVisible(false);
+        }
+
+        // Macro editor panel - after macros, before mods
+        int extraRightWidthCollapsed = getExtraRightPanelWidth();
+        if (extraRightWidthCollapsed > 0) {
+            auto extraRightArea = bounds.removeFromLeft(extraRightWidthCollapsed);
+            resizedExtraRightPanel(extraRightArea);
+        }
+
         if (modPanelVisible_) {
             auto modArea = bounds.removeFromLeft(getModPanelWidth());
             resizedModPanel(modArea);
@@ -308,31 +328,11 @@ void NodeComponent::resized() {
                 modsPanel_->setVisible(false);
         }
 
-        // Extra left panel (e.g., modulator editor)
+        // Mod editor panel - after mods, before main content
         int extraWidthCollapsed = getExtraLeftPanelWidth();
         if (extraWidthCollapsed > 0) {
             auto extraArea = bounds.removeFromLeft(extraWidthCollapsed);
             resizedExtraLeftPanel(extraArea);
-        }
-
-        if (paramPanelVisible_) {
-            auto paramArea = bounds.removeFromLeft(getParamPanelWidth());
-            resizedParamPanel(paramArea);
-        } else {
-            // Hide param knobs when panel is not visible
-            for (auto& knob : paramKnobs_) {
-                knob->setVisible(false);
-            }
-            // Hide the real macro panel if it exists
-            if (macroPanel_)
-                macroPanel_->setVisible(false);
-        }
-
-        // Extra right panel (e.g., macro editor) - after params
-        int extraRightWidthCollapsed = getExtraRightPanelWidth();
-        if (extraRightWidthCollapsed > 0) {
-            auto extraRightArea = bounds.removeFromLeft(extraRightWidthCollapsed);
-            resizedExtraRightPanel(extraRightArea);
         }
 
         // === RIGHT SIDE PANEL (even when collapsed) ===
@@ -369,7 +369,27 @@ void NodeComponent::resized() {
         return;
     }
 
-    // === LEFT SIDE PANELS: [Mods][Extra][Params] ===
+    // === LEFT SIDE PANELS: [Macros][MacroEditor][Mods][ModEditor] ===
+    if (paramPanelVisible_) {
+        auto paramArea = bounds.removeFromLeft(getParamPanelWidth());
+        resizedParamPanel(paramArea);
+    } else {
+        // Hide param knobs when panel is not visible
+        for (auto& knob : paramKnobs_) {
+            knob->setVisible(false);
+        }
+        // Hide the real macro panel if it exists
+        if (macroPanel_)
+            macroPanel_->setVisible(false);
+    }
+
+    // Macro editor panel - after macros, before mods
+    int extraRightWidth = getExtraRightPanelWidth();
+    if (extraRightWidth > 0) {
+        auto extraRightArea = bounds.removeFromLeft(extraRightWidth);
+        resizedExtraRightPanel(extraRightArea);
+    }
+
     if (modPanelVisible_) {
         auto modArea = bounds.removeFromLeft(getModPanelWidth());
         resizedModPanel(modArea);
@@ -384,31 +404,11 @@ void NodeComponent::resized() {
             modsPanel_->setVisible(false);
     }
 
-    // Extra left panel (e.g., modulator editor)
+    // Mod editor panel - after mods, before main content
     int extraWidth = getExtraLeftPanelWidth();
     if (extraWidth > 0) {
         auto extraArea = bounds.removeFromLeft(extraWidth);
         resizedExtraLeftPanel(extraArea);
-    }
-
-    if (paramPanelVisible_) {
-        auto paramArea = bounds.removeFromLeft(getParamPanelWidth());
-        resizedParamPanel(paramArea);
-    } else {
-        // Hide param knobs when panel is not visible
-        for (auto& knob : paramKnobs_) {
-            knob->setVisible(false);
-        }
-        // Hide the real macro panel if it exists
-        if (macroPanel_)
-            macroPanel_->setVisible(false);
-    }
-
-    // Extra right panel (e.g., macro editor) - after params
-    int extraRightWidth = getExtraRightPanelWidth();
-    if (extraRightWidth > 0) {
-        auto extraRightArea = bounds.removeFromLeft(extraRightWidth);
-        resizedExtraRightPanel(extraRightArea);
     }
 
     // === RIGHT SIDE PANEL: [Gain] ===
