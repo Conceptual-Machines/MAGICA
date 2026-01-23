@@ -64,6 +64,9 @@ class RackComponent : public NodeComponent {
     void mouseDown(const juce::MouseEvent& e) override;
     void mouseWheelMove(const juce::MouseEvent& e, const juce::MouseWheelDetails& wheel) override;
 
+    // SelectionManagerListener override
+    void chainNodeSelectionChanged(const magda::ChainNodePath& path) override;
+
   protected:
     void paintContent(juce::Graphics& g, juce::Rectangle<int> contentArea) override;
     void resizedContent(juce::Rectangle<int> contentArea) override;
@@ -82,7 +85,6 @@ class RackComponent : public NodeComponent {
 
   private:
     void initializeCommon(const magda::RackInfo& rack);
-    void onChainRowSelected(ChainRowComponent& row);
     void onAddChainClicked();
 
     magda::ChainNodePath rackPath_;  // Full path to this rack

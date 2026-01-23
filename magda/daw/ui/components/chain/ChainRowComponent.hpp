@@ -61,9 +61,6 @@ class ChainRowComponent : public juce::Component, public magda::SelectionManager
     void selectionTypeChanged(magda::SelectionType newType) override;
     void chainNodeSelectionChanged(const magda::ChainNodePath& path) override;
 
-    // Callback when chain row is clicked (legacy - for RackComponent to show chain panel)
-    std::function<void(ChainRowComponent&)> onSelected;
-
   private:
     void onMuteClicked();
     void onSoloClicked();

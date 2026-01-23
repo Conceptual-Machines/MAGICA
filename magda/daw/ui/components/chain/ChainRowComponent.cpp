@@ -141,13 +141,8 @@ void ChainRowComponent::mouseUp(const juce::MouseEvent& event) {
 
     DBG("ChainRowComponent::mouseUp - chainId=" << chainId_ << " rackId=" << rackId_);
 
-    // Use centralized selection
+    // Use centralized selection - RackComponent will respond via chainNodeSelectionChanged
     magda::SelectionManager::getInstance().selectChainNode(nodePath_);
-
-    // Also call legacy callback for RackComponent to show chain panel
-    if (onSelected) {
-        onSelected(*this);
-    }
 }
 
 void ChainRowComponent::selectionTypeChanged(magda::SelectionType /*newType*/) {

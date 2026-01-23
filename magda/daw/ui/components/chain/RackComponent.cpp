@@ -399,9 +399,6 @@ void RackComponent::rebuildChainRows() {
             auto row = std::make_unique<ChainRowComponent>(*this, trackId_, rackId_, chain);
             // Set the full nested path (includes parent rack/chain context)
             row->setNodePath(rackPath_.withChain(chain.id));
-            row->onSelected = [this](ChainRowComponent& selectedRow) {
-                onChainRowSelected(selectedRow);
-            };
             chainRowsContainer_.addAndMakeVisible(*row);
             newRows.push_back(std::move(row));
         }
@@ -440,32 +437,45 @@ void RackComponent::clearDeviceSelection() {
     }
 }
 
-void RackComponent::onChainRowSelected(ChainRowComponent& row) {
-    DBG("RackComponent::onChainRowSelected - rackId="
-        << rackId_ << " chainId=" << row.getChainId() << " isNested=" << (isNested() ? "yes" : "no")
-        << " rowSelected=" << (row.isSelected() ? "yes" : "no")
-        << " panelVisible=" << (isChainPanelVisible() ? "yes" : "no"));
+void RackComponent::chainNodeSelectionChanged(const magda::ChainNodePath& path) {
+    // First let base class handle visual selection state
+    NodeComponent::chainNodeSelectionChanged(path);
 
-    // Toggle behavior: if clicking already-selected chain, collapse/hide the panel
-    if (row.isSelected() && isChainPanelVisible()) {
-        DBG("  -> hiding chain panel (toggle off)");
-        hideChainPanel();
-        return;
+    // Check if the selected path is one of our chains
+    if (path.trackId != trackId_) {
+        return;  // Not our track
     }
 
-    // Clear all selections first
-    clearChainSelection();
-    // Select the clicked row
-    row.setSelected(true);
+    // Check if the path is a chain within this rack
+    if (path.steps.size() != rackPath_.steps.size() + 1) {
+        return;  // Not a direct child chain
+    }
+
+    // Verify all parent steps match
+    for (size_t i = 0; i < rackPath_.steps.size(); ++i) {
+        if (path.steps[i].type != rackPath_.steps[i].type ||
+            path.steps[i].id != rackPath_.steps[i].id) {
+            return;  // Not in this rack
+        }
+    }
+
+    // Verify the last step is a chain
+    if (path.steps.back().type != magda::ChainStepType::Chain) {
+        return;  // Not a chain
+    }
+
+    magda::ChainId chainId = path.steps.back().id;
+
+    DBG("RackComponent::chainNodeSelectionChanged - rackId="
+        << rackId_ << " chainId=" << chainId << " isNested=" << (isNested() ? "yes" : "no"));
+
     // Show chain panel within this rack
-    DBG("  -> showing chain panel for chainId=" << row.getChainId());
-    showChainPanel(row.getChainId());
+    showChainPanel(chainId);
+
     // Notify parent (for clearing selections in other racks)
     if (onChainSelected) {
-        DBG("  -> calling onChainSelected callback (rackId=" << row.getRackId() << ")");
-        onChainSelected(row.getTrackId(), row.getRackId(), row.getChainId());
-    } else {
-        DBG("  -> onChainSelected callback NOT set (nested rack)");
+        DBG("  -> calling onChainSelected callback");
+        onChainSelected(trackId_, rackId_, chainId);
     }
 }
 
