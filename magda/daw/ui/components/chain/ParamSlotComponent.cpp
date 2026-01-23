@@ -306,7 +306,8 @@ void ParamSlotComponent::showLinkModeSlider(bool /*isNewLink*/, float initialAmo
     linkModeSlider_->setBounds(getLocalBounds().reduced(2));
     linkModeSlider_->toFront(true);
     linkModeSlider_->setVisible(true);
-    linkModeSlider_->grabKeyboardFocus();
+    // Don't grab keyboard focus - let sliders stay visible on multiple parameters
+    // linkModeSlider_->grabKeyboardFocus();
 }
 
 void ParamSlotComponent::hideLinkModeSlider() {
