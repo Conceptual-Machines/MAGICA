@@ -250,13 +250,24 @@ void ModulatorEditorPanel::paint(juce::Graphics& g) {
     bounds.removeFromTop(18 + 6);  // Skip phase slider + gap
     bounds.removeFromTop(18 + 6);  // Skip rate row + gap
 
-    // "Trigger" label with indicator dot
-    auto triggerLabelRow = bounds.removeFromTop(10);
+    // "Trigger" label
+    g.drawText("Trigger", bounds.removeFromTop(10), juce::Justification::centredLeft);
 
-    // Draw trigger indicator dot on the left
+    // Skip to trigger row for monitor dot
+    auto triggerRow = bounds.removeFromTop(18);
+    // Layout: [dropdown] [gap] [monitor dot] [gap] [advanced button]
+    // Advanced button width: 20, gap: 4, monitor dot: 6
+    int advButtonWidth = 20;
+    int dotDiameter = 6;
+    triggerRow.removeFromRight(advButtonWidth);  // Skip advanced button
+    triggerRow.removeFromRight(4);               // Skip gap before advanced
+    auto dotArea = triggerRow.removeFromRight(dotDiameter);
+    triggerRow.removeFromRight(4);  // Skip gap before dot
+
+    // Draw trigger indicator dot
     const float dotRadius = 3.0f;
     auto dotBounds =
-        juce::Rectangle<float>(triggerLabelRow.getX(), triggerLabelRow.getCentreY() - dotRadius,
+        juce::Rectangle<float>(static_cast<float>(dotArea.getX()), dotArea.getCentreY() - dotRadius,
                                dotRadius * 2, dotRadius * 2);
 
     // Use live mod pointer for real-time trigger state
@@ -268,11 +279,6 @@ void ModulatorEditorPanel::paint(juce::Graphics& g) {
         g.setColour(DarkTheme::getSecondaryTextColour().withAlpha(0.3f));
         g.drawEllipse(dotBounds, 1.0f);
     }
-
-    // Draw "Trigger" text after the dot
-    triggerLabelRow.removeFromLeft(static_cast<int>(dotRadius * 2 + 4));
-    g.setColour(DarkTheme::getSecondaryTextColour());
-    g.drawText("Trigger", triggerLabelRow, juce::Justification::centredLeft);
 }
 
 void ModulatorEditorPanel::resized() {
@@ -309,14 +315,19 @@ void ModulatorEditorPanel::resized() {
     syncDivisionCombo_.setBounds(rateRow);
     bounds.removeFromTop(6);
 
-    // Trigger row: [label painted] [combo] [... button]
+    // Trigger row: [dropdown] [gap] [monitor dot] [gap] [advanced button]
     bounds.removeFromTop(10);  // "Trigger" label
     auto triggerRow = bounds.removeFromTop(18);
 
     // Advanced button on the right
     int advButtonWidth = 20;
     advancedButton_->setBounds(triggerRow.removeFromRight(advButtonWidth));
-    triggerRow.removeFromRight(4);  // Small gap
+    triggerRow.removeFromRight(4);  // Gap before advanced
+
+    // Leave space for monitor dot (painted in paint())
+    int dotDiameter = 6;
+    triggerRow.removeFromRight(dotDiameter);  // Monitor dot space
+    triggerRow.removeFromRight(4);            // Gap before dot
 
     // Trigger combo takes remaining space
     triggerModeCombo_.setBounds(triggerRow);
