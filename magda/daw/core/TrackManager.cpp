@@ -1565,7 +1565,14 @@ void TrackManager::setDeviceMacroTarget(const ChainNodePath& devicePath, int mac
         if (macroIndex < 0 || macroIndex >= static_cast<int>(device->macros.size())) {
             return;
         }
-        device->macros[macroIndex].target = target;
+
+        // Add to links vector if not already present
+        if (!device->macros[macroIndex].getLink(target)) {
+            MacroLink newLink;
+            newLink.target = target;
+            newLink.amount = 0.5f;  // Default amount
+            device->macros[macroIndex].links.push_back(newLink);
+        }
         // Don't notify - simple value change doesn't need UI rebuild
     }
 }
@@ -1577,10 +1584,6 @@ void TrackManager::removeDeviceMacroLink(const ChainNodePath& devicePath, int ma
             return;
         }
         device->macros[macroIndex].removeLink(target);
-        // Clear legacy target if it matches
-        if (device->macros[macroIndex].target == target) {
-            device->macros[macroIndex].target = MacroTarget{};
-        }
     }
 }
 
@@ -1599,10 +1602,6 @@ void TrackManager::setDeviceMacroLinkAmount(const ChainNodePath& devicePath, int
             newLink.target = target;
             newLink.amount = amount;
             device->macros[macroIndex].links.push_back(newLink);
-        }
-        // Also update legacy value if target matches
-        if (device->macros[macroIndex].target == target) {
-            device->macros[macroIndex].value = amount;
         }
     }
 }
