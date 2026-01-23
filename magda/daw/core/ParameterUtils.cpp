@@ -159,6 +159,14 @@ juce::String formatValue(float realValue, const ParameterInfo& info, int decimal
         return juce::String(realValue, decimalPlaces) + " dB";
     }
 
+    if (info.unit == "st") {
+        // Semitones: show + sign for positive values
+        if (realValue > 0.0f) {
+            return "+" + juce::String(realValue, decimalPlaces) + " st";
+        }
+        return juce::String(realValue, decimalPlaces) + " st";
+    }
+
     // Default: just value with unit
     if (info.unit.isNotEmpty()) {
         return juce::String(realValue, decimalPlaces) + " " + info.unit;

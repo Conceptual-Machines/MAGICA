@@ -144,6 +144,26 @@ inline ParameterInfo decibels(int index, const juce::String& name, float minDb =
 }
 
 /**
+ * @brief Create a semitones parameter (linear scale for pitch)
+ * @param index Parameter index
+ * @param name Display name
+ * @param minSt Minimum semitones (default: -24, 2 octaves down)
+ * @param maxSt Maximum semitones (default: +24, 2 octaves up)
+ */
+inline ParameterInfo semitones(int index, const juce::String& name, float minSt = -24.0f,
+                               float maxSt = 24.0f) {
+    ParameterInfo info;
+    info.paramIndex = index;
+    info.name = name;
+    info.unit = "st";
+    info.minValue = minSt;
+    info.maxValue = maxSt;
+    info.defaultValue = 0.0f;  // No pitch shift
+    info.scale = ParameterScale::Linear;
+    return info;
+}
+
+/**
  * @brief Create a boolean/switch parameter
  * @param index Parameter index
  * @param name Display name

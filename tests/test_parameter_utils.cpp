@@ -108,6 +108,23 @@ TEST_CASE("ParameterPresets - discrete", "[parameter][presets]") {
     REQUIRE(mode.modulatable == false);
 }
 
+TEST_CASE("ParameterPresets - semitones", "[parameter][presets]") {
+    auto pitch = ParameterPresets::semitones(0, "Pitch");
+    REQUIRE(pitch.name == "Pitch");
+    REQUIRE(pitch.unit == "st");
+    REQUIRE(pitch.minValue == Catch::Approx(-24.0f));
+    REQUIRE(pitch.maxValue == Catch::Approx(24.0f));
+    REQUIRE(pitch.defaultValue == Catch::Approx(0.0f));
+    REQUIRE(pitch.scale == ParameterScale::Linear);
+    REQUIRE(pitch.modulatable == true);  // Pitch can be modulated
+}
+
+TEST_CASE("ParameterPresets - semitones with custom range", "[parameter][presets]") {
+    auto detune = ParameterPresets::semitones(1, "Detune", -12.0f, 12.0f);
+    REQUIRE(detune.minValue == Catch::Approx(-12.0f));
+    REQUIRE(detune.maxValue == Catch::Approx(12.0f));
+}
+
 // ============================================================================
 // normalizedToReal Tests
 // ============================================================================
@@ -495,6 +512,25 @@ TEST_CASE("formatValue - Decibels display", "[parameter][format]") {
     SECTION("Zero dB") {
         auto str = ParameterUtils::formatValue(0.0f, param);
         REQUIRE(str == "0.0 dB");
+    }
+}
+
+TEST_CASE("formatValue - Semitones display", "[parameter][format]") {
+    auto param = ParameterPresets::semitones(0, "Pitch");
+
+    SECTION("Positive semitones shows plus sign") {
+        auto str = ParameterUtils::formatValue(12.0f, param);
+        REQUIRE(str == "+12.0 st");
+    }
+
+    SECTION("Negative semitones shows minus") {
+        auto str = ParameterUtils::formatValue(-7.0f, param);
+        REQUIRE(str == "-7.0 st");
+    }
+
+    SECTION("Zero semitones") {
+        auto str = ParameterUtils::formatValue(0.0f, param);
+        REQUIRE(str == "0.0 st");
     }
 }
 
