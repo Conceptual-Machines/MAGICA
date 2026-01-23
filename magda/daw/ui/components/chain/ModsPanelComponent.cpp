@@ -11,12 +11,27 @@ AddModButton::AddModButton() = default;
 void AddModButton::paint(juce::Graphics& g) {
     auto bounds = getLocalBounds();
 
-    // Only show add button on hover
+    // Always show subtle outline for empty slot
     if (!isMouseOver()) {
-        return;  // Empty slot - show nothing
+        // Very subtle dashed border to indicate empty slot
+        g.setColour(DarkTheme::getColour(DarkTheme::BORDER).withAlpha(0.3f));
+        float dashLengths[2] = {4.0f, 4.0f};
+        g.drawDashedLine(
+            juce::Line<float>(bounds.getX(), bounds.getY(), bounds.getRight(), bounds.getY()),
+            dashLengths, 2, 0.5f);
+        g.drawDashedLine(juce::Line<float>(bounds.getRight(), bounds.getY(), bounds.getRight(),
+                                           bounds.getBottom()),
+                         dashLengths, 2, 0.5f);
+        g.drawDashedLine(juce::Line<float>(bounds.getRight(), bounds.getBottom(), bounds.getX(),
+                                           bounds.getBottom()),
+                         dashLengths, 2, 0.5f);
+        g.drawDashedLine(
+            juce::Line<float>(bounds.getX(), bounds.getBottom(), bounds.getX(), bounds.getY()),
+            dashLengths, 2, 0.5f);
+        return;
     }
 
-    // Dashed border
+    // Hover state - bright dashed border
     g.setColour(DarkTheme::getColour(DarkTheme::BORDER).brighter(0.2f));
     float dashLengths[2] = {4.0f, 4.0f};
     g.drawDashedLine(
