@@ -27,6 +27,7 @@ ModulatorEditorPanel::ModulatorEditorPanel() {
     typeSelector_.setColour(juce::ComboBox::textColourId, DarkTheme::getTextColour());
     typeSelector_.setColour(juce::ComboBox::outlineColourId,
                             DarkTheme::getColour(DarkTheme::BORDER));
+    typeSelector_.setJustificationType(juce::Justification::centredLeft);
     typeSelector_.onChange = [this]() {
         int id = typeSelector_.getSelectedId();
         if (id > 0 && onTypeChanged) {
@@ -47,6 +48,7 @@ ModulatorEditorPanel::ModulatorEditorPanel() {
     waveformCombo_.setColour(juce::ComboBox::textColourId, DarkTheme::getTextColour());
     waveformCombo_.setColour(juce::ComboBox::outlineColourId,
                              DarkTheme::getColour(DarkTheme::BORDER));
+    waveformCombo_.setJustificationType(juce::Justification::centredLeft);
     waveformCombo_.onChange = [this]() {
         int id = waveformCombo_.getSelectedId();
         if (id > 0 && onWaveformChanged) {
@@ -110,6 +112,7 @@ ModulatorEditorPanel::ModulatorEditorPanel() {
     syncDivisionCombo_.setColour(juce::ComboBox::textColourId, DarkTheme::getTextColour());
     syncDivisionCombo_.setColour(juce::ComboBox::outlineColourId,
                                  DarkTheme::getColour(DarkTheme::BORDER));
+    syncDivisionCombo_.setJustificationType(juce::Justification::centredLeft);
     syncDivisionCombo_.onChange = [this]() {
         int id = syncDivisionCombo_.getSelectedId();
         if (id >= 100) {
@@ -146,6 +149,7 @@ ModulatorEditorPanel::ModulatorEditorPanel() {
     triggerModeCombo_.setColour(juce::ComboBox::textColourId, DarkTheme::getTextColour());
     triggerModeCombo_.setColour(juce::ComboBox::outlineColourId,
                                 DarkTheme::getColour(DarkTheme::BORDER));
+    triggerModeCombo_.setJustificationType(juce::Justification::centredLeft);
     triggerModeCombo_.onChange = [this]() {
         int id = triggerModeCombo_.getSelectedId();
         if (id > 0) {
@@ -238,79 +242,79 @@ void ModulatorEditorPanel::paint(juce::Graphics& g) {
     g.drawRect(getLocalBounds());
 
     // Section headers
-    auto bounds = getLocalBounds().reduced(4);
-    bounds.removeFromTop(24);  // Skip name label
+    auto bounds = getLocalBounds().reduced(6);
+    bounds.removeFromTop(18 + 6);  // Skip name label + gap
 
     // "Type" label
     g.setColour(DarkTheme::getSecondaryTextColour());
     g.setFont(FontManager::getInstance().getUIFont(8.0f));
-    g.drawText("Type", bounds.removeFromTop(12), juce::Justification::centredLeft);
+    g.drawText("Type", bounds.removeFromTop(10), juce::Justification::centredLeft);
 
-    bounds.removeFromTop(22);  // Skip type selector
+    bounds.removeFromTop(18 + 6);  // Skip type selector + gap
 
     // "Waveform" label
-    g.drawText("Waveform", bounds.removeFromTop(12), juce::Justification::centredLeft);
+    g.drawText("Waveform", bounds.removeFromTop(10), juce::Justification::centredLeft);
 
-    bounds.removeFromTop(22);  // Skip waveform selector
-    bounds.removeFromTop(50);  // Skip waveform display
+    bounds.removeFromTop(18 + 4);  // Skip waveform selector + gap
+    bounds.removeFromTop(46 + 6);  // Skip waveform display + gap
 
     // "Phase" label
-    g.drawText("Phase", bounds.removeFromTop(12), juce::Justification::centredLeft);
+    g.drawText("Phase", bounds.removeFromTop(10), juce::Justification::centredLeft);
 
-    bounds.removeFromTop(22);  // Skip phase slider
+    bounds.removeFromTop(18 + 6);  // Skip phase slider + gap
 
     // "Rate" label (with sync toggle)
-    g.drawText("Rate", bounds.removeFromTop(12), juce::Justification::centredLeft);
+    g.drawText("Rate", bounds.removeFromTop(10), juce::Justification::centredLeft);
 
-    bounds.removeFromTop(22);  // Skip sync toggle + rate/division control
+    bounds.removeFromTop(18 + 6);  // Skip sync toggle + rate/division control + gap
 
     // "Trigger" label
-    g.drawText("Trigger", bounds.removeFromTop(12), juce::Justification::centredLeft);
+    g.drawText("Trigger", bounds.removeFromTop(10), juce::Justification::centredLeft);
 }
 
 void ModulatorEditorPanel::resized() {
-    auto bounds = getLocalBounds().reduced(4);
+    auto bounds = getLocalBounds().reduced(6);
 
     // Name label at top
-    nameLabel_.setBounds(bounds.removeFromTop(20));
-    bounds.removeFromTop(4);
+    nameLabel_.setBounds(bounds.removeFromTop(18));
+    bounds.removeFromTop(6);
 
     // Type label area (painted) + selector
-    bounds.removeFromTop(12);  // "Type" label
-    typeSelector_.setBounds(bounds.removeFromTop(20));
-    bounds.removeFromTop(4);
+    bounds.removeFromTop(10);  // "Type" label
+    typeSelector_.setBounds(bounds.removeFromTop(18));
+    bounds.removeFromTop(6);
 
     // Waveform label area (painted) + selector
-    bounds.removeFromTop(12);  // "Waveform" label
-    waveformCombo_.setBounds(bounds.removeFromTop(20));
+    bounds.removeFromTop(10);  // "Waveform" label
+    waveformCombo_.setBounds(bounds.removeFromTop(18));
     bounds.removeFromTop(4);
 
     // Waveform display (animated visualization)
-    waveformDisplay_.setBounds(bounds.removeFromTop(50));
-    bounds.removeFromTop(4);
+    waveformDisplay_.setBounds(bounds.removeFromTop(46));
+    bounds.removeFromTop(6);
 
     // Phase label area (painted) + slider
-    bounds.removeFromTop(12);  // "Phase" label
-    phaseSlider_.setBounds(bounds.removeFromTop(20));
-    bounds.removeFromTop(4);
+    bounds.removeFromTop(10);  // "Phase" label
+    phaseSlider_.setBounds(bounds.removeFromTop(18));
+    bounds.removeFromTop(6);
 
     // Rate label area (painted) + sync toggle + rate/division control
-    bounds.removeFromTop(12);  // "Rate" label
-    auto rateRow = bounds.removeFromTop(20);
+    bounds.removeFromTop(10);  // "Rate" label
+    auto rateRow = bounds.removeFromTop(18);
 
     // Sync toggle takes left portion
-    int syncToggleWidth = 42;
+    int syncToggleWidth = 40;
     syncToggle_.setBounds(rateRow.removeFromLeft(syncToggleWidth));
-    rateRow.removeFromLeft(2);  // Small gap
+    rateRow.removeFromLeft(4);  // Small gap
 
     // Rate slider or division combo takes remaining space (same position, shown alternately)
     rateSlider_.setBounds(rateRow);
     syncDivisionCombo_.setBounds(rateRow);
-    bounds.removeFromTop(4);
+    bounds.removeFromTop(6);
 
     // Trigger label area (painted) + combo
-    bounds.removeFromTop(12);  // "Trigger" label
-    triggerModeCombo_.setBounds(bounds.removeFromTop(20));
+    bounds.removeFromTop(10);  // "Trigger" label
+    triggerModeCombo_.setBounds(bounds.removeFromTop(18));
     bounds.removeFromTop(8);
 
     // Target info at bottom

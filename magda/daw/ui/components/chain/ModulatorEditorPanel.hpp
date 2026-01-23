@@ -35,17 +35,31 @@ class WaveformDisplay : public juce::Component, private juce::Timer {
         const float height = bounds.getHeight();
         const float centerY = height * 0.5f;
 
-        // Draw waveform path
+        // Draw phase offset indicator line (vertical dashed line at offset position)
+        if (mod_->phaseOffset > 0.001f) {
+            float offsetX = bounds.getX() + mod_->phaseOffset * width;
+            g.setColour(juce::Colours::orange.withAlpha(0.3f));
+            // Draw dashed line
+            const float dashLength = 3.0f;
+            for (float y = bounds.getY(); y < bounds.getBottom(); y += dashLength * 2) {
+                g.drawLine(offsetX, y, offsetX, juce::jmin(y + dashLength, bounds.getBottom()),
+                           1.0f);
+            }
+        }
+
+        // Draw waveform path (shifted by phase offset for visual representation)
         juce::Path waveformPath;
         const int numPoints = 100;
 
         for (int i = 0; i < numPoints; ++i) {
-            float phase = static_cast<float>(i) / static_cast<float>(numPoints - 1);
-            float value = magda::ModulatorEngine::generateWaveform(mod_->waveform, phase);
+            float displayPhase = static_cast<float>(i) / static_cast<float>(numPoints - 1);
+            // Apply phase offset to show how waveform is shifted
+            float effectivePhase = std::fmod(displayPhase + mod_->phaseOffset, 1.0f);
+            float value = magda::ModulatorEngine::generateWaveform(mod_->waveform, effectivePhase);
 
             // Invert value so high values are at top
             float y = centerY + (0.5f - value) * (height - 8.0f);
-            float x = bounds.getX() + phase * width;
+            float x = bounds.getX() + displayPhase * width;
 
             if (i == 0) {
                 waveformPath.startNewSubPath(x, y);
@@ -55,21 +69,22 @@ class WaveformDisplay : public juce::Component, private juce::Timer {
         }
 
         // Draw the waveform line
-        g.setColour(juce::Colours::orange.withAlpha(0.6f));
+        g.setColour(juce::Colours::orange.withAlpha(0.7f));
         g.strokePath(waveformPath, juce::PathStrokeType(1.5f));
 
-        // Draw current phase indicator (dot)
-        float currentX = bounds.getX() + mod_->phase * width;
+        // Draw current phase indicator (dot) - use actual phase position
+        float displayX = bounds.getX() + mod_->phase * width;
         float currentValue = mod_->value;
         float currentY = centerY + (0.5f - currentValue) * (height - 8.0f);
 
         g.setColour(juce::Colours::orange);
-        g.fillEllipse(currentX - 3.0f, currentY - 3.0f, 6.0f, 6.0f);
+        g.fillEllipse(displayX - 4.0f, currentY - 4.0f, 8.0f, 8.0f);
 
-        // Draw trigger indicator dot in top-left corner
-        const float triggerDotRadius = 4.0f;
-        auto triggerDotBounds = juce::Rectangle<float>(bounds.getX() + 4.0f, bounds.getY() + 4.0f,
-                                                       triggerDotRadius * 2, triggerDotRadius * 2);
+        // Draw trigger indicator dot in top-right corner
+        const float triggerDotRadius = 3.0f;
+        auto triggerDotBounds = juce::Rectangle<float>(
+            bounds.getRight() - triggerDotRadius * 2 - 4.0f, bounds.getY() + 4.0f,
+            triggerDotRadius * 2, triggerDotRadius * 2);
 
         if (mod_->triggered) {
             // Lit up when triggered
@@ -137,7 +152,7 @@ class ModulatorEditorPanel : public juce::Component {
     void mouseUp(const juce::MouseEvent& e) override;
 
     // Preferred width for this panel
-    static constexpr int PREFERRED_WIDTH = 120;
+    static constexpr int PREFERRED_WIDTH = 150;
 
   private:
     int selectedModIndex_ = -1;
