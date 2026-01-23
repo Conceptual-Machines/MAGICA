@@ -81,6 +81,12 @@ class DeviceSlotComponent : public NodeComponent {
     void onMacroValueChangedInternal(int macroIndex, float value) override;
     void onMacroTargetChangedInternal(int macroIndex, magda::MacroTarget target) override;
     void onMacroNameChangedInternal(int macroIndex, const juce::String& name) override;
+    // Contextual link callbacks for macros (similar to mods)
+    void onMacroLinkAmountChangedInternal(int macroIndex, magda::MacroTarget target,
+                                          float amount) override;
+    void onMacroNewLinkCreatedInternal(int macroIndex, magda::MacroTarget target,
+                                       float amount) override;
+    void onMacroLinkRemovedInternal(int macroIndex, magda::MacroTarget target) override;
     void onModClickedInternal(int modIndex) override;
     void onMacroClickedInternal(int macroIndex) override;
     void onModPageAddRequested(int itemsToAdd) override;
@@ -91,6 +97,7 @@ class DeviceSlotComponent : public NodeComponent {
     void onModLinkAmountChangedInternal(int modIndex, magda::ModTarget target,
                                         float amount) override;
     void onModNewLinkCreatedInternal(int modIndex, magda::ModTarget target, float amount) override;
+    void onModLinkRemovedInternal(int modIndex, magda::ModTarget target) override;
 
     // SelectionManagerListener overrides
     void selectionTypeChanged(magda::SelectionType newType) override;

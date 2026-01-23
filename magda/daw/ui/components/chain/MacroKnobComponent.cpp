@@ -1,5 +1,7 @@
 #include "MacroKnobComponent.hpp"
 
+#include "BinaryData.h"
+#include "core/LinkModeManager.hpp"
 #include "ui/themes/DarkTheme.hpp"
 #include "ui/themes/FontManager.hpp"
 
@@ -20,7 +22,7 @@ MacroKnobComponent::MacroKnobComponent(int macroIndex) : macroIndex_(macroIndex)
     nameLabel_.setInterceptsMouseClicks(false, false);
     addAndMakeVisible(nameLabel_);
 
-    // Value slider
+    // Value slider - hidden for consistency with mod cells
     valueSlider_.setRange(0.0, 1.0, 0.01);
     valueSlider_.setValue(currentMacro_.value, juce::dontSendNotification);
     valueSlider_.setFont(FontManager::getInstance().getUIFont(9.0f));
@@ -30,7 +32,26 @@ MacroKnobComponent::MacroKnobComponent(int macroIndex) : macroIndex_(macroIndex)
             onValueChanged(currentMacro_.value);
         }
     };
-    addAndMakeVisible(valueSlider_);
+    valueSlider_.setVisible(false);  // Hide for consistency
+    addChildComponent(valueSlider_);
+
+    // Link button - toggles link mode for this macro (using link_flat icon)
+    linkButton_ = std::make_unique<magda::SvgButton>("Link", BinaryData::link_flat_svg,
+                                                     BinaryData::link_flat_svgSize);
+    linkButton_->setNormalColor(DarkTheme::getSecondaryTextColour());
+    linkButton_->setHoverColor(DarkTheme::getColour(DarkTheme::ACCENT_PURPLE));
+    linkButton_->setActiveColor(DarkTheme::getColour(DarkTheme::ACCENT_PURPLE));
+    linkButton_->setActiveBackgroundColor(
+        DarkTheme::getColour(DarkTheme::ACCENT_PURPLE).withAlpha(0.2f));
+    linkButton_->onClick = [this]() { onLinkButtonClicked(); };
+    addAndMakeVisible(*linkButton_);
+
+    // Register for link mode notifications
+    magda::LinkModeManager::getInstance().addListener(this);
+}
+
+MacroKnobComponent::~MacroKnobComponent() {
+    magda::LinkModeManager::getInstance().removeListener(this);
 }
 
 void MacroKnobComponent::setMacroInfo(const magda::MacroInfo& macro) {
@@ -53,26 +74,34 @@ void MacroKnobComponent::setSelected(bool selected) {
 }
 
 void MacroKnobComponent::paint(juce::Graphics& g) {
-    // Background - highlight when selected (purple for macros)
-    if (selected_) {
-        g.setColour(DarkTheme::getColour(DarkTheme::ACCENT_PURPLE).withAlpha(0.3f));
+    auto bounds = getLocalBounds();
+
+    // Guard against invalid bounds
+    if (bounds.getWidth() <= 0 || bounds.getHeight() <= 0) {
+        return;
+    }
+
+    // Check if this macro is in link mode (link button is active)
+    bool isInLinkMode =
+        magda::LinkModeManager::getInstance().isMacroInLinkMode(parentPath_, macroIndex_);
+
+    // Background - purple tint when in link mode, normal otherwise
+    if (isInLinkMode) {
+        g.setColour(DarkTheme::getColour(DarkTheme::ACCENT_PURPLE).withAlpha(0.15f));
+        g.fillRoundedRectangle(bounds.toFloat(), 3.0f);
     } else {
         g.setColour(DarkTheme::getColour(DarkTheme::SURFACE).brighter(0.04f));
+        g.fillRoundedRectangle(bounds.toFloat(), 3.0f);
     }
-    g.fillRoundedRectangle(getLocalBounds().toFloat(), 3.0f);
 
-    // Border - purple when selected
+    // Border - grey when selected, default otherwise
     if (selected_) {
-        g.setColour(DarkTheme::getColour(DarkTheme::ACCENT_PURPLE));
-        g.drawRoundedRectangle(getLocalBounds().toFloat().reduced(0.5f), 3.0f, 2.0f);
+        g.setColour(juce::Colour(0xff888888));  // Grey for selection
+        g.drawRoundedRectangle(bounds.toFloat().reduced(0.5f), 3.0f, 2.0f);
     } else {
         g.setColour(DarkTheme::getColour(DarkTheme::BORDER));
-        g.drawRoundedRectangle(getLocalBounds().toFloat().reduced(0.5f), 3.0f, 1.0f);
+        g.drawRoundedRectangle(bounds.toFloat().reduced(0.5f), 3.0f, 1.0f);
     }
-
-    // Link indicator at bottom
-    auto linkArea = getLocalBounds().removeFromBottom(LINK_INDICATOR_HEIGHT);
-    paintLinkIndicator(g, linkArea);
 }
 
 void MacroKnobComponent::resized() {
@@ -81,12 +110,14 @@ void MacroKnobComponent::resized() {
     // Name label at top
     nameLabel_.setBounds(bounds.removeFromTop(NAME_LABEL_HEIGHT));
 
-    // Value slider
-    bounds.removeFromTop(1);
-    valueSlider_.setBounds(bounds.removeFromTop(VALUE_SLIDER_HEIGHT));
+    // Value slider is hidden - skip layout
 
-    // Link indicator area (painted, not a component)
-    // bounds.removeFromTop(LINK_INDICATOR_HEIGHT) is handled in paint
+    // Skip remaining space and position link button at the very bottom
+    auto remainingHeight = bounds.getHeight();
+    if (remainingHeight > LINK_BUTTON_HEIGHT) {
+        bounds.removeFromTop(remainingHeight - LINK_BUTTON_HEIGHT);
+    }
+    linkButton_->setBounds(bounds.removeFromTop(LINK_BUTTON_HEIGHT));
 }
 
 void MacroKnobComponent::mouseDown(const juce::MouseEvent& e) {
@@ -137,20 +168,23 @@ void MacroKnobComponent::mouseUp(const juce::MouseEvent& e) {
     isDragging_ = false;
 }
 
-void MacroKnobComponent::paintLinkIndicator(juce::Graphics& g, juce::Rectangle<int> area) {
-    // Link indicator dot
-    int dotSize = 4;
-    auto dotBounds = area.withSizeKeepingCentre(dotSize, dotSize);
+void MacroKnobComponent::macroLinkModeChanged(bool active, const magda::MacroSelection& selection) {
+    // Update button appearance if this is our macro
+    bool isOurMacro =
+        active && selection.parentPath == parentPath_ && selection.macroIndex == macroIndex_;
+    linkButton_->setActive(isOurMacro);
+    repaint();  // Update purple border
+}
 
-    if (currentMacro_.isLinked()) {
-        // Purple filled dot when linked
-        g.setColour(DarkTheme::getColour(DarkTheme::ACCENT_PURPLE));
-        g.fillEllipse(dotBounds.toFloat());
-    } else {
-        // Gray outline dot when not linked
-        g.setColour(DarkTheme::getSecondaryTextColour().withAlpha(0.5f));
-        g.drawEllipse(dotBounds.toFloat(), 1.0f);
-    }
+void MacroKnobComponent::onLinkButtonClicked() {
+    // Toggle link mode for this macro
+    magda::LinkModeManager::getInstance().toggleMacroLinkMode(parentPath_, macroIndex_);
+}
+
+void MacroKnobComponent::paintLinkIndicator(juce::Graphics& g, juce::Rectangle<int> area) {
+    // No longer needed - link button handles this
+    (void)g;
+    (void)area;
 }
 
 void MacroKnobComponent::showLinkMenu() {

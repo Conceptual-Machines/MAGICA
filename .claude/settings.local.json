@@ -29,7 +29,8 @@
       "Bash(gh label create:*)",
       "Bash(open:*)",
       "Bash(make run-console:*)",
-      "Bash(gh label list:*)"
+      "Bash(gh label list:*)",
+      "Bash(git checkout:*)"
     ]
   },
   "enableAllProjectMcpServers": true,

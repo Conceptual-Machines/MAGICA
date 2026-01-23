@@ -1,5 +1,7 @@
 #include "ModKnobComponent.hpp"
 
+#include "BinaryData.h"
+#include "core/LinkModeManager.hpp"
 #include "ui/themes/DarkTheme.hpp"
 #include "ui/themes/FontManager.hpp"
 
@@ -20,7 +22,7 @@ ModKnobComponent::ModKnobComponent(int modIndex) : modIndex_(modIndex) {
     nameLabel_.setInterceptsMouseClicks(false, false);
     addAndMakeVisible(nameLabel_);
 
-    // Amount slider (modulation depth)
+    // Amount slider (modulation depth) - hidden, amount is set per-parameter link
     amountSlider_.setRange(0.0, 1.0, 0.01);
     amountSlider_.setValue(currentMod_.amount, juce::dontSendNotification);
     amountSlider_.setFont(FontManager::getInstance().getUIFont(9.0f));
@@ -30,68 +32,33 @@ ModKnobComponent::ModKnobComponent(int modIndex) : modIndex_(modIndex) {
             onAmountChanged(currentMod_.amount);
         }
     };
-    amountSlider_.onShiftClicked = [this]() {
-        // Shift+click on slider: if a param is selected, link or edit amount
-        if (selectedParam_.isValid()) {
-            const auto* existingLink = currentMod_.getLink(selectedParam_);
-            bool isLinked = existingLink != nullptr ||
-                            (currentMod_.target.deviceId == selectedParam_.deviceId &&
-                             currentMod_.target.paramIndex == selectedParam_.paramIndex);
+    amountSlider_.setVisible(false);  // Hide - amount is per-parameter, not global
+    addChildComponent(amountSlider_);
 
-            if (isLinked) {
-                // Already linked - show slider to edit amount
-                float currentAmount = existingLink ? existingLink->amount : currentMod_.amount;
-                showAmountSlider(currentAmount, false);
-            } else {
-                // Not linked - immediately create link at 50% and show slider for adjustment
-                if (onNewLinkCreated) {
-                    onNewLinkCreated(selectedParam_, 0.5f);
-                }
-                showAmountSlider(0.5f, false);  // false = editing existing
-            }
-        }
-    };
-    addAndMakeVisible(amountSlider_);
+    // Link button - toggles link mode for this mod (using link_flat icon)
+    linkButton_ = std::make_unique<magda::SvgButton>("Link", BinaryData::link_flat_svg,
+                                                     BinaryData::link_flat_svgSize);
+    linkButton_->setNormalColor(DarkTheme::getSecondaryTextColour());
+    linkButton_->setHoverColor(DarkTheme::getColour(DarkTheme::ACCENT_ORANGE));
+    linkButton_->setActiveColor(DarkTheme::getColour(DarkTheme::ACCENT_ORANGE));
+    linkButton_->setActiveBackgroundColor(
+        DarkTheme::getColour(DarkTheme::ACCENT_ORANGE).withAlpha(0.2f));
+    linkButton_->onClick = [this]() { onLinkButtonClicked(); };
+    addAndMakeVisible(*linkButton_);
+
+    // Register for link mode notifications
+    magda::LinkModeManager::getInstance().addListener(this);
+}
+
+ModKnobComponent::~ModKnobComponent() {
+    magda::LinkModeManager::getInstance().removeListener(this);
 }
 
 void ModKnobComponent::setModInfo(const magda::ModInfo& mod) {
     currentMod_ = mod;
     nameLabel_.setText(mod.name, juce::dontSendNotification);
-    updateAmountDisplay();
-    repaint();  // Update link indicator
-}
-
-void ModKnobComponent::setSelectedParam(const magda::ModTarget& param) {
-    selectedParam_ = param;
-    updateAmountDisplay();
+    amountSlider_.setValue(mod.amount, juce::dontSendNotification);
     repaint();
-}
-
-void ModKnobComponent::clearSelectedParam() {
-    selectedParam_ = magda::ModTarget{};
-    updateAmountDisplay();
-    repaint();
-}
-
-void ModKnobComponent::updateAmountDisplay() {
-    // If a param is selected, show the link amount for that param (if linked)
-    if (selectedParam_.isValid()) {
-        if (const auto* link = currentMod_.getLink(selectedParam_)) {
-            amountSlider_.setValue(link->amount, juce::dontSendNotification);
-            return;
-        }
-        // Legacy check
-        if (currentMod_.target.deviceId == selectedParam_.deviceId &&
-            currentMod_.target.paramIndex == selectedParam_.paramIndex) {
-            amountSlider_.setValue(currentMod_.amount, juce::dontSendNotification);
-            return;
-        }
-        // Not linked to selected param - show 0
-        amountSlider_.setValue(0.0, juce::dontSendNotification);
-    } else {
-        // No param selected - show the mod's global amount
-        amountSlider_.setValue(currentMod_.amount, juce::dontSendNotification);
-    }
 }
 
 void ModKnobComponent::setAvailableTargets(
@@ -107,26 +74,34 @@ void ModKnobComponent::setSelected(bool selected) {
 }
 
 void ModKnobComponent::paint(juce::Graphics& g) {
-    // Background - highlight when selected
-    if (selected_) {
-        g.setColour(DarkTheme::getColour(DarkTheme::ACCENT_ORANGE).withAlpha(0.3f));
+    auto bounds = getLocalBounds();
+
+    // Guard against invalid bounds
+    if (bounds.getWidth() <= 0 || bounds.getHeight() <= 0) {
+        return;
+    }
+
+    // Check if this mod is in link mode (link button is active)
+    bool isInLinkMode =
+        magda::LinkModeManager::getInstance().isModInLinkMode(parentPath_, modIndex_);
+
+    // Background - orange tint when in link mode, normal otherwise
+    if (isInLinkMode) {
+        g.setColour(DarkTheme::getColour(DarkTheme::ACCENT_ORANGE).withAlpha(0.15f));
+        g.fillRoundedRectangle(bounds.toFloat(), 3.0f);
     } else {
         g.setColour(DarkTheme::getColour(DarkTheme::SURFACE).brighter(0.04f));
+        g.fillRoundedRectangle(bounds.toFloat(), 3.0f);
     }
-    g.fillRoundedRectangle(getLocalBounds().toFloat(), 3.0f);
 
-    // Border - orange when selected
+    // Border - grey when selected, default otherwise
     if (selected_) {
-        g.setColour(DarkTheme::getColour(DarkTheme::ACCENT_ORANGE));
-        g.drawRoundedRectangle(getLocalBounds().toFloat().reduced(0.5f), 3.0f, 2.0f);
+        g.setColour(juce::Colour(0xff888888));  // Grey for selection
+        g.drawRoundedRectangle(bounds.toFloat().reduced(0.5f), 3.0f, 2.0f);
     } else {
         g.setColour(DarkTheme::getColour(DarkTheme::BORDER));
-        g.drawRoundedRectangle(getLocalBounds().toFloat().reduced(0.5f), 3.0f, 1.0f);
+        g.drawRoundedRectangle(bounds.toFloat().reduced(0.5f), 3.0f, 1.0f);
     }
-
-    // Link indicator at bottom
-    auto linkArea = getLocalBounds().removeFromBottom(LINK_INDICATOR_HEIGHT);
-    paintLinkIndicator(g, linkArea);
 }
 
 void ModKnobComponent::resized() {
@@ -135,12 +110,15 @@ void ModKnobComponent::resized() {
     // Name label at top
     nameLabel_.setBounds(bounds.removeFromTop(NAME_LABEL_HEIGHT));
 
-    // Amount slider
-    bounds.removeFromTop(1);
-    amountSlider_.setBounds(bounds.removeFromTop(AMOUNT_SLIDER_HEIGHT));
+    // Amount slider is hidden - skip layout
+    // (This space could be used for LFO rate or other mod-specific controls)
 
-    // Link indicator area (painted, not a component)
-    // bounds.removeFromTop(LINK_INDICATOR_HEIGHT) is handled in paint
+    // Skip remaining space and position link button at the very bottom
+    auto remainingHeight = bounds.getHeight();
+    if (remainingHeight > LINK_BUTTON_HEIGHT) {
+        bounds.removeFromTop(remainingHeight - LINK_BUTTON_HEIGHT);
+    }
+    linkButton_->setBounds(bounds.removeFromTop(LINK_BUTTON_HEIGHT));
 }
 
 void ModKnobComponent::mouseDown(const juce::MouseEvent& e) {
@@ -192,66 +170,23 @@ void ModKnobComponent::mouseUp(const juce::MouseEvent& e) {
     isDragging_ = false;
 }
 
-void ModKnobComponent::showAmountSlider(float currentAmount, bool isNewLink) {
-    // Create a simple slider component for the popup
-    auto* slider = new juce::Slider(juce::Slider::LinearHorizontal, juce::Slider::TextBoxRight);
-    slider->setRange(0.0, 100.0, 1.0);
-    slider->setValue(currentAmount * 100.0, juce::dontSendNotification);
-    slider->setTextValueSuffix("%");
-    slider->setSize(200, 30);
+void ModKnobComponent::modLinkModeChanged(bool active, const magda::ModSelection& selection) {
+    // Update button appearance if this is our mod
+    bool isOurMod =
+        active && selection.parentPath == parentPath_ && selection.modIndex == modIndex_;
+    linkButton_->setActive(isOurMod);
+    repaint();  // Update orange border
+}
 
-    auto safeThis = juce::Component::SafePointer<ModKnobComponent>(this);
-    auto target = selectedParam_;
-
-    // When slider changes, update the amount
-    slider->onValueChange = [safeThis, slider, target, isNewLink]() {
-        if (safeThis == nullptr)
-            return;
-        float amount = static_cast<float>(slider->getValue() / 100.0);
-
-        if (isNewLink) {
-            if (safeThis->onNewLinkCreated) {
-                safeThis->onNewLinkCreated(target, amount);
-            }
-        } else {
-            if (safeThis->onLinkAmountChanged) {
-                safeThis->onLinkAmountChanged(target, amount);
-            }
-        }
-    };
-
-    // Show as callout box
-    auto& callout = juce::CallOutBox::launchAsynchronously(std::unique_ptr<juce::Component>(slider),
-                                                           getScreenBounds(), nullptr);
-    (void)callout;
+void ModKnobComponent::onLinkButtonClicked() {
+    // Toggle link mode for this mod
+    magda::LinkModeManager::getInstance().toggleModLinkMode(parentPath_, modIndex_);
 }
 
 void ModKnobComponent::paintLinkIndicator(juce::Graphics& g, juce::Rectangle<int> area) {
-    // Link indicator dot
-    int dotSize = 4;
-    auto dotBounds = area.withSizeKeepingCentre(dotSize, dotSize);
-
-    // Check if linked to the selected param
-    bool linkedToSelectedParam = false;
-    if (selectedParam_.isValid()) {
-        linkedToSelectedParam = currentMod_.getLink(selectedParam_) != nullptr ||
-                                (currentMod_.target.deviceId == selectedParam_.deviceId &&
-                                 currentMod_.target.paramIndex == selectedParam_.paramIndex);
-    }
-
-    if (linkedToSelectedParam) {
-        // Orange filled dot when linked to selected param
-        g.setColour(DarkTheme::getColour(DarkTheme::ACCENT_ORANGE));
-        g.fillEllipse(dotBounds.toFloat());
-    } else if (currentMod_.isLinked()) {
-        // Purple filled dot when linked (but not to selected param)
-        g.setColour(DarkTheme::getColour(DarkTheme::ACCENT_PURPLE));
-        g.fillEllipse(dotBounds.toFloat());
-    } else {
-        // Gray outline dot when not linked
-        g.setColour(DarkTheme::getSecondaryTextColour().withAlpha(0.5f));
-        g.drawEllipse(dotBounds.toFloat(), 1.0f);
-    }
+    // No longer needed - link button handles this
+    (void)g;
+    (void)area;
 }
 
 void ModKnobComponent::showLinkMenu() {

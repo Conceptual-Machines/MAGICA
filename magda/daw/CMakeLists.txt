@@ -48,8 +48,11 @@ juce_add_binary_data(MagdaAssets
     ../../assets/icons/Chords2.svg
     ../../assets/icons/link.svg
     ../../assets/icons/link_bright.svg
+    ../../assets/icons/link_flat.svg
+    ../../assets/icons/knob.svg
     ../../assets/icons/sine-wave.svg
     ../../assets/icons/sine-wave-bright.svg
+    ../../assets/icons/bare_sine.svg
     ../../assets/icons/open_in_new.svg
     ../../assets/icons/power_on.svg
     ../../assets/icons/rack.svg
@@ -87,6 +90,7 @@ set(DAW_CORE_SOURCES
     core/TrackManager.cpp
     core/ClipManager.cpp
     core/SelectionManager.cpp
+    core/LinkModeManager.cpp
     core/UndoManager.cpp
     core/ClipCommands.cpp
     core/TrackCommands.cpp
@@ -207,6 +211,7 @@ set(DAW_HEADERS
     core/ClipInfo.hpp
     core/ClipManager.hpp
     core/SelectionManager.hpp
+    core/LinkModeManager.hpp
     core/UndoManager.hpp
     core/ClipCommands.hpp
     core/TrackCommands.hpp

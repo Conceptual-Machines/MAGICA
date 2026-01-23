@@ -79,7 +79,7 @@ class TrackChainContent : public PanelContent,
 
     // Header bar controls - LEFT side (action buttons)
     std::unique_ptr<magda::SvgButton> globalModsButton_;  // Toggle global modulators panel
-    std::unique_ptr<magda::SvgButton> linkButton_;        // Parameter linking
+    std::unique_ptr<magda::SvgButton> macroButton_;       // Toggle global macros panel
     std::unique_ptr<magda::SvgButton> addRackButton_;     // Add rack button
     std::unique_ptr<magda::SvgButton> treeViewButton_;    // Show chain tree dialog
 

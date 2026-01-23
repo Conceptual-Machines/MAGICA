@@ -204,6 +204,9 @@ class TrackManager {
     // Macro management for devices (path-based for nested device support)
     void setDeviceMacroValue(const ChainNodePath& devicePath, int macroIndex, float value);
     void setDeviceMacroTarget(const ChainNodePath& devicePath, int macroIndex, MacroTarget target);
+    void removeDeviceMacroLink(const ChainNodePath& devicePath, int macroIndex, MacroTarget target);
+    void setDeviceMacroLinkAmount(const ChainNodePath& devicePath, int macroIndex,
+                                  MacroTarget target, float amount);
     void setDeviceMacroName(const ChainNodePath& devicePath, int macroIndex,
                             const juce::String& name);
     void addDeviceMacroPage(const ChainNodePath& devicePath);

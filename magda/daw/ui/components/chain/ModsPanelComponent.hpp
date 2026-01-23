@@ -45,10 +45,6 @@ class ModsPanelComponent : public PagedControlPanel {
     // Set parent path for drag-and-drop (propagates to all knobs)
     void setParentPath(const magda::ChainNodePath& path);
 
-    // Contextual selection - when set, knobs show amounts for this param
-    void setSelectedParam(const magda::ModTarget& param);
-    void clearSelectedParam();
-
     // Set which mod is selected (orange highlight)
     void setSelectedModIndex(int modIndex);
 
@@ -57,9 +53,6 @@ class ModsPanelComponent : public PagedControlPanel {
     std::function<void(int modIndex, magda::ModTarget target)> onModTargetChanged;
     std::function<void(int modIndex, juce::String name)> onModNameChanged;
     std::function<void(int modIndex)> onModClicked;  // Opens modulator editor
-    // Link amount callbacks (for contextual param linking)
-    std::function<void(int modIndex, magda::ModTarget target, float amount)> onModLinkAmountChanged;
-    std::function<void(int modIndex, magda::ModTarget target, float amount)> onModNewLinkCreated;
 
   protected:
     // PagedControlPanel overrides

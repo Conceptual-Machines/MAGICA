@@ -773,11 +773,6 @@ void NodeComponent::selectionTypeChanged(magda::SelectionType newType) {
     if (newType != magda::SelectionType::ChainNode) {
         setSelected(false);
     }
-
-    // If selection type changed away from Param, clear contextual param in mods panel
-    if (newType != magda::SelectionType::Param && modsPanel_) {
-        modsPanel_->clearSelectedParam();
-    }
 }
 
 void NodeComponent::chainNodeSelectionChanged(const magda::ChainNodePath& path) {
@@ -790,20 +785,7 @@ void NodeComponent::chainNodeReselected(const magda::ChainNodePath& /*path*/) {
     // Not used - we handle collapse toggle directly in mouseUp
 }
 
-void NodeComponent::paramSelectionChanged(const magda::ParamSelection& selection) {
-    // When a param is selected, update mods panel to show contextual amounts
-    if (modsPanel_) {
-        if (selection.isValid()) {
-            // Create a ModTarget from the ParamSelection
-            magda::ModTarget target;
-            target.deviceId = selection.devicePath.getDeviceId();
-            target.paramIndex = selection.paramIndex;
-            modsPanel_->setSelectedParam(target);
-        } else {
-            modsPanel_->clearSelectedParam();
-        }
-    }
-}
+void NodeComponent::paramSelectionChanged(const magda::ParamSelection& selection) {}
 
 void NodeComponent::mouseDown(const juce::MouseEvent& e) {
     // Only handle left clicks for selection
@@ -928,13 +910,6 @@ void NodeComponent::initializeModsMacrosPanels() {
     };
     modsPanel_->onPanelClicked = [this]() {
         magda::SelectionManager::getInstance().selectModsPanel(nodePath_);
-    };
-    modsPanel_->onModLinkAmountChanged = [this](int modIndex, magda::ModTarget target,
-                                                float amount) {
-        onModLinkAmountChangedInternal(modIndex, target, amount);
-    };
-    modsPanel_->onModNewLinkCreated = [this](int modIndex, magda::ModTarget target, float amount) {
-        onModNewLinkCreatedInternal(modIndex, target, amount);
     };
     addChildComponent(*modsPanel_);
 

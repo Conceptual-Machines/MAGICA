@@ -510,8 +510,8 @@ TrackChainContent::TrackChainContent()
     // === HEADER BAR CONTROLS - LEFT SIDE (action buttons) ===
 
     // Global mods toggle button (sine wave icon - same as rack/device mod buttons)
-    globalModsButton_ = std::make_unique<magda::SvgButton>("Mod", BinaryData::sinewavebright_svg,
-                                                           BinaryData::sinewavebright_svgSize);
+    globalModsButton_ = std::make_unique<magda::SvgButton>("Mod", BinaryData::bare_sine_svg,
+                                                           BinaryData::bare_sine_svgSize);
     globalModsButton_->setClickingTogglesState(true);
     globalModsButton_->setNormalColor(DarkTheme::getSecondaryTextColour());
     globalModsButton_->setActiveColor(juce::Colours::white);
@@ -525,20 +525,20 @@ TrackChainContent::TrackChainContent()
     };
     addChildComponent(*globalModsButton_);
 
-    // Link button (parameter linking)
-    linkButton_ = std::make_unique<magda::SvgButton>("Link", BinaryData::link_bright_svg,
-                                                     BinaryData::link_bright_svgSize);
-    linkButton_->setClickingTogglesState(true);
-    linkButton_->setNormalColor(DarkTheme::getSecondaryTextColour());
-    linkButton_->setActiveColor(juce::Colours::white);
-    linkButton_->setActiveBackgroundColor(DarkTheme::getColour(DarkTheme::ACCENT_BLUE));
-    linkButton_->setBorderColor(DarkTheme::getColour(DarkTheme::BORDER));
-    linkButton_->onClick = [this]() {
-        linkButton_->setActive(linkButton_->getToggleState());
+    // Macro button (global macros toggle)
+    macroButton_ =
+        std::make_unique<magda::SvgButton>("Macro", BinaryData::knob_svg, BinaryData::knob_svgSize);
+    macroButton_->setClickingTogglesState(true);
+    macroButton_->setNormalColor(DarkTheme::getSecondaryTextColour());
+    macroButton_->setActiveColor(juce::Colours::white);
+    macroButton_->setActiveBackgroundColor(DarkTheme::getColour(DarkTheme::ACCENT_BLUE));
+    macroButton_->setBorderColor(DarkTheme::getColour(DarkTheme::BORDER));
+    macroButton_->onClick = [this]() {
+        macroButton_->setActive(macroButton_->getToggleState());
         // TODO: Toggle parameter linking mode
-        DBG("Link mode: " << (linkButton_->getToggleState() ? "ON" : "OFF"));
+        DBG("Link mode: " << (macroButton_->getToggleState() ? "ON" : "OFF"));
     };
-    addChildComponent(*linkButton_);
+    addChildComponent(*macroButton_);
 
     // Add rack button (rack icon with blue fill, grey border)
     addRackButton_ =
@@ -784,7 +784,7 @@ void TrackChainContent::resized() {
         // LEFT SIDE - Action buttons
         globalModsButton_->setBounds(headerArea.removeFromLeft(20));
         headerArea.removeFromLeft(2);
-        linkButton_->setBounds(headerArea.removeFromLeft(20));
+        macroButton_->setBounds(headerArea.removeFromLeft(20));
         headerArea.removeFromLeft(8);
         addRackButton_->setBounds(headerArea.removeFromLeft(20));
         headerArea.removeFromLeft(4);
@@ -962,7 +962,7 @@ void TrackChainContent::updateFromSelectedTrack() {
 void TrackChainContent::showHeader(bool show) {
     // Left side - action buttons
     globalModsButton_->setVisible(show);
-    linkButton_->setVisible(show);
+    macroButton_->setVisible(show);
     addRackButton_->setVisible(show);
     treeViewButton_->setVisible(show);
     // Right side - track info

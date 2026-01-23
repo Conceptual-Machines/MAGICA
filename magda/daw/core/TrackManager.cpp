@@ -1014,7 +1014,26 @@ static ChainInfo* getChainFromPath(TrackManager& tm, const ChainNodePath& chainP
 }
 
 void TrackManager::removeDeviceFromChainByPath(const ChainNodePath& devicePath) {
-    // devicePath ends with a Device step
+    // Handle top-level device (uses topLevelDeviceId field)
+    if (devicePath.topLevelDeviceId != INVALID_DEVICE_ID) {
+        auto* track = getTrack(devicePath.trackId);
+        if (!track)
+            return;
+        auto& elements = track->chainElements;
+        auto it =
+            std::find_if(elements.begin(), elements.end(), [&devicePath](const ChainElement& e) {
+                return magda::isDevice(e) && magda::getDevice(e).id == devicePath.topLevelDeviceId;
+            });
+        if (it != elements.end()) {
+            DBG("Removed top-level device: " << magda::getDevice(*it).name
+                                             << " (id=" << devicePath.topLevelDeviceId << ")");
+            elements.erase(it);
+            notifyTrackDevicesChanged(devicePath.trackId);
+        }
+        return;
+    }
+
+    // Handle nested device (uses steps vector ending with Device step)
     if (devicePath.steps.empty())
         return;
 
@@ -1039,8 +1058,8 @@ void TrackManager::removeDeviceFromChainByPath(const ChainNodePath& devicePath) 
             return magda::isDevice(e) && magda::getDevice(e).id == deviceId;
         });
         if (it != elements.end()) {
-            DBG("Removed device via path: " << magda::getDevice(*it).name << " (id=" << deviceId
-                                            << ")");
+            DBG("Removed nested device via path: " << magda::getDevice(*it).name
+                                                   << " (id=" << deviceId << ")");
             elements.erase(it);
             notifyTrackDevicesChanged(devicePath.trackId);
         }
@@ -1456,9 +1475,15 @@ void TrackManager::setDeviceModLinkAmount(const ChainNodePath& devicePath, int m
         if (modIndex < 0 || modIndex >= static_cast<int>(device->mods.size())) {
             return;
         }
-        // Update amount in links vector
+        // Update amount in links vector (or create link if it doesn't exist)
         if (auto* link = device->mods[modIndex].getLink(target)) {
             link->amount = amount;
+        } else {
+            // Link doesn't exist - create it
+            ModLink newLink;
+            newLink.target = target;
+            newLink.amount = amount;
+            device->mods[modIndex].links.push_back(newLink);
         }
         // Also update legacy amount if target matches
         if (device->mods[modIndex].target == target) {
@@ -1542,6 +1567,43 @@ void TrackManager::setDeviceMacroTarget(const ChainNodePath& devicePath, int mac
         }
         device->macros[macroIndex].target = target;
         // Don't notify - simple value change doesn't need UI rebuild
+    }
+}
+
+void TrackManager::removeDeviceMacroLink(const ChainNodePath& devicePath, int macroIndex,
+                                         MacroTarget target) {
+    if (auto* device = getDeviceInChainByPath(devicePath)) {
+        if (macroIndex < 0 || macroIndex >= static_cast<int>(device->macros.size())) {
+            return;
+        }
+        device->macros[macroIndex].removeLink(target);
+        // Clear legacy target if it matches
+        if (device->macros[macroIndex].target == target) {
+            device->macros[macroIndex].target = MacroTarget{};
+        }
+    }
+}
+
+void TrackManager::setDeviceMacroLinkAmount(const ChainNodePath& devicePath, int macroIndex,
+                                            MacroTarget target, float amount) {
+    if (auto* device = getDeviceInChainByPath(devicePath)) {
+        if (macroIndex < 0 || macroIndex >= static_cast<int>(device->macros.size())) {
+            return;
+        }
+        // Update amount in links vector (or create link if it doesn't exist)
+        if (auto* link = device->macros[macroIndex].getLink(target)) {
+            link->amount = amount;
+        } else {
+            // Link doesn't exist - create it
+            MacroLink newLink;
+            newLink.target = target;
+            newLink.amount = amount;
+            device->macros[macroIndex].links.push_back(newLink);
+        }
+        // Also update legacy value if target matches
+        if (device->macros[macroIndex].target == target) {
+            device->macros[macroIndex].value = amount;
+        }
     }
 }
 

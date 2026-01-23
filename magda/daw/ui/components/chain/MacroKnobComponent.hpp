@@ -4,14 +4,16 @@
 
 #include <functional>
 
+#include "core/LinkModeManager.hpp"
 #include "core/MacroInfo.hpp"
 #include "core/SelectionManager.hpp"
+#include "ui/components/common/SvgButton.hpp"
 #include "ui/components/common/TextSlider.hpp"
 
 namespace magda::daw::ui {
 
 /**
- * @brief A single macro knob with label, value slider, and link indicator
+ * @brief A single macro knob with label, value slider, and link button
  *
  * Supports drag-and-drop: drag from this knob onto a ParamSlotComponent to create a link.
  *
@@ -19,13 +21,16 @@ namespace magda::daw::ui {
  * +-----------+
  * | Macro 1   |  <- name label (editable on double-click)
  * |   0.50    |  <- value slider (0.0 to 1.0)
- * |     *     |  <- link dot (purple if linked)
+ * |   [Link]  |  <- link button (toggle link mode)
  * +-----------+
+ *
+ * Clicking the main area opens the macro editor side panel.
+ * Clicking the link button enters link mode for this macro.
  */
-class MacroKnobComponent : public juce::Component {
+class MacroKnobComponent : public juce::Component, public magda::LinkModeManagerListener {
   public:
     explicit MacroKnobComponent(int macroIndex);
-    ~MacroKnobComponent() override = default;
+    ~MacroKnobComponent() override;
 
     // Set macro info from data model
     void setMacroInfo(const magda::MacroInfo& macro);
@@ -66,13 +71,18 @@ class MacroKnobComponent : public juce::Component {
     static constexpr const char* DRAG_PREFIX = "macro_drag:";
 
   private:
+    // LinkModeManagerListener implementation
+    void macroLinkModeChanged(bool active, const magda::MacroSelection& selection) override;
+
     void showLinkMenu();
     void paintLinkIndicator(juce::Graphics& g, juce::Rectangle<int> area);
     void onNameLabelEdited();
+    void onLinkButtonClicked();
 
     int macroIndex_;
     juce::Label nameLabel_;
     TextSlider valueSlider_{TextSlider::Format::Decimal};
+    std::unique_ptr<magda::SvgButton> linkButton_;
     magda::MacroInfo currentMacro_;
     std::vector<std::pair<magda::DeviceId, juce::String>> availableTargets_;
     bool selected_ = false;
@@ -85,7 +95,7 @@ class MacroKnobComponent : public juce::Component {
 
     static constexpr int NAME_LABEL_HEIGHT = 11;
     static constexpr int VALUE_SLIDER_HEIGHT = 14;
-    static constexpr int LINK_INDICATOR_HEIGHT = 6;
+    static constexpr int LINK_BUTTON_HEIGHT = 16;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(MacroKnobComponent)
 };

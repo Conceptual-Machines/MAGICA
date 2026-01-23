@@ -1,11 +1,18 @@
 #include "ParamSlotComponent.hpp"
 
+#include "core/LinkModeManager.hpp"
 #include "ui/themes/DarkTheme.hpp"
 #include "ui/themes/FontManager.hpp"
 
 namespace magda::daw::ui {
 
 ParamSlotComponent::ParamSlotComponent(int paramIndex) : paramIndex_(paramIndex) {
+    // Register for link mode notifications
+    magda::LinkModeManager::getInstance().addListener(this);
+
+    // Allow painting outside bounds for tooltip
+    setInterceptsMouseClicks(true, true);
+
     nameLabel_.setJustificationType(juce::Justification::centredLeft);
     nameLabel_.setColour(juce::Label::textColourId, DarkTheme::getSecondaryTextColour());
     nameLabel_.setInterceptsMouseClicks(false, false);
@@ -13,6 +20,8 @@ ParamSlotComponent::ParamSlotComponent(int paramIndex) : paramIndex_(paramIndex)
 
     valueSlider_.setRange(0.0, 1.0, 0.01);
     valueSlider_.setValue(0.5, juce::dontSendNotification);
+    valueSlider_.setTextColour(juce::Colours::white);  // Bright white for better visibility
+    valueSlider_.setBackgroundColour(juce::Colours::transparentBlack);  // Transparent background
     valueSlider_.onValueChanged = [this](double value) {
         if (onValueChanged) {
             onValueChanged(value);
@@ -29,14 +38,15 @@ ParamSlotComponent::ParamSlotComponent(int paramIndex) : paramIndex_(paramIndex)
         showLinkMenu();
     };
 
-    // Amount label for Shift+drag feedback
-    amountLabel_.setFont(FontManager::getInstance().getUIFont(10.0f));
+    // Amount label for link mode drag tooltip
+    amountLabel_.setFont(FontManager::getInstance().getUIFont(12.0f));
     amountLabel_.setColour(juce::Label::textColourId, juce::Colours::white);
     amountLabel_.setColour(juce::Label::backgroundColourId,
-                           DarkTheme::getColour(DarkTheme::ACCENT_ORANGE).withAlpha(0.9f));
+                           DarkTheme::getColour(DarkTheme::ACCENT_ORANGE).withAlpha(0.95f));
     amountLabel_.setJustificationType(juce::Justification::centred);
     amountLabel_.setVisible(false);
-    addAndMakeVisible(amountLabel_);
+    amountLabel_.setAlwaysOnTop(true);
+    addChildComponent(amountLabel_);
 
     // Shift+drag: edit mod amount when a mod is selected
     valueSlider_.onShiftDragStart = [this](float /*startValue*/) {
@@ -124,6 +134,157 @@ ParamSlotComponent::ParamSlotComponent(int paramIndex) : paramIndex_(paramIndex)
     setInterceptsMouseClicks(true, true);
 }
 
+ParamSlotComponent::~ParamSlotComponent() {
+    // Clean up tooltip if it's on desktop
+    if (amountLabel_.isOnDesktop()) {
+        amountLabel_.removeFromDesktop();
+    }
+    magda::LinkModeManager::getInstance().removeListener(this);
+}
+
+void ParamSlotComponent::modLinkModeChanged(bool active, const magda::ModSelection& selection) {
+    isInLinkMode_ = active;
+    activeMod_ = selection;
+
+    // Clean up tooltip if link mode is being exited
+    if (!active) {
+        isLinkModeDrag_ = false;
+        amountLabel_.setVisible(false);
+        if (amountLabel_.isOnDesktop()) {
+            amountLabel_.removeFromDesktop();
+        }
+    }
+
+    // Disable value slider interaction when in link mode
+    valueSlider_.setInterceptsMouseClicks(!active, !active);
+
+    // Update cursor if mouse is hovering
+    if (isMouseOver()) {
+        setMouseCursor(isInLinkMode_ ? juce::MouseCursor::PointingHandCursor
+                                     : juce::MouseCursor::NormalCursor);
+    }
+
+    repaint();  // Show link mode highlight
+}
+
+void ParamSlotComponent::macroLinkModeChanged(bool active, const magda::MacroSelection& selection) {
+    isInLinkMode_ = active;
+    activeMacro_ = selection;
+
+    // Clean up tooltip if link mode is being exited
+    if (!active) {
+        isLinkModeDrag_ = false;
+        amountLabel_.setVisible(false);
+        if (amountLabel_.isOnDesktop()) {
+            amountLabel_.removeFromDesktop();
+        }
+    }
+
+    // Disable value slider interaction when in link mode
+    valueSlider_.setInterceptsMouseClicks(!active, !active);
+
+    // Update cursor if mouse is hovering
+    if (isMouseOver()) {
+        setMouseCursor(isInLinkMode_ ? juce::MouseCursor::PointingHandCursor
+                                     : juce::MouseCursor::NormalCursor);
+    }
+
+    repaint();  // Show link mode highlight
+}
+
+void ParamSlotComponent::handleLinkModeClick() {
+    if (!isInLinkMode_) {
+        return;
+    }
+
+    // Check if a mod or macro is active
+    if (activeMod_.isValid() && availableMods_ && activeMod_.modIndex >= 0 &&
+        activeMod_.modIndex < static_cast<int>(availableMods_->size())) {
+        // Mod link mode
+        const auto& mod = (*availableMods_)[static_cast<size_t>(activeMod_.modIndex)];
+        magda::ModTarget thisTarget{deviceId_, paramIndex_};
+
+        // Check if already linked
+        const auto* existingLink = mod.getLink(thisTarget);
+        bool isLinked = existingLink != nullptr ||
+                        (mod.target.deviceId == deviceId_ && mod.target.paramIndex == paramIndex_);
+
+        float initialAmount = isLinked ? (existingLink ? existingLink->amount : mod.amount) : 0.5f;
+
+        if (!isLinked) {
+            // Create new link
+            if (onModLinkedWithAmount) {
+                onModLinkedWithAmount(activeMod_.modIndex, thisTarget, initialAmount);
+            }
+        }
+
+        // Show overlay slider
+        showLinkModeSlider(!isLinked, initialAmount);
+    } else if (activeMacro_.isValid() && availableMacros_ && activeMacro_.macroIndex >= 0 &&
+               activeMacro_.macroIndex < static_cast<int>(availableMacros_->size())) {
+        // Macro link mode
+        const auto& macro = (*availableMacros_)[static_cast<size_t>(activeMacro_.macroIndex)];
+        magda::MacroTarget thisTarget{deviceId_, paramIndex_};
+
+        // Check if already linked
+        bool isLinked =
+            macro.target.deviceId == deviceId_ && macro.target.paramIndex == paramIndex_;
+
+        if (!isLinked) {
+            // Create new link
+            if (onMacroLinked) {
+                onMacroLinked(activeMacro_.macroIndex, thisTarget);
+            }
+        }
+
+        // For macros, we don't show a slider since they don't have per-link amounts
+        // Just exit link mode
+        magda::LinkModeManager::getInstance().exitMacroLinkMode();
+    }
+}
+
+void ParamSlotComponent::showLinkModeSlider(bool /*isNewLink*/, float initialAmount) {
+    if (!linkModeSlider_) {
+        linkModeSlider_ = std::make_unique<juce::Slider>(juce::Slider::LinearHorizontal,
+                                                         juce::Slider::TextBoxRight);
+        linkModeSlider_->setRange(0.0, 100.0, 1.0);
+        linkModeSlider_->setTextValueSuffix("%");
+        linkModeSlider_->setColour(juce::Slider::backgroundColourId,
+                                   DarkTheme::getColour(DarkTheme::SURFACE));
+        linkModeSlider_->setColour(juce::Slider::thumbColourId,
+                                   DarkTheme::getColour(DarkTheme::ACCENT_ORANGE));
+        linkModeSlider_->setColour(juce::Slider::trackColourId,
+                                   DarkTheme::getColour(DarkTheme::ACCENT_ORANGE).withAlpha(0.5f));
+
+        auto safeThis = juce::Component::SafePointer<ParamSlotComponent>(this);
+        linkModeSlider_->onValueChange = [safeThis]() {
+            if (safeThis == nullptr || !safeThis->linkModeSlider_) {
+                return;
+            }
+            float amount = static_cast<float>(safeThis->linkModeSlider_->getValue() / 100.0);
+
+            if (safeThis->activeMod_.isValid() && safeThis->onModAmountChanged) {
+                magda::ModTarget thisTarget{safeThis->deviceId_, safeThis->paramIndex_};
+                safeThis->onModAmountChanged(safeThis->activeMod_.modIndex, thisTarget, amount);
+            }
+        };
+
+        addAndMakeVisible(*linkModeSlider_);
+    }
+
+    linkModeSlider_->setValue(initialAmount * 100.0, juce::dontSendNotification);
+    linkModeSlider_->setBounds(getLocalBounds().reduced(2));
+    linkModeSlider_->toFront(true);
+    linkModeSlider_->setVisible(true);
+    linkModeSlider_->grabKeyboardFocus();
+}
+
+void ParamSlotComponent::hideLinkModeSlider() {
+    if (linkModeSlider_) {
+        linkModeSlider_->setVisible(false);
+    }
+}
+
 void ParamSlotComponent::setParamName(const juce::String& name) {
     nameLabel_.setText(name, juce::dontSendNotification);
 }
@@ -135,6 +296,9 @@ void ParamSlotComponent::setParamValue(double value) {
 void ParamSlotComponent::setFonts(const juce::Font& labelFont, const juce::Font& valueFont) {
     nameLabel_.setFont(labelFont);
     valueSlider_.setFont(valueFont);
+    valueSlider_.setTextColour(juce::Colours::white);  // Ensure white text after font change
+    valueSlider_.setBackgroundColour(
+        juce::Colours::transparentBlack);  // Ensure transparent background
 }
 
 void ParamSlotComponent::paint(juce::Graphics& /*g*/) {
@@ -142,36 +306,26 @@ void ParamSlotComponent::paint(juce::Graphics& /*g*/) {
 }
 
 void ParamSlotComponent::paintOverChildren(juce::Graphics& g) {
-    // Draw drag-over highlight (orange border when a mod is being dragged over)
-    if (isDragOver_) {
-        g.setColour(DarkTheme::getColour(DarkTheme::ACCENT_ORANGE).withAlpha(0.3f));
+    // Draw link mode highlight (background tint when a mod/macro is in link mode)
+    if (isInLinkMode_) {
+        auto color = activeMod_.isValid()
+                         ? DarkTheme::getColour(DarkTheme::ACCENT_ORANGE).withAlpha(0.15f)
+                         : DarkTheme::getColour(DarkTheme::ACCENT_PURPLE).withAlpha(0.15f);
+        g.setColour(color);
         g.fillRoundedRectangle(getLocalBounds().toFloat(), 2.0f);
-        g.setColour(DarkTheme::getColour(DarkTheme::ACCENT_ORANGE));
+    }
+    // Draw drag-over highlight (background tint when a mod is being dragged over)
+    else if (isDragOver_) {
+        g.setColour(DarkTheme::getColour(DarkTheme::ACCENT_ORANGE).withAlpha(0.15f));
+        g.fillRoundedRectangle(getLocalBounds().toFloat(), 2.0f);
+    }
+    // Draw selection highlight (border only)
+    else if (selected_) {
+        g.setColour(juce::Colour(0xff888888));
         g.drawRoundedRectangle(getLocalBounds().toFloat().reduced(0.5f), 2.0f, 2.0f);
     }
-    // Draw selection highlight on top of children
-    else if (selected_) {
-        g.setColour(juce::Colour(0xff888888).withAlpha(0.15f));
-        g.fillRoundedRectangle(getLocalBounds().toFloat(), 2.0f);
-        g.setColour(juce::Colour(0xff888888));
-        g.drawRoundedRectangle(getLocalBounds().toFloat().reduced(0.5f), 2.0f, 1.0f);
-    }
 
-    // Draw value indicator line at bottom of slider area
-    auto sliderBounds = valueSlider_.getBounds();
-    int indicatorHeight = 3;
-    int indicatorY = sliderBounds.getBottom() - indicatorHeight - 1;
-    int totalWidth = sliderBounds.getWidth() - 4;
-    int x = sliderBounds.getX() + 2;
-
-    // Draw current value as a grey line
-    double value = valueSlider_.getValue();
-    int barWidth = static_cast<int>(totalWidth * value);
-    g.setColour(juce::Colour(0xff888888).withAlpha(0.6f));  // Grey
-    g.fillRoundedRectangle(static_cast<float>(x), static_cast<float>(indicatorY),
-                           static_cast<float>(barWidth), static_cast<float>(indicatorHeight), 1.5f);
-
-    // Draw modulation indicators (stacked above value line)
+    // Draw modulation indicators as horizontal bars
     paintModulationIndicators(g);
 }
 
@@ -186,10 +340,69 @@ void ParamSlotComponent::resized() {
     valueSlider_.setBounds(bounds);
 }
 
+void ParamSlotComponent::mouseEnter(const juce::MouseEvent& /*e*/) {
+    // Change cursor to pointing hand when in link mode
+    if (isInLinkMode_) {
+        setMouseCursor(juce::MouseCursor::PointingHandCursor);
+    }
+}
+
+void ParamSlotComponent::mouseExit(const juce::MouseEvent& /*e*/) {
+    // Restore default cursor
+    setMouseCursor(juce::MouseCursor::NormalCursor);
+}
+
 void ParamSlotComponent::mouseDown(const juce::MouseEvent& e) {
     // Handle right-click anywhere on the component
     if (e.mods.isPopupMenu()) {
         showLinkMenu();
+        return;
+    }
+
+    // Handle link mode - prepare for drag to set amount (mods only, macros are click-to-link)
+    if (isInLinkMode_ && e.mods.isLeftButtonDown() && activeMod_.isValid()) {
+        // Mod link mode - get existing link amount or default to 50%
+        float initialAmount = 0.5f;
+        bool isLinked = false;
+
+        if (activeMod_.isValid() && availableMods_ && activeMod_.modIndex >= 0 &&
+            activeMod_.modIndex < static_cast<int>(availableMods_->size())) {
+            const auto& mod = (*availableMods_)[static_cast<size_t>(activeMod_.modIndex)];
+            magda::ModTarget thisTarget{deviceId_, paramIndex_};
+
+            const auto* existingLink = mod.getLink(thisTarget);
+            isLinked = existingLink != nullptr ||
+                       (mod.target.deviceId == deviceId_ && mod.target.paramIndex == paramIndex_);
+
+            if (isLinked) {
+                initialAmount = existingLink ? existingLink->amount : mod.amount;
+            }
+        }
+
+        // Start link mode drag for mods
+        isLinkModeDrag_ = true;
+        linkModeDragStartAmount_ = initialAmount;
+        linkModeDragCurrentAmount_ = initialAmount;
+        linkModeDragStartY_ = e.getMouseDownY();
+
+        // Show tooltip-style amount label
+        int percent = static_cast<int>(initialAmount * 100);
+        amountLabel_.setText(juce::String(percent) + "%", juce::dontSendNotification);
+
+        // Add tooltip to desktop so it can render outside component bounds
+        if (!amountLabel_.isOnDesktop()) {
+            amountLabel_.addToDesktop(juce::ComponentPeer::windowIsTemporary |
+                                      juce::ComponentPeer::windowIgnoresMouseClicks);
+        }
+
+        // Position above the parameter cell in screen coordinates
+        auto screenBounds = getScreenBounds();
+        amountLabel_.setBounds(screenBounds.getX(), screenBounds.getY() - 22,
+                               screenBounds.getWidth(), 20);
+        amountLabel_.setVisible(true);
+        amountLabel_.toFront(true);
+
+        repaint();
         return;
     }
 
@@ -203,11 +416,90 @@ void ParamSlotComponent::mouseDown(const juce::MouseEvent& e) {
     // Note: Shift+drag and regular drag on slider are handled by valueSlider_ callbacks
 }
 
-void ParamSlotComponent::mouseDrag(const juce::MouseEvent& /*e*/) {
-    // Drag handling is done by valueSlider_ callbacks
+void ParamSlotComponent::mouseDrag(const juce::MouseEvent& e) {
+    // Handle link mode drag - vertical drag sets modulation amount
+    if (isLinkModeDrag_) {
+        // Calculate amount based on vertical drag distance
+        // Drag down = decrease, drag up = increase
+        int deltaY = linkModeDragStartY_ - e.getPosition().y;  // Inverted: up = positive
+        float sensitivity = 0.005f;                            // 200 pixels = full range
+        float newAmount =
+            juce::jlimit(0.0f, 1.0f, linkModeDragStartAmount_ + (deltaY * sensitivity));
+
+        // Store current drag amount for visual preview
+        linkModeDragCurrentAmount_ = newAmount;
+
+        // Create or update the link
+        if (activeMod_.isValid() && availableMods_ && activeMod_.modIndex >= 0 &&
+            activeMod_.modIndex < static_cast<int>(availableMods_->size())) {
+            magda::ModTarget thisTarget{deviceId_, paramIndex_};
+
+            // Check if link exists
+            const auto& mod = (*availableMods_)[static_cast<size_t>(activeMod_.modIndex)];
+            const auto* existingLink = mod.getLink(thisTarget);
+            bool isLinked = existingLink != nullptr || (mod.target.deviceId == deviceId_ &&
+                                                        mod.target.paramIndex == paramIndex_);
+
+            if (isLinked) {
+                // Update existing link amount
+                if (onModAmountChanged) {
+                    onModAmountChanged(activeMod_.modIndex, thisTarget, newAmount);
+                }
+            } else {
+                // Create new link with current amount
+                if (onModLinkedWithAmount) {
+                    onModLinkedWithAmount(activeMod_.modIndex, thisTarget, newAmount);
+                }
+            }
+
+            // Update tooltip label
+            int percent = static_cast<int>(newAmount * 100);
+            amountLabel_.setText(juce::String(percent) + "%", juce::dontSendNotification);
+
+            repaint();
+        }
+        return;
+    }
+
+    // Regular drag handling is done by valueSlider_ callbacks
 }
 
 void ParamSlotComponent::mouseUp(const juce::MouseEvent& /*e*/) {
+    // Clean up link mode drag state (for mods)
+    if (isLinkModeDrag_) {
+        isLinkModeDrag_ = false;
+        amountLabel_.setVisible(false);
+
+        // Remove from desktop if it was added
+        if (amountLabel_.isOnDesktop()) {
+            amountLabel_.removeFromDesktop();
+        }
+
+        repaint();
+        return;
+    }
+
+    // Handle macro link mode - click to link (not drag)
+    if (isInLinkMode_ && activeMacro_.isValid() && availableMacros_ &&
+        activeMacro_.macroIndex >= 0 &&
+        activeMacro_.macroIndex < static_cast<int>(availableMacros_->size())) {
+        const auto& macro = (*availableMacros_)[static_cast<size_t>(activeMacro_.macroIndex)];
+        magda::MacroTarget thisTarget{deviceId_, paramIndex_};
+
+        // Check if already linked
+        bool isLinked =
+            macro.target.deviceId == deviceId_ && macro.target.paramIndex == paramIndex_;
+
+        if (!isLinked) {
+            // Create new link
+            if (onMacroLinked) {
+                onMacroLinked(activeMacro_.macroIndex, thisTarget);
+            }
+        }
+        // Don't exit macro link mode - let user link multiple parameters
+        return;
+    }
+
     // Mouse up handling is done by valueSlider_ callbacks
 }
 
@@ -260,6 +552,17 @@ std::vector<std::pair<int, const magda::MacroInfo*>> ParamSlotComponent::getLink
         return linked;
     }
 
+    // If a macro is selected, only check that specific macro
+    if (selectedMacroIndex_ >= 0 &&
+        selectedMacroIndex_ < static_cast<int>(availableMacros_->size())) {
+        const auto& macro = (*availableMacros_)[static_cast<size_t>(selectedMacroIndex_)];
+        if (macro.target.deviceId == deviceId_ && macro.target.paramIndex == paramIndex_) {
+            linked.push_back({selectedMacroIndex_, &macro});
+        }
+        return linked;
+    }
+
+    // No macro selected - show all linked macros
     for (size_t i = 0; i < availableMacros_->size(); ++i) {
         const auto& macro = (*availableMacros_)[i];
         if (macro.target.deviceId == deviceId_ && macro.target.paramIndex == paramIndex_) {
@@ -270,44 +573,58 @@ std::vector<std::pair<int, const magda::MacroInfo*>> ParamSlotComponent::getLink
 }
 
 void ParamSlotComponent::paintModulationIndicators(juce::Graphics& g) {
-    auto linkedMods = getLinkedMods();
-    auto linkedMacros = getLinkedMacros();
+    auto sliderBounds = valueSlider_.getBounds();
 
-    if (linkedMods.empty() && linkedMacros.empty()) {
+    // Guard against invalid bounds
+    if (sliderBounds.getWidth() <= 4 || sliderBounds.getHeight() <= 0) {
         return;
     }
 
-    // Draw indicators stacked above the value line
-    auto sliderBounds = valueSlider_.getBounds();
-    int indicatorHeight = 3;
-    // Start above the value line (which is at bottom - indicatorHeight - 1)
-    int indicatorY = sliderBounds.getBottom() - (indicatorHeight * 2) - 2;
-    int totalWidth = sliderBounds.getWidth() - 4;
-    int x = sliderBounds.getX() + 2;
+    // Use most of the slider width for the max bar width
+    int maxWidth = sliderBounds.getWidth() - 4;
+    int leftX = sliderBounds.getX() + 2;
 
-    // Draw mod indicators (orange) - use mod.amount, not link->amount
-    for (const auto& [modIndex, link] : linkedMods) {
-        // Get the mod's amount (not the per-link amount)
-        float modAmount = 0.5f;
-        if (availableMods_ && modIndex < static_cast<int>(availableMods_->size())) {
-            modAmount = (*availableMods_)[static_cast<size_t>(modIndex)].amount;
-        }
-        int barWidth = static_cast<int>(totalWidth * modAmount);
-        g.setColour(DarkTheme::getColour(DarkTheme::ACCENT_ORANGE).withAlpha(0.8f));
-        g.fillRoundedRectangle(static_cast<float>(x), static_cast<float>(indicatorY),
-                               static_cast<float>(barWidth), static_cast<float>(indicatorHeight),
-                               1.5f);
-        indicatorY -= (indicatorHeight + 1);  // Stack multiple indicators
+    // Bar height (thickness)
+    const int barHeight = 3;
+    int y = sliderBounds.getBottom() - 2;
+
+    // If we're dragging in link mode, only show preview of current drag amount
+    if (isLinkModeDrag_ && activeMod_.isValid()) {
+        int barWidth = juce::jmax(1, static_cast<int>(maxWidth * linkModeDragCurrentAmount_));
+        g.setColour(DarkTheme::getColour(DarkTheme::ACCENT_ORANGE).withAlpha(0.5f));
+        g.fillRoundedRectangle(static_cast<float>(leftX), static_cast<float>(y - barHeight),
+                               static_cast<float>(barWidth), static_cast<float>(barHeight), 1.0f);
+        return;  // Don't draw other indicators while dragging
     }
 
-    // Draw macro indicators (purple)
+    // Only draw mod/macro indicators when in link mode
+    if (!isInLinkMode_) {
+        return;
+    }
+
+    // Draw mod indicators (orange) - horizontal bars
+    auto linkedMods = getLinkedMods();
+    for (const auto& [modIndex, link] : linkedMods) {
+        float linkAmount = link->amount;
+        int barWidth = juce::jmax(1, static_cast<int>(maxWidth * linkAmount));
+
+        g.setColour(DarkTheme::getColour(DarkTheme::ACCENT_ORANGE).withAlpha(0.5f));
+        g.fillRoundedRectangle(static_cast<float>(leftX), static_cast<float>(y - barHeight),
+                               static_cast<float>(barWidth), static_cast<float>(barHeight), 1.0f);
+
+        y -= (barHeight + 1);
+    }
+
+    // Draw macro indicators (purple) - horizontal bars
+    auto linkedMacros = getLinkedMacros();
     for (const auto& [macroIndex, macro] : linkedMacros) {
-        int barWidth = static_cast<int>(totalWidth * macro->value);
-        g.setColour(DarkTheme::getColour(DarkTheme::ACCENT_PURPLE).withAlpha(0.8f));
-        g.fillRoundedRectangle(static_cast<float>(x), static_cast<float>(indicatorY),
-                               static_cast<float>(barWidth), static_cast<float>(indicatorHeight),
-                               1.5f);
-        indicatorY -= (indicatorHeight + 1);
+        int barWidth = juce::jmax(1, static_cast<int>(maxWidth * macro->value));
+
+        g.setColour(DarkTheme::getColour(DarkTheme::ACCENT_PURPLE).withAlpha(0.5f));
+        g.fillRoundedRectangle(static_cast<float>(leftX), static_cast<float>(y - barHeight),
+                               static_cast<float>(barWidth), static_cast<float>(barHeight), 1.0f);
+
+        y -= (barHeight + 1);
     }
 }
 
@@ -512,6 +829,11 @@ void ParamSlotComponent::itemDropped(const SourceDetails& details) {
         magda::ModTarget target{deviceId_, paramIndex_};
         if (onModLinkedWithAmount) {
             onModLinkedWithAmount(modIndex, target, 0.5f);
+        }
+
+        // Auto-select this param so user can immediately edit the amount
+        if (devicePath_.isValid()) {
+            magda::SelectionManager::getInstance().selectParam(devicePath_, paramIndex_);
         }
     }
     // Handle macro drops: "macro_drag:trackId:topLevelDeviceId:macroIndex"

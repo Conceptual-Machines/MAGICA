@@ -2,6 +2,7 @@
 
 #include <juce_gui_basics/juce_gui_basics.h>
 
+#include "core/LinkModeManager.hpp"
 #include "core/MacroInfo.hpp"
 #include "core/ModInfo.hpp"
 #include "core/SelectionManager.hpp"
@@ -17,11 +18,14 @@ namespace magda::daw::ui {
  * mods/macros linked to this parameter.
  *
  * Supports drag-and-drop: drop a ModKnobComponent here to create a link.
+ * Supports link mode: when a mod/macro is in link mode, clicking this param creates a link.
  */
-class ParamSlotComponent : public juce::Component, public juce::DragAndDropTarget {
+class ParamSlotComponent : public juce::Component,
+                           public juce::DragAndDropTarget,
+                           public magda::LinkModeManagerListener {
   public:
     ParamSlotComponent(int paramIndex);
-    ~ParamSlotComponent() override = default;
+    ~ParamSlotComponent() override;
 
     void setParamName(const juce::String& name);
     void setParamValue(double value);
@@ -45,7 +49,7 @@ class ParamSlotComponent : public juce::Component, public juce::DragAndDropTarge
         availableMacros_ = macros;
     }
 
-    // Contextual selection - when set, only shows this mod's link
+    // Contextual selection - when set, only shows this mod's/macro's link
     void setSelectedModIndex(int modIndex) {
         selectedModIndex_ = modIndex;
         repaint();
@@ -56,6 +60,18 @@ class ParamSlotComponent : public juce::Component, public juce::DragAndDropTarge
     }
     int getSelectedModIndex() const {
         return selectedModIndex_;
+    }
+
+    void setSelectedMacroIndex(int macroIndex) {
+        selectedMacroIndex_ = macroIndex;
+        repaint();
+    }
+    void clearSelectedMacro() {
+        selectedMacroIndex_ = -1;
+        repaint();
+    }
+    int getSelectedMacroIndex() const {
+        return selectedMacroIndex_;
     }
 
     // Selection state (this param cell is selected)
@@ -78,6 +94,8 @@ class ParamSlotComponent : public juce::Component, public juce::DragAndDropTarge
     void paint(juce::Graphics& g) override;
     void paintOverChildren(juce::Graphics& g) override;
     void resized() override;
+    void mouseEnter(const juce::MouseEvent& e) override;
+    void mouseExit(const juce::MouseEvent& e) override;
     void mouseDown(const juce::MouseEvent& e) override;
     void mouseDrag(const juce::MouseEvent& e) override;
     void mouseUp(const juce::MouseEvent& e) override;
@@ -89,13 +107,17 @@ class ParamSlotComponent : public juce::Component, public juce::DragAndDropTarge
     void itemDropped(const SourceDetails& details) override;
 
   private:
+    // LinkModeManagerListener implementation
+    void modLinkModeChanged(bool active, const magda::ModSelection& selection) override;
+    void macroLinkModeChanged(bool active, const magda::MacroSelection& selection) override;
     int paramIndex_;
     magda::DeviceId deviceId_ = magda::INVALID_DEVICE_ID;
     magda::ChainNodePath devicePath_;  // For param selection
     const magda::ModArray* availableMods_ = nullptr;
     const magda::MacroArray* availableMacros_ = nullptr;
-    int selectedModIndex_ = -1;  // -1 means no mod selected (show all)
-    bool selected_ = false;      // This param cell is selected
+    int selectedModIndex_ = -1;    // -1 means no mod selected (show all)
+    int selectedMacroIndex_ = -1;  // -1 means no macro selected (show all)
+    bool selected_ = false;        // This param cell is selected
 
     juce::Label nameLabel_;
     TextSlider valueSlider_{TextSlider::Format::Decimal};
@@ -111,6 +133,23 @@ class ParamSlotComponent : public juce::Component, public juce::DragAndDropTarge
 
     // Drag-and-drop state
     bool isDragOver_ = false;
+
+    // Link mode state
+    bool isInLinkMode_ = false;
+    magda::ModSelection activeMod_;
+    magda::MacroSelection activeMacro_;
+
+    // Link mode drag state (for setting modulation amount via drag)
+    bool isLinkModeDrag_ = false;
+    float linkModeDragStartAmount_ = 0.5f;
+    float linkModeDragCurrentAmount_ = 0.5f;
+    int linkModeDragStartY_ = 0;
+
+    // Overlay slider for link mode
+    std::unique_ptr<juce::Slider> linkModeSlider_;
+    void showLinkModeSlider(bool isNewLink, float initialAmount);
+    void hideLinkModeSlider();
+    void handleLinkModeClick();
 
     // Find mods/macros targeting this param (returns mod index + link pointer)
     // If selectedModIndex_ >= 0, only returns that mod's link (if any)

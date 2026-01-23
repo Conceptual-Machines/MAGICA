@@ -60,9 +60,9 @@ DeviceSlotComponent::DeviceSlotComponent(const magda::DeviceInfo& device) : devi
         }
     };
 
-    // Mod button (toggle mod panel) - sine wave icon
-    modButton_ = std::make_unique<magda::SvgButton>("Mod", BinaryData::sinewavebright_svg,
-                                                    BinaryData::sinewavebright_svgSize);
+    // Mod button (toggle mod panel) - bare sine icon
+    modButton_ = std::make_unique<magda::SvgButton>("Mod", BinaryData::bare_sine_svg,
+                                                    BinaryData::bare_sine_svgSize);
     modButton_->setClickingTogglesState(true);
     modButton_->setToggleState(modPanelVisible_, juce::dontSendNotification);
     modButton_->setNormalColor(DarkTheme::getSecondaryTextColour());
@@ -75,9 +75,9 @@ DeviceSlotComponent::DeviceSlotComponent(const magda::DeviceInfo& device) : devi
     };
     addAndMakeVisible(*modButton_);
 
-    // Macro button (toggle macro panel) - link icon
-    macroButton_ = std::make_unique<magda::SvgButton>("Macro", BinaryData::link_bright_svg,
-                                                      BinaryData::link_bright_svgSize);
+    // Macro button (toggle macro panel) - knob icon
+    macroButton_ =
+        std::make_unique<magda::SvgButton>("Macro", BinaryData::knob_svg, BinaryData::knob_svgSize);
     macroButton_->setClickingTogglesState(true);
     macroButton_->setToggleState(paramPanelVisible_, juce::dontSendNotification);
     macroButton_->setNormalColor(DarkTheme::getSecondaryTextColour());
@@ -176,6 +176,7 @@ DeviceSlotComponent::DeviceSlotComponent(const magda::DeviceInfo& device) : devi
             magda::TrackManager::getInstance().setDeviceModLinkAmount(nodePath_, modIndex, target,
                                                                       amount);
             updateParamModulation();
+            updateModsPanel();  // Refresh mod knobs with new link data
 
             // Auto-expand mods panel and select the linked mod
             if (!modPanelVisible_) {
@@ -188,6 +189,7 @@ DeviceSlotComponent::DeviceSlotComponent(const magda::DeviceInfo& device) : devi
         paramSlots_[i]->onModUnlinked = [this](int modIndex, magda::ModTarget target) {
             magda::TrackManager::getInstance().removeDeviceModLink(nodePath_, modIndex, target);
             updateParamModulation();
+            updateModsPanel();  // Refresh mod knobs after unlinking
         };
         paramSlots_[i]->onModAmountChanged = [this](int modIndex, magda::ModTarget /*target*/,
                                                     float amount) {
@@ -257,12 +259,21 @@ void DeviceSlotComponent::updateParamModulation() {
     // Check if a mod is selected in SelectionManager for contextual display
     auto& selMgr = magda::SelectionManager::getInstance();
     int selectedModIndex = -1;
+    int selectedMacroIndex = -1;
 
     if (selMgr.hasModSelection()) {
         const auto& modSel = selMgr.getModSelection();
         // Only apply contextual filtering if the mod belongs to this device
         if (modSel.parentPath == nodePath_) {
             selectedModIndex = modSel.modIndex;
+        }
+    }
+
+    if (selMgr.hasMacroSelection()) {
+        const auto& macroSel = selMgr.getMacroSelection();
+        // Only apply contextual filtering if the macro belongs to this device
+        if (macroSel.parentPath == nodePath_) {
+            selectedMacroIndex = macroSel.macroIndex;
         }
     }
 
@@ -273,6 +284,7 @@ void DeviceSlotComponent::updateParamModulation() {
         paramSlots_[i]->setAvailableMods(mods);
         paramSlots_[i]->setAvailableMacros(macros);
         paramSlots_[i]->setSelectedModIndex(selectedModIndex);
+        paramSlots_[i]->setSelectedMacroIndex(selectedMacroIndex);
         paramSlots_[i]->repaint();
     }
 }
@@ -468,6 +480,37 @@ void DeviceSlotComponent::onMacroNameChangedInternal(int macroIndex, const juce:
     magda::TrackManager::getInstance().setDeviceMacroName(nodePath_, macroIndex, name);
 }
 
+void DeviceSlotComponent::onMacroLinkAmountChangedInternal(int macroIndex,
+                                                           magda::MacroTarget target,
+                                                           float amount) {
+    magda::TrackManager::getInstance().setDeviceMacroLinkAmount(nodePath_, macroIndex, target,
+                                                                amount);
+    updateParamModulation();
+}
+
+void DeviceSlotComponent::onMacroNewLinkCreatedInternal(int macroIndex, magda::MacroTarget target,
+                                                        float amount) {
+    DBG("onMacroNewLinkCreatedInternal: macroIndex=" << macroIndex
+                                                     << " target.paramIndex=" << target.paramIndex);
+
+    magda::TrackManager::getInstance().setDeviceMacroTarget(nodePath_, macroIndex, target);
+    magda::TrackManager::getInstance().setDeviceMacroLinkAmount(nodePath_, macroIndex, target,
+                                                                amount);
+    updateParamModulation();
+
+    // Auto-select the linked param so user can see the link and adjust amount
+    if (target.isValid()) {
+        DBG("Auto-selecting param: " << target.paramIndex);
+        magda::SelectionManager::getInstance().selectParam(nodePath_, target.paramIndex);
+    }
+}
+
+void DeviceSlotComponent::onMacroLinkRemovedInternal(int macroIndex, magda::MacroTarget target) {
+    magda::TrackManager::getInstance().removeDeviceMacroLink(nodePath_, macroIndex, target);
+    updateMacroPanel();
+    updateParamModulation();
+}
+
 void DeviceSlotComponent::onModClickedInternal(int modIndex) {
     magda::SelectionManager::getInstance().selectMod(nodePath_, modIndex);
 }
@@ -486,6 +529,17 @@ void DeviceSlotComponent::onModNewLinkCreatedInternal(int modIndex, magda::ModTa
                                                       float amount) {
     magda::TrackManager::getInstance().setDeviceModTarget(nodePath_, modIndex, target);
     magda::TrackManager::getInstance().setDeviceModLinkAmount(nodePath_, modIndex, target, amount);
+    updateParamModulation();
+
+    // Auto-select the linked param so user can see the link and adjust amount
+    if (target.isValid()) {
+        magda::SelectionManager::getInstance().selectParam(nodePath_, target.paramIndex);
+    }
+}
+
+void DeviceSlotComponent::onModLinkRemovedInternal(int modIndex, magda::ModTarget target) {
+    magda::TrackManager::getInstance().removeDeviceModLink(nodePath_, modIndex, target);
+    updateModsPanel();
     updateParamModulation();
 }
 
@@ -537,6 +591,14 @@ void DeviceSlotComponent::goToNextPage() {
 void DeviceSlotComponent::selectionTypeChanged(magda::SelectionType newType) {
     // Call base class first (handles node deselection)
     NodeComponent::selectionTypeChanged(newType);
+
+    // Clear param slot selection visual when switching away from Param selection
+    if (newType != magda::SelectionType::Param) {
+        for (int i = 0; i < NUM_PARAMS_PER_PAGE; ++i) {
+            paramSlots_[i]->setSelected(false);
+        }
+    }
+
     // Update param slots' contextual mod filter
     updateParamModulation();
 }
@@ -556,6 +618,9 @@ void DeviceSlotComponent::modSelectionChanged(const magda::ModSelection& selecti
 }
 
 void DeviceSlotComponent::macroSelectionChanged(const magda::MacroSelection& selection) {
+    // Update param slots to show contextual indicators
+    updateParamModulation();
+
     // Update macro knob selection highlight
     if (macroPanel_) {
         if (selection.isValid() && selection.parentPath == nodePath_) {
@@ -567,8 +632,10 @@ void DeviceSlotComponent::macroSelectionChanged(const magda::MacroSelection& sel
 }
 
 void DeviceSlotComponent::paramSelectionChanged(const magda::ParamSelection& selection) {
-    // Call base class first (updates mods panel)
-    NodeComponent::paramSelectionChanged(selection);
+    // Refresh mod and macro data from TrackManager BEFORE setting selected param
+    // This ensures knobs have fresh link data when updateAmountDisplay() is called
+    updateModsPanel();
+    updateMacroPanel();
 
     // Update param slot selection states
     for (int i = 0; i < NUM_PARAMS_PER_PAGE; ++i) {

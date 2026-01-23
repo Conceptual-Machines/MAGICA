@@ -33,16 +33,27 @@ struct MacroTarget {
 };
 
 /**
- * @brief A macro knob that can be linked to a device parameter
+ * @brief A single macro link with per-link amount
+ */
+struct MacroLink {
+    MacroTarget target;
+    float amount = 0.5f;  // Per-link amount (0.0 to 1.0)
+};
+
+/**
+ * @brief A macro knob that can be linked to device parameters
  *
  * Macros provide quick access to key parameters without opening device UIs.
  * Each rack and chain has 16 macro knobs.
+ *
+ * Supports multiple links: one macro can control multiple parameters simultaneously.
  */
 struct MacroInfo {
     MacroId id = INVALID_MACRO_ID;
-    juce::String name;   // e.g., "Macro 1" or user-defined
-    float value = 0.5f;  // 0.0 to 1.0, normalized
-    MacroTarget target;  // Optional linked parameter
+    juce::String name;             // e.g., "Macro 1" or user-defined
+    float value = 0.5f;            // 0.0 to 1.0, normalized (global macro value)
+    MacroTarget target;            // Legacy: single linked parameter (for backward compatibility)
+    std::vector<MacroLink> links;  // New: multiple links with per-link amounts
 
     // Default constructor
     MacroInfo() = default;
@@ -51,7 +62,34 @@ struct MacroInfo {
     explicit MacroInfo(int index) : id(index), name("Macro " + juce::String(index + 1)) {}
 
     bool isLinked() const {
-        return target.isValid();
+        return target.isValid() || !links.empty();
+    }
+
+    // Get link for a specific target
+    const MacroLink* getLink(const MacroTarget& target) const {
+        for (const auto& link : links) {
+            if (link.target == target) {
+                return &link;
+            }
+        }
+        return nullptr;
+    }
+
+    // Get mutable link for a specific target
+    MacroLink* getLink(const MacroTarget& target) {
+        for (auto& link : links) {
+            if (link.target == target) {
+                return &link;
+            }
+        }
+        return nullptr;
+    }
+
+    // Remove link to a specific target
+    void removeLink(const MacroTarget& t) {
+        links.erase(std::remove_if(links.begin(), links.end(),
+                                   [&t](const MacroLink& link) { return link.target == t; }),
+                    links.end());
     }
 };
 

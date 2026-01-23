@@ -726,13 +726,19 @@ void SelectionManager::notifyMacroSelectionChanged(const MacroSelection& selecti
 // ============================================================================
 
 void SelectionManager::selectParam(const ChainNodePath& devicePath, int paramIndex) {
+    DBG("SelectionManager::selectParam called: paramIndex=" + juce::String(paramIndex));
+
     bool typeChanged = selectionType_ != SelectionType::Param;
     bool selectionChanged =
         paramSelection_.devicePath != devicePath || paramSelection_.paramIndex != paramIndex;
 
     if (!typeChanged && !selectionChanged) {
+        DBG("  -> Already selected, returning early");
         return;  // Already selected
     }
+
+    DBG("  -> Proceeding with selection, typeChanged=" +
+        juce::String(typeChanged ? "true" : "false"));
 
     // Clear other selection types (but keep track selection for context)
     selectedClipId_ = INVALID_CLIP_ID;

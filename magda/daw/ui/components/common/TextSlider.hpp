@@ -74,13 +74,29 @@ class TextSlider : public juce::Component, public juce::Label::Listener {
         label_.setFont(font);
     }
 
+    void setTextColour(const juce::Colour& colour) {
+        label_.setColour(juce::Label::textColourId, colour);
+    }
+
+    void setBackgroundColour(const juce::Colour& colour) {
+        label_.setColour(juce::Label::backgroundColourId, colour);
+    }
+
     void setRightClickEditsText(bool shouldEdit) {
         rightClickEditsText_ = shouldEdit;
     }
 
+    void setShiftDragStartValue(float value) {
+        shiftDragStartValue_ = value;
+    }
+
     std::function<void(double)> onValueChanged;
-    std::function<void()> onClicked;     // Called on single left-click (no drag)
-    std::function<void()> onAltClicked;  // Called on Alt+click (no drag)
+    std::function<void()> onClicked;       // Called on single left-click (no drag)
+    std::function<void()> onShiftClicked;  // Called on Shift+click (no drag)
+    std::function<void(float)>
+        onShiftDragStart;  // Called when Shift+drag starts, param is start value (0-1)
+    std::function<void(float)> onShiftDrag;  // Called during Shift+drag with new value (0-1)
+    std::function<void()> onShiftDragEnd;    // Called when Shift+drag ends
     std::function<void()>
         onRightClicked;  // Called on right-click (when rightClickEditsText_ is false)
 
@@ -94,11 +110,22 @@ class TextSlider : public juce::Component, public juce::Label::Listener {
             dragStartY_ = e.y;
             dragStartX_ = e.x;
             hasDragged_ = false;
+            isLeftButtonDrag_ = true;
+            isShiftDrag_ = e.mods.isShiftDown();
+
+            // If Shift is held and we have a callback, notify start
+            if (isShiftDrag_ && onShiftDragStart) {
+                shiftDragStartValue_ = 0.5f;  // Default start value for new links
+                onShiftDragStart(shiftDragStartValue_);
+            }
+        } else {
+            isLeftButtonDrag_ = false;
+            isShiftDrag_ = false;
         }
     }
 
     void mouseDrag(const juce::MouseEvent& e) override {
-        if (label_.isBeingEdited())
+        if (label_.isBeingEdited() || !isLeftButtonDrag_)
             return;
 
         // Check if we've moved enough to count as a drag
@@ -109,15 +136,35 @@ class TextSlider : public juce::Component, public juce::Label::Listener {
         }
 
         if (hasDragged_) {
-            // Vertical drag: up increases, down decreases
-            // Use 200 pixels for full range for smoother control
-            double dragSensitivity = (maxValue_ - minValue_) / 200.0;
-            double delta = (dragStartY_ - e.y) * dragSensitivity;
-            setValue(dragStartValue_ + delta);
+            if (isShiftDrag_ && onShiftDrag) {
+                // Shift+drag: call the callback with normalized value (0-1)
+                float dragSensitivity = 1.0f / 100.0f;  // 100 pixels for full range
+                float delta = static_cast<float>(dragStartY_ - e.y) * dragSensitivity;
+                float newValue = juce::jlimit(0.0f, 1.0f, shiftDragStartValue_ + delta);
+                onShiftDrag(newValue);
+            } else {
+                // Normal drag: change the slider value
+                double dragSensitivity = (maxValue_ - minValue_) / 200.0;
+                double delta = (dragStartY_ - e.y) * dragSensitivity;
+                setValue(dragStartValue_ + delta);
+            }
         }
     }
 
     void mouseUp(const juce::MouseEvent& e) override {
+        // Handle Shift+drag end
+        if (isShiftDrag_) {
+            if (hasDragged_ && onShiftDragEnd) {
+                onShiftDragEnd();
+            } else if (!hasDragged_ && onShiftClicked) {
+                // Shift+click (no drag)
+                onShiftClicked();
+            }
+            hasDragged_ = false;
+            isShiftDrag_ = false;
+            return;
+        }
+
         if (!hasDragged_) {
             if (e.mods.isPopupMenu()) {
                 if (rightClickEditsText_) {
@@ -127,9 +174,6 @@ class TextSlider : public juce::Component, public juce::Label::Listener {
                     // Right-click callback (for context menus, etc.)
                     onRightClicked();
                 }
-            } else if (e.mods.isAltDown() && onAltClicked) {
-                // Alt+click callback (for direct amount editing)
-                onAltClicked();
             } else if (onClicked) {
                 // Single left-click callback
                 onClicked();
@@ -180,6 +224,9 @@ class TextSlider : public juce::Component, public juce::Label::Listener {
     int dragStartX_ = 0;
     int dragStartY_ = 0;
     bool hasDragged_ = false;
+    bool isLeftButtonDrag_ = false;
+    bool isShiftDrag_ = false;
+    float shiftDragStartValue_ = 0.5f;
     bool rightClickEditsText_ = true;
 
     void updateLabel() {

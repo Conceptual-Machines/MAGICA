@@ -17,6 +17,7 @@
 #include "../views/MixerView.hpp"
 #include "../views/SessionView.hpp"
 #include "core/Config.hpp"
+#include "core/LinkModeManager.hpp"
 #include "core/TrackCommands.hpp"
 #include "core/TrackManager.hpp"
 #include "core/UndoManager.hpp"
@@ -300,6 +301,12 @@ MainWindow::MainComponent::~MainComponent() {
 }
 
 bool MainWindow::MainComponent::keyPressed(const juce::KeyPress& key) {
+    // ESC: Exit link mode
+    if (key == juce::KeyPress::escapeKey) {
+        LinkModeManager::getInstance().exitAllLinkModes();
+        return true;
+    }
+
     // Cmd/Ctrl+Shift+D: Open Debug Dialog
     if (key ==
         juce::KeyPress('d', juce::ModifierKeys::commandModifier | juce::ModifierKeys::shiftModifier,

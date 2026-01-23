@@ -4,14 +4,16 @@
 
 #include <functional>
 
+#include "core/LinkModeManager.hpp"
 #include "core/ModInfo.hpp"
 #include "core/SelectionManager.hpp"
+#include "ui/components/common/SvgButton.hpp"
 #include "ui/components/common/TextSlider.hpp"
 
 namespace magda::daw::ui {
 
 /**
- * @brief A single mod cell with type icon, name, amount slider, and link indicator
+ * @brief A single mod cell with type icon, name, amount slider, and link button
  *
  * Supports drag-and-drop: drag from this knob onto a ParamSlotComponent to create a link.
  *
@@ -19,15 +21,16 @@ namespace magda::daw::ui {
  * +-----------+
  * | LFO 1     |  <- type + name label
  * |   0.50    |  <- amount slider
- * |     *     |  <- link dot (orange if linked)
+ * |   [Link]  |  <- link button (toggle link mode)
  * +-----------+
  *
- * Clicking the cell opens the modulator editor side panel.
+ * Clicking the main area opens the modulator editor side panel.
+ * Clicking the link button enters link mode for this mod.
  */
-class ModKnobComponent : public juce::Component {
+class ModKnobComponent : public juce::Component, public magda::LinkModeManagerListener {
   public:
     explicit ModKnobComponent(int modIndex);
-    ~ModKnobComponent() override = default;
+    ~ModKnobComponent() override;
 
     // Set mod info from data model
     void setModInfo(const magda::ModInfo& mod);
@@ -46,13 +49,6 @@ class ModKnobComponent : public juce::Component {
         return modIndex_;
     }
 
-    // Contextual selection - when set, shows the link amount for this param
-    void setSelectedParam(const magda::ModTarget& param);
-    void clearSelectedParam();
-    bool hasSelectedParam() const {
-        return selectedParam_.isValid();
-    }
-
     // Selection state (this mod cell is selected)
     void setSelected(bool selected);
     bool isSelected() const {
@@ -64,9 +60,6 @@ class ModKnobComponent : public juce::Component {
     std::function<void(magda::ModTarget)> onTargetChanged;
     std::function<void(juce::String)> onNameChanged;
     std::function<void()> onClicked;  // Opens modulator editor panel
-    // Link amount callbacks (for when a param is selected)
-    std::function<void(magda::ModTarget, float)> onLinkAmountChanged;
-    std::function<void(magda::ModTarget, float)> onNewLinkCreated;
 
     void paint(juce::Graphics& g) override;
     void resized() override;
@@ -78,18 +71,21 @@ class ModKnobComponent : public juce::Component {
     static constexpr const char* DRAG_PREFIX = "mod_drag:";
 
   private:
+    // LinkModeManagerListener implementation
+    void modLinkModeChanged(bool active, const magda::ModSelection& selection) override;
+
     void showLinkMenu();
-    void showAmountSlider(float currentAmount, bool isNewLink);
     void paintLinkIndicator(juce::Graphics& g, juce::Rectangle<int> area);
     void onNameLabelEdited();
+    void onLinkButtonClicked();
 
     int modIndex_;
     juce::Label nameLabel_;
     TextSlider amountSlider_{TextSlider::Format::Decimal};
+    std::unique_ptr<magda::SvgButton> linkButton_;
     magda::ModInfo currentMod_;
     std::vector<std::pair<magda::DeviceId, juce::String>> availableTargets_;
     bool selected_ = false;
-    magda::ModTarget selectedParam_;   // For contextual display
     magda::ChainNodePath parentPath_;  // For drag-and-drop identification
 
     // Drag state
@@ -97,11 +93,9 @@ class ModKnobComponent : public juce::Component {
     bool isDragging_ = false;
     static constexpr int DRAG_THRESHOLD = 5;
 
-    void updateAmountDisplay();  // Update slider based on context
-
     static constexpr int NAME_LABEL_HEIGHT = 11;
     static constexpr int AMOUNT_SLIDER_HEIGHT = 14;
-    static constexpr int LINK_INDICATOR_HEIGHT = 6;
+    static constexpr int LINK_BUTTON_HEIGHT = 16;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(ModKnobComponent)
 };
