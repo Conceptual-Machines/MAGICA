@@ -195,10 +195,11 @@ DeviceSlotComponent::DeviceSlotComponent(const magda::DeviceInfo& device) : devi
             updateParamModulation();
             updateModsPanel();  // Refresh mod knobs after unlinking
         };
-        paramSlots_[i]->onModAmountChanged = [this](int modIndex, magda::ModTarget /*target*/,
+        paramSlots_[i]->onModAmountChanged = [this](int modIndex, magda::ModTarget target,
                                                     float amount) {
-            // Update global mod amount (shown on mod knob)
-            magda::TrackManager::getInstance().setDeviceModAmount(nodePath_, modIndex, amount);
+            // Update per-parameter link amount
+            magda::TrackManager::getInstance().setDeviceModLinkAmount(nodePath_, modIndex, target,
+                                                                      amount);
             updateParamModulation();
             updateModsPanel();  // Refresh mod knob to show new amount
         };
