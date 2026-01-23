@@ -145,6 +145,13 @@ void ChainRowComponent::mouseUp(const juce::MouseEvent& event) {
     magda::SelectionManager::getInstance().selectChainNode(nodePath_);
 }
 
+void ChainRowComponent::mouseDoubleClick(const juce::MouseEvent& /*event*/) {
+    // Double-click toggles expand/collapse of this chain
+    if (onDoubleClick) {
+        onDoubleClick(chainId_);
+    }
+}
+
 void ChainRowComponent::selectionTypeChanged(magda::SelectionType /*newType*/) {
     // Selection type changed - chainNodeSelectionChanged will handle visual update
 }

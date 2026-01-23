@@ -400,6 +400,16 @@ void RackComponent::rebuildChainRows() {
             auto row = std::make_unique<ChainRowComponent>(*this, trackId_, rackId_, chain);
             // Set the full nested path (includes parent rack/chain context)
             row->setNodePath(rackPath_.withChain(chain.id));
+            // Wire up double-click to toggle expand/collapse
+            row->onDoubleClick = [this](magda::ChainId chainId) {
+                if (selectedChainId_ == chainId) {
+                    // Already showing this chain - collapse it
+                    hideChainPanel();
+                } else {
+                    // Show this chain
+                    showChainPanel(chainId);
+                }
+            };
             chainRowsContainer_.addAndMakeVisible(*row);
             newRows.push_back(std::move(row));
         }

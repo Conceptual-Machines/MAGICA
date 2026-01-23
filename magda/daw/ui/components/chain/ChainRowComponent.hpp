@@ -33,6 +33,7 @@ class ChainRowComponent : public juce::Component, public magda::SelectionManager
     void resized() override;
     void mouseDown(const juce::MouseEvent& event) override;
     void mouseUp(const juce::MouseEvent& event) override;
+    void mouseDoubleClick(const juce::MouseEvent& event) override;
 
     int getPreferredHeight() const;
     magda::ChainId getChainId() const {
@@ -60,6 +61,9 @@ class ChainRowComponent : public juce::Component, public magda::SelectionManager
     // SelectionManagerListener
     void selectionTypeChanged(magda::SelectionType newType) override;
     void chainNodeSelectionChanged(const magda::ChainNodePath& path) override;
+
+    // Callback for double-click to toggle expand/collapse
+    std::function<void(magda::ChainId)> onDoubleClick;
 
   private:
     void onMuteClicked();

@@ -755,9 +755,9 @@ void ParamSlotComponent::paintModulationIndicators(juce::Graphics& g) {
                                    static_cast<float>(amountBarHeight), 1.0f);
         }
 
-        // Draw MACRO amount line at TOP - only for the ACTIVE macro in link mode
+        // Draw MACRO amount line at BOTTOM - only for the ACTIVE macro in link mode
         if (activeMacro_.isValid() && activeMacro_.macroIndex >= 0) {
-            int y = sliderBounds.getY() + 2;
+            int y = sliderBounds.getBottom() - 6;
             magda::MacroTarget thisTarget{deviceId_, paramIndex_};
             const magda::MacroInfo* macro = nullptr;
 
@@ -793,8 +793,7 @@ void ParamSlotComponent::paintModulationIndicators(juce::Graphics& g) {
             }
         }
 
-        // Draw MOD amount line - only for the ACTIVE mod in link mode
-        // Position above where movement line would be (thinner, brighter)
+        // Draw MOD amount line at TOP - only for the ACTIVE mod in link mode
         if (activeMod_.isValid() && activeMod_.modIndex >= 0) {
             // Check if active mod is from device-level or rack-level
             // Compare the active mod's parent path with this device's path
@@ -810,8 +809,7 @@ void ParamSlotComponent::paintModulationIndicators(juce::Graphics& g) {
             }
 
             if (modPtr) {
-                // Position above where movement line would be
-                int y = sliderBounds.getBottom() - 6 - movementBarHeight - 2;
+                int y = sliderBounds.getY() + 2;
                 magda::ModTarget thisTarget{deviceId_, paramIndex_};
 
                 if (const auto* link = modPtr->getLink(thisTarget)) {
@@ -860,9 +858,9 @@ void ParamSlotComponent::paintModulationIndicators(juce::Graphics& g) {
             }
         }
 
-        // Draw MACRO movement line (purple) at TOP if any macro modulation exists
+        // Draw MACRO movement line (purple) at BOTTOM if any macro modulation exists
         if (totalMacroModulation > 0.0f) {
-            int y = sliderBounds.getY() + 2;
+            int y = sliderBounds.getBottom() - 6;
 
             // Get current parameter value (0.0 to 1.0)
             float currentParamValue = static_cast<float>(valueSlider_.getValue());
@@ -906,9 +904,9 @@ void ParamSlotComponent::paintModulationIndicators(juce::Graphics& g) {
         }
     }
 
-    // Draw MOD movement line (orange) at BOTTOM if any mod modulation exists
+    // Draw MOD movement line (orange) at TOP if any mod modulation exists
     if (totalModModulation > 0.0f) {
-        int y = sliderBounds.getBottom() - 6;
+        int y = sliderBounds.getY() + 2;
 
         // Get current parameter value (0.0 to 1.0)
         float currentParamValue = static_cast<float>(valueSlider_.getValue());

@@ -792,10 +792,10 @@ void TrackChainContent::resized() {
         // Layout: MOD RACK+ RACK-MB+ ... Name | gain | ON
         auto headerArea = bounds.removeFromTop(HEADER_HEIGHT).reduced(8, 4);
 
-        // LEFT SIDE - Action buttons
-        globalModsButton_->setBounds(headerArea.removeFromLeft(20));
-        headerArea.removeFromLeft(2);
+        // LEFT SIDE - Action buttons (Macros first, then Mods)
         macroButton_->setBounds(headerArea.removeFromLeft(20));
+        headerArea.removeFromLeft(2);
+        globalModsButton_->setBounds(headerArea.removeFromLeft(20));
         headerArea.removeFromLeft(8);
         addRackButton_->setBounds(headerArea.removeFromLeft(20));
         headerArea.removeFromLeft(4);
