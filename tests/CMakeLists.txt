@@ -3,6 +3,7 @@ set(TEST_SOURCES
     test_command.cpp
     test_interfaces.cpp
     test_nested_racks.cpp
+    test_modulation.cpp
 )
 
 # Create test executable
