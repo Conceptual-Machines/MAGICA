@@ -24,6 +24,34 @@ enum class ModType { LFO, Envelope, Random, Follower };
 enum class LFOWaveform { Sine, Triangle, Square, Saw, ReverseSaw };
 
 /**
+ * @brief Tempo sync divisions for LFO rate
+ */
+enum class SyncDivision {
+    Whole = 1,            // 1 bar (4 beats)
+    Half = 2,             // 1/2 note
+    Quarter = 4,          // 1/4 note (1 beat)
+    Eighth = 8,           // 1/8 note
+    Sixteenth = 16,       // 1/16 note
+    ThirtySecond = 32,    // 1/32 note
+    DottedHalf = 3,       // 1/2 + 1/4
+    DottedQuarter = 6,    // 1/4 + 1/8
+    DottedEighth = 12,    // 1/8 + 1/16
+    TripletHalf = 33,     // 1/2 triplet
+    TripletQuarter = 66,  // 1/4 triplet
+    TripletEighth = 132   // 1/8 triplet
+};
+
+/**
+ * @brief LFO trigger modes
+ */
+enum class LFOTriggerMode {
+    Free,       // Continuous, never resets
+    Transport,  // Reset on transport start/loop
+    MIDI,       // Reset on MIDI note-on (stubbed)
+    Audio       // Reset on audio transient (stubbed)
+};
+
+/**
  * @brief Target for a mod link (which device parameter it modulates)
  */
 struct ModTarget {
@@ -70,8 +98,22 @@ struct ModInfo {
     float rate = 1.0f;                         // Rate/speed of modulation (Hz)
     LFOWaveform waveform = LFOWaveform::Sine;  // LFO waveform shape
     float phase = 0.0f;                        // 0.0 to 1.0, current position in cycle
+    float phaseOffset = 0.0f;                  // 0.0 to 1.0, phase offset (adds to phase)
     float value = 0.5f;                        // 0.0 to 1.0, current LFO output
-    std::vector<ModLink> links;                // All parameter links for this mod
+
+    // Tempo sync settings
+    bool tempoSync = false;                             // Use tempo-synced rate instead of Hz
+    SyncDivision syncDivision = SyncDivision::Quarter;  // Musical division when synced
+
+    // Trigger mode settings
+    LFOTriggerMode triggerMode = LFOTriggerMode::Free;  // When to reset phase
+    bool triggered = false;                             // Set true when trigger fires (for UI dot)
+
+    // Advanced receiver settings (for future MIDI/Audio trigger modes)
+    int midiChannel = 0;  // 0 = any, 1-16 = specific
+    int midiNote = -1;    // -1 = any, 0-127 = specific
+
+    std::vector<ModLink> links;  // All parameter links for this mod
 
     // Legacy single target/amount for backward compatibility
     // TODO: Remove after migration

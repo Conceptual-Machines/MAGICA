@@ -65,6 +65,21 @@ class WaveformDisplay : public juce::Component, private juce::Timer {
 
         g.setColour(juce::Colours::orange);
         g.fillEllipse(currentX - 3.0f, currentY - 3.0f, 6.0f, 6.0f);
+
+        // Draw trigger indicator dot in top-left corner
+        const float triggerDotRadius = 4.0f;
+        auto triggerDotBounds = juce::Rectangle<float>(bounds.getX() + 4.0f, bounds.getY() + 4.0f,
+                                                       triggerDotRadius * 2, triggerDotRadius * 2);
+
+        if (mod_->triggered) {
+            // Lit up when triggered
+            g.setColour(juce::Colours::orange);
+            g.fillEllipse(triggerDotBounds);
+        } else {
+            // Outline only when not triggered
+            g.setColour(juce::Colours::orange.withAlpha(0.3f));
+            g.drawEllipse(triggerDotBounds, 1.0f);
+        }
     }
 
   private:
@@ -111,6 +126,10 @@ class ModulatorEditorPanel : public juce::Component {
     std::function<void(magda::ModType type)> onTypeChanged;
     std::function<void(float rate)> onRateChanged;
     std::function<void(magda::LFOWaveform waveform)> onWaveformChanged;
+    std::function<void(float phaseOffset)> onPhaseOffsetChanged;
+    std::function<void(bool tempoSync)> onTempoSyncChanged;
+    std::function<void(magda::SyncDivision division)> onSyncDivisionChanged;
+    std::function<void(magda::LFOTriggerMode mode)> onTriggerModeChanged;
 
     void paint(juce::Graphics& g) override;
     void resized() override;
@@ -130,7 +149,11 @@ class ModulatorEditorPanel : public juce::Component {
     juce::ComboBox typeSelector_;
     juce::ComboBox waveformCombo_;
     WaveformDisplay waveformDisplay_;
+    TextSlider phaseSlider_{TextSlider::Format::Decimal};
+    juce::ToggleButton syncToggle_;
+    juce::ComboBox syncDivisionCombo_;
     TextSlider rateSlider_{TextSlider::Format::Decimal};
+    juce::ComboBox triggerModeCombo_;
     juce::Label targetLabel_;
 
     void updateFromMod();

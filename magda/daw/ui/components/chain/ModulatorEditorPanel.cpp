@@ -58,6 +58,70 @@ ModulatorEditorPanel::ModulatorEditorPanel() {
     // Waveform display
     addAndMakeVisible(waveformDisplay_);
 
+    // Phase offset slider (0° to 360°)
+    phaseSlider_.setRange(0.0, 360.0, 1.0);
+    phaseSlider_.setValue(0.0, juce::dontSendNotification);
+    phaseSlider_.setFont(FontManager::getInstance().getUIFont(9.0f));
+    phaseSlider_.onValueChanged = [this](double value) {
+        // Convert degrees (0-360) to normalized (0-1)
+        float normalized = static_cast<float>(value / 360.0);
+        currentMod_.phaseOffset = normalized;
+        if (onPhaseOffsetChanged) {
+            onPhaseOffsetChanged(normalized);
+        }
+    };
+    addAndMakeVisible(phaseSlider_);
+
+    // Sync toggle button
+    syncToggle_.setButtonText("Sync");
+    syncToggle_.setColour(juce::ToggleButton::textColourId, DarkTheme::getTextColour());
+    syncToggle_.setColour(juce::ToggleButton::tickColourId,
+                          DarkTheme::getColour(DarkTheme::ACCENT_ORANGE));
+    syncToggle_.onClick = [this]() {
+        bool synced = syncToggle_.getToggleState();
+        currentMod_.tempoSync = synced;
+        // Show/hide appropriate control
+        rateSlider_.setVisible(!synced);
+        syncDivisionCombo_.setVisible(synced);
+        if (onTempoSyncChanged) {
+            onTempoSyncChanged(synced);
+        }
+        resized();  // Re-layout
+    };
+    addAndMakeVisible(syncToggle_);
+
+    // Sync division combo box
+    syncDivisionCombo_.addItem("1 Bar", static_cast<int>(magda::SyncDivision::Whole) + 100);
+    syncDivisionCombo_.addItem("1/2", static_cast<int>(magda::SyncDivision::Half) + 100);
+    syncDivisionCombo_.addItem("1/4", static_cast<int>(magda::SyncDivision::Quarter) + 100);
+    syncDivisionCombo_.addItem("1/8", static_cast<int>(magda::SyncDivision::Eighth) + 100);
+    syncDivisionCombo_.addItem("1/16", static_cast<int>(magda::SyncDivision::Sixteenth) + 100);
+    syncDivisionCombo_.addItem("1/32", static_cast<int>(magda::SyncDivision::ThirtySecond) + 100);
+    syncDivisionCombo_.addItem("1/2.", static_cast<int>(magda::SyncDivision::DottedHalf) + 100);
+    syncDivisionCombo_.addItem("1/4.", static_cast<int>(magda::SyncDivision::DottedQuarter) + 100);
+    syncDivisionCombo_.addItem("1/8.", static_cast<int>(magda::SyncDivision::DottedEighth) + 100);
+    syncDivisionCombo_.addItem("1/2T", static_cast<int>(magda::SyncDivision::TripletHalf) + 100);
+    syncDivisionCombo_.addItem("1/4T", static_cast<int>(magda::SyncDivision::TripletQuarter) + 100);
+    syncDivisionCombo_.addItem("1/8T", static_cast<int>(magda::SyncDivision::TripletEighth) + 100);
+    syncDivisionCombo_.setSelectedId(static_cast<int>(magda::SyncDivision::Quarter) + 100,
+                                     juce::dontSendNotification);
+    syncDivisionCombo_.setColour(juce::ComboBox::backgroundColourId,
+                                 DarkTheme::getColour(DarkTheme::SURFACE));
+    syncDivisionCombo_.setColour(juce::ComboBox::textColourId, DarkTheme::getTextColour());
+    syncDivisionCombo_.setColour(juce::ComboBox::outlineColourId,
+                                 DarkTheme::getColour(DarkTheme::BORDER));
+    syncDivisionCombo_.onChange = [this]() {
+        int id = syncDivisionCombo_.getSelectedId();
+        if (id >= 100) {
+            auto division = static_cast<magda::SyncDivision>(id - 100);
+            currentMod_.syncDivision = division;
+            if (onSyncDivisionChanged) {
+                onSyncDivisionChanged(division);
+            }
+        }
+    };
+    addChildComponent(syncDivisionCombo_);  // Hidden by default (shown when sync enabled)
+
     // Rate slider
     rateSlider_.setRange(0.01, 20.0, 0.01);
     rateSlider_.setValue(1.0, juce::dontSendNotification);
@@ -69,6 +133,30 @@ ModulatorEditorPanel::ModulatorEditorPanel() {
         }
     };
     addAndMakeVisible(rateSlider_);
+
+    // Trigger mode combo box
+    triggerModeCombo_.addItem("Free", static_cast<int>(magda::LFOTriggerMode::Free) + 1);
+    triggerModeCombo_.addItem("Transport", static_cast<int>(magda::LFOTriggerMode::Transport) + 1);
+    triggerModeCombo_.addItem("MIDI", static_cast<int>(magda::LFOTriggerMode::MIDI) + 1);
+    triggerModeCombo_.addItem("Audio", static_cast<int>(magda::LFOTriggerMode::Audio) + 1);
+    triggerModeCombo_.setSelectedId(static_cast<int>(magda::LFOTriggerMode::Free) + 1,
+                                    juce::dontSendNotification);
+    triggerModeCombo_.setColour(juce::ComboBox::backgroundColourId,
+                                DarkTheme::getColour(DarkTheme::SURFACE));
+    triggerModeCombo_.setColour(juce::ComboBox::textColourId, DarkTheme::getTextColour());
+    triggerModeCombo_.setColour(juce::ComboBox::outlineColourId,
+                                DarkTheme::getColour(DarkTheme::BORDER));
+    triggerModeCombo_.onChange = [this]() {
+        int id = triggerModeCombo_.getSelectedId();
+        if (id > 0) {
+            auto mode = static_cast<magda::LFOTriggerMode>(id - 1);
+            currentMod_.triggerMode = mode;
+            if (onTriggerModeChanged) {
+                onTriggerModeChanged(mode);
+            }
+        }
+    };
+    addAndMakeVisible(triggerModeCombo_);
 
     // Target label
     targetLabel_.setFont(FontManager::getInstance().getUIFont(8.0f));
@@ -92,12 +180,20 @@ void ModulatorEditorPanel::setSelectedModIndex(int index) {
         nameLabel_.setText("No Mod Selected", juce::dontSendNotification);
         typeSelector_.setEnabled(false);
         waveformCombo_.setEnabled(false);
+        phaseSlider_.setEnabled(false);
+        syncToggle_.setEnabled(false);
+        syncDivisionCombo_.setEnabled(false);
         rateSlider_.setEnabled(false);
+        triggerModeCombo_.setEnabled(false);
         targetLabel_.setText("No Target", juce::dontSendNotification);
     } else {
         typeSelector_.setEnabled(true);
         waveformCombo_.setEnabled(true);
+        phaseSlider_.setEnabled(true);
+        syncToggle_.setEnabled(true);
+        syncDivisionCombo_.setEnabled(true);
         rateSlider_.setEnabled(true);
+        triggerModeCombo_.setEnabled(true);
     }
 }
 
@@ -106,7 +202,22 @@ void ModulatorEditorPanel::updateFromMod() {
     typeSelector_.setSelectedId(static_cast<int>(currentMod_.type) + 1, juce::dontSendNotification);
     waveformCombo_.setSelectedId(static_cast<int>(currentMod_.waveform) + 1,
                                  juce::dontSendNotification);
+    // Convert normalized (0-1) to degrees (0-360)
+    phaseSlider_.setValue(currentMod_.phaseOffset * 360.0, juce::dontSendNotification);
+
+    // Tempo sync controls
+    syncToggle_.setToggleState(currentMod_.tempoSync, juce::dontSendNotification);
+    syncDivisionCombo_.setSelectedId(static_cast<int>(currentMod_.syncDivision) + 100,
+                                     juce::dontSendNotification);
     rateSlider_.setValue(currentMod_.rate, juce::dontSendNotification);
+
+    // Show/hide rate vs division based on sync state
+    rateSlider_.setVisible(!currentMod_.tempoSync);
+    syncDivisionCombo_.setVisible(currentMod_.tempoSync);
+
+    // Trigger mode
+    triggerModeCombo_.setSelectedId(static_cast<int>(currentMod_.triggerMode) + 1,
+                                    juce::dontSendNotification);
 
     if (currentMod_.isLinked()) {
         targetLabel_.setText("Target: Device " + juce::String(currentMod_.target.deviceId) +
@@ -143,8 +254,18 @@ void ModulatorEditorPanel::paint(juce::Graphics& g) {
     bounds.removeFromTop(22);  // Skip waveform selector
     bounds.removeFromTop(50);  // Skip waveform display
 
-    // "Rate" label
+    // "Phase" label
+    g.drawText("Phase", bounds.removeFromTop(12), juce::Justification::centredLeft);
+
+    bounds.removeFromTop(22);  // Skip phase slider
+
+    // "Rate" label (with sync toggle)
     g.drawText("Rate", bounds.removeFromTop(12), juce::Justification::centredLeft);
+
+    bounds.removeFromTop(22);  // Skip sync toggle + rate/division control
+
+    // "Trigger" label
+    g.drawText("Trigger", bounds.removeFromTop(12), juce::Justification::centredLeft);
 }
 
 void ModulatorEditorPanel::resized() {
@@ -168,9 +289,28 @@ void ModulatorEditorPanel::resized() {
     waveformDisplay_.setBounds(bounds.removeFromTop(50));
     bounds.removeFromTop(4);
 
-    // Rate label area (painted) + slider
+    // Phase label area (painted) + slider
+    bounds.removeFromTop(12);  // "Phase" label
+    phaseSlider_.setBounds(bounds.removeFromTop(20));
+    bounds.removeFromTop(4);
+
+    // Rate label area (painted) + sync toggle + rate/division control
     bounds.removeFromTop(12);  // "Rate" label
-    rateSlider_.setBounds(bounds.removeFromTop(20));
+    auto rateRow = bounds.removeFromTop(20);
+
+    // Sync toggle takes left portion
+    int syncToggleWidth = 42;
+    syncToggle_.setBounds(rateRow.removeFromLeft(syncToggleWidth));
+    rateRow.removeFromLeft(2);  // Small gap
+
+    // Rate slider or division combo takes remaining space (same position, shown alternately)
+    rateSlider_.setBounds(rateRow);
+    syncDivisionCombo_.setBounds(rateRow);
+    bounds.removeFromTop(4);
+
+    // Trigger label area (painted) + combo
+    bounds.removeFromTop(12);  // "Trigger" label
+    triggerModeCombo_.setBounds(bounds.removeFromTop(20));
     bounds.removeFromTop(8);
 
     // Target info at bottom

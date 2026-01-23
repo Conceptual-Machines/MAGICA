@@ -973,6 +973,26 @@ void NodeComponent::initializeModsMacrosPanels() {
             onModWaveformChangedInternal(selectedModIndex_, waveform);
         }
     };
+    modulatorEditorPanel_->onPhaseOffsetChanged = [this](float phaseOffset) {
+        if (selectedModIndex_ >= 0) {
+            onModPhaseOffsetChangedInternal(selectedModIndex_, phaseOffset);
+        }
+    };
+    modulatorEditorPanel_->onTempoSyncChanged = [this](bool tempoSync) {
+        if (selectedModIndex_ >= 0) {
+            onModTempoSyncChangedInternal(selectedModIndex_, tempoSync);
+        }
+    };
+    modulatorEditorPanel_->onSyncDivisionChanged = [this](magda::SyncDivision division) {
+        if (selectedModIndex_ >= 0) {
+            onModSyncDivisionChangedInternal(selectedModIndex_, division);
+        }
+    };
+    modulatorEditorPanel_->onTriggerModeChanged = [this](magda::LFOTriggerMode mode) {
+        if (selectedModIndex_ >= 0) {
+            onModTriggerModeChangedInternal(selectedModIndex_, mode);
+        }
+    };
     addChildComponent(*modulatorEditorPanel_);
 
     // Create macro editor panel

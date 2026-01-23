@@ -561,6 +561,24 @@ void DeviceSlotComponent::onModWaveformChangedInternal(int modIndex, magda::LFOW
     magda::TrackManager::getInstance().setDeviceModWaveform(nodePath_, modIndex, waveform);
 }
 
+void DeviceSlotComponent::onModPhaseOffsetChangedInternal(int modIndex, float phaseOffset) {
+    magda::TrackManager::getInstance().setDeviceModPhaseOffset(nodePath_, modIndex, phaseOffset);
+}
+
+void DeviceSlotComponent::onModTempoSyncChangedInternal(int modIndex, bool tempoSync) {
+    magda::TrackManager::getInstance().setDeviceModTempoSync(nodePath_, modIndex, tempoSync);
+}
+
+void DeviceSlotComponent::onModSyncDivisionChangedInternal(int modIndex,
+                                                           magda::SyncDivision division) {
+    magda::TrackManager::getInstance().setDeviceModSyncDivision(nodePath_, modIndex, division);
+}
+
+void DeviceSlotComponent::onModTriggerModeChangedInternal(int modIndex,
+                                                          magda::LFOTriggerMode mode) {
+    magda::TrackManager::getInstance().setDeviceModTriggerMode(nodePath_, modIndex, mode);
+}
+
 void DeviceSlotComponent::onMacroValueChangedInternal(int macroIndex, float value) {
     magda::TrackManager::getInstance().setDeviceMacroValue(nodePath_, macroIndex, value);
     updateParamModulation();  // Refresh param indicators to show new value

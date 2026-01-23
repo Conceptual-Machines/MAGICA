@@ -610,6 +610,26 @@ void RackComponent::onModRateChangedInternal(int modIndex, float rate) {
     magda::TrackManager::getInstance().setRackModRate(rackPath_, modIndex, rate);
 }
 
+void RackComponent::onModWaveformChangedInternal(int modIndex, magda::LFOWaveform waveform) {
+    magda::TrackManager::getInstance().setRackModWaveform(rackPath_, modIndex, waveform);
+}
+
+void RackComponent::onModPhaseOffsetChangedInternal(int modIndex, float phaseOffset) {
+    magda::TrackManager::getInstance().setRackModPhaseOffset(rackPath_, modIndex, phaseOffset);
+}
+
+void RackComponent::onModTempoSyncChangedInternal(int modIndex, bool tempoSync) {
+    magda::TrackManager::getInstance().setRackModTempoSync(rackPath_, modIndex, tempoSync);
+}
+
+void RackComponent::onModSyncDivisionChangedInternal(int modIndex, magda::SyncDivision division) {
+    magda::TrackManager::getInstance().setRackModSyncDivision(rackPath_, modIndex, division);
+}
+
+void RackComponent::onModTriggerModeChangedInternal(int modIndex, magda::LFOTriggerMode mode) {
+    magda::TrackManager::getInstance().setRackModTriggerMode(rackPath_, modIndex, mode);
+}
+
 void RackComponent::onMacroValueChangedInternal(int macroIndex, float value) {
     magda::TrackManager::getInstance().setRackMacroValue(rackPath_, macroIndex, value);
 

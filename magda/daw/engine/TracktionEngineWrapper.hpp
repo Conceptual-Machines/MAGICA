@@ -55,6 +55,11 @@ class TracktionEngineWrapper : public AudioEngine,
     void setLooping(bool enabled) override;
     void setLoopRegion(double start_seconds, double end_seconds) override;
     bool isLooping() const override;
+    bool justStarted() const override;
+    bool justLooped() const override;
+
+    // Call this each frame to update trigger state (call before updateAllMods)
+    void updateTriggerState();
 
     // Metronome/click track control
     void setMetronomeEnabled(bool enabled) override;
@@ -129,6 +134,12 @@ class TracktionEngineWrapper : public AudioEngine,
     // Tracktion Engine components
     std::unique_ptr<tracktion::Engine> engine_;
     std::unique_ptr<tracktion::Edit> currentEdit_;
+
+    // Transport trigger state tracking
+    bool wasPlaying_ = false;    // Previous frame's playing state
+    double lastPosition_ = 0.0;  // Previous frame's position (for loop detection)
+    bool justStarted_ = false;   // True for one frame after play starts
+    bool justLooped_ = false;    // True for one frame after loop
 
     // Helper methods
     tracktion::Track* findTrackById(const std::string& track_id) const;

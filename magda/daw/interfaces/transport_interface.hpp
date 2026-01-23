@@ -100,4 +100,16 @@ class TransportInterface {
      * @brief Check if looping is enabled
      */
     virtual bool isLooping() const = 0;
+
+    /**
+     * @brief Check if transport just started playing (true for one frame after play starts)
+     * Used for LFO trigger mode to reset phase on transport start
+     */
+    virtual bool justStarted() const = 0;
+
+    /**
+     * @brief Check if transport just looped back (true for one frame after loop point)
+     * Used for LFO trigger mode to reset phase on loop
+     */
+    virtual bool justLooped() const = 0;
 };

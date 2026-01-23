@@ -1456,6 +1456,58 @@ void TrackManager::setRackModRate(const ChainNodePath& rackPath, int modIndex, f
     }
 }
 
+void TrackManager::setRackModPhaseOffset(const ChainNodePath& rackPath, int modIndex,
+                                         float phaseOffset) {
+    if (auto* rack = getRackByPath(rackPath)) {
+        if (modIndex < 0 || modIndex >= static_cast<int>(rack->mods.size())) {
+            return;
+        }
+        rack->mods[modIndex].phaseOffset = juce::jlimit(0.0f, 1.0f, phaseOffset);
+        // Don't notify - simple value change doesn't need UI rebuild
+    }
+}
+
+void TrackManager::setRackModWaveform(const ChainNodePath& rackPath, int modIndex,
+                                      LFOWaveform waveform) {
+    if (auto* rack = getRackByPath(rackPath)) {
+        if (modIndex < 0 || modIndex >= static_cast<int>(rack->mods.size())) {
+            return;
+        }
+        rack->mods[modIndex].waveform = waveform;
+        // Don't notify - simple value change doesn't need UI rebuild
+    }
+}
+
+void TrackManager::setRackModTempoSync(const ChainNodePath& rackPath, int modIndex,
+                                       bool tempoSync) {
+    if (auto* rack = getRackByPath(rackPath)) {
+        if (modIndex < 0 || modIndex >= static_cast<int>(rack->mods.size())) {
+            return;
+        }
+        rack->mods[modIndex].tempoSync = tempoSync;
+    }
+}
+
+void TrackManager::setRackModSyncDivision(const ChainNodePath& rackPath, int modIndex,
+                                          SyncDivision division) {
+    if (auto* rack = getRackByPath(rackPath)) {
+        if (modIndex < 0 || modIndex >= static_cast<int>(rack->mods.size())) {
+            return;
+        }
+        rack->mods[modIndex].syncDivision = division;
+    }
+}
+
+void TrackManager::setRackModTriggerMode(const ChainNodePath& rackPath, int modIndex,
+                                         LFOTriggerMode mode) {
+    if (auto* rack = getRackByPath(rackPath)) {
+        if (modIndex < 0 || modIndex >= static_cast<int>(rack->mods.size())) {
+            return;
+        }
+        rack->mods[modIndex].triggerMode = mode;
+    }
+}
+
 void TrackManager::addRackMod(const ChainNodePath& rackPath, int slotIndex, ModType type) {
     if (auto* rack = getRackByPath(rackPath)) {
         // Add a single mod at the specified slot index
@@ -1630,6 +1682,47 @@ void TrackManager::setDeviceModWaveform(const ChainNodePath& devicePath, int mod
     }
 }
 
+void TrackManager::setDeviceModPhaseOffset(const ChainNodePath& devicePath, int modIndex,
+                                           float phaseOffset) {
+    if (auto* device = getDeviceInChainByPath(devicePath)) {
+        if (modIndex < 0 || modIndex >= static_cast<int>(device->mods.size())) {
+            return;
+        }
+        device->mods[modIndex].phaseOffset = juce::jlimit(0.0f, 1.0f, phaseOffset);
+        // Don't notify - simple value change doesn't need UI rebuild
+    }
+}
+
+void TrackManager::setDeviceModTempoSync(const ChainNodePath& devicePath, int modIndex,
+                                         bool tempoSync) {
+    if (auto* device = getDeviceInChainByPath(devicePath)) {
+        if (modIndex < 0 || modIndex >= static_cast<int>(device->mods.size())) {
+            return;
+        }
+        device->mods[modIndex].tempoSync = tempoSync;
+    }
+}
+
+void TrackManager::setDeviceModSyncDivision(const ChainNodePath& devicePath, int modIndex,
+                                            SyncDivision division) {
+    if (auto* device = getDeviceInChainByPath(devicePath)) {
+        if (modIndex < 0 || modIndex >= static_cast<int>(device->mods.size())) {
+            return;
+        }
+        device->mods[modIndex].syncDivision = division;
+    }
+}
+
+void TrackManager::setDeviceModTriggerMode(const ChainNodePath& devicePath, int modIndex,
+                                           LFOTriggerMode mode) {
+    if (auto* device = getDeviceInChainByPath(devicePath)) {
+        if (modIndex < 0 || modIndex >= static_cast<int>(device->mods.size())) {
+            return;
+        }
+        device->mods[modIndex].triggerMode = mode;
+    }
+}
+
 void TrackManager::addDeviceMod(const ChainNodePath& devicePath, int slotIndex, ModType type) {
     if (auto* device = getDeviceInChainByPath(devicePath)) {
         // Add a single mod at the specified slot index
@@ -1690,23 +1783,60 @@ void TrackManager::removeDeviceModPage(const ChainNodePath& devicePath) {
     }
 }
 
-void TrackManager::updateAllMods(double deltaTime) {
+void TrackManager::updateAllMods(double deltaTime, double bpm, bool transportJustStarted,
+                                 bool transportJustLooped) {
     // Lambda to update a single mod's phase and value
-    auto updateMod = [deltaTime](ModInfo& mod) {
+    auto updateMod = [deltaTime, bpm, transportJustStarted, transportJustLooped](ModInfo& mod) {
         // Skip disabled mods - set value to 0 so they don't affect modulation
         if (!mod.enabled) {
             mod.value = 0.0f;
+            mod.triggered = false;
             return;
         }
 
         if (mod.type == ModType::LFO) {
+            // Check for trigger (phase reset)
+            bool shouldTrigger = false;
+            switch (mod.triggerMode) {
+                case LFOTriggerMode::Free:
+                    // Never reset
+                    break;
+                case LFOTriggerMode::Transport:
+                    // Reset on transport start or loop
+                    if (transportJustStarted || transportJustLooped) {
+                        shouldTrigger = true;
+                    }
+                    break;
+                case LFOTriggerMode::MIDI:
+                    // STUB: Will trigger on MIDI note-on when infrastructure ready
+                    break;
+                case LFOTriggerMode::Audio:
+                    // STUB: Will trigger on audio transient when infrastructure ready
+                    break;
+            }
+
+            if (shouldTrigger) {
+                mod.phase = 0.0f;  // Reset to start
+                mod.triggered = true;
+            } else {
+                mod.triggered = false;
+            }
+
+            // Calculate effective rate (Hz or tempo-synced)
+            float effectiveRate = mod.rate;
+            if (mod.tempoSync) {
+                effectiveRate = ModulatorEngine::calculateSyncRateHz(mod.syncDivision, bpm);
+            }
+
             // Update phase (wraps at 1.0)
-            mod.phase += static_cast<float>(mod.rate * deltaTime);
+            mod.phase += static_cast<float>(effectiveRate * deltaTime);
             while (mod.phase >= 1.0f) {
                 mod.phase -= 1.0f;
             }
+            // Apply phase offset when generating waveform
+            float effectivePhase = std::fmod(mod.phase + mod.phaseOffset, 1.0f);
             // Generate waveform output using ModulatorEngine
-            mod.value = ModulatorEngine::generateWaveform(mod.waveform, mod.phase);
+            mod.value = ModulatorEngine::generateWaveform(mod.waveform, effectivePhase);
         }
     };
 

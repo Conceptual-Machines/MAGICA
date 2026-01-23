@@ -221,6 +221,41 @@ bool TracktionEngineWrapper::isLooping() const {
     return false;
 }
 
+bool TracktionEngineWrapper::justStarted() const {
+    return justStarted_;
+}
+
+bool TracktionEngineWrapper::justLooped() const {
+    return justLooped_;
+}
+
+void TracktionEngineWrapper::updateTriggerState() {
+    // Reset flags at start of each frame
+    justStarted_ = false;
+    justLooped_ = false;
+
+    bool currentlyPlaying = isPlaying();
+    double currentPosition = getCurrentPosition();
+
+    // Detect play start (was not playing, now playing)
+    if (currentlyPlaying && !wasPlaying_) {
+        justStarted_ = true;
+    }
+
+    // Detect loop (position jumped backward while playing and looping)
+    if (currentlyPlaying && isLooping() && currentPosition < lastPosition_) {
+        // Position went backward - likely a loop
+        // Add a threshold to avoid false positives from small position jitter
+        if (lastPosition_ - currentPosition > 0.1) {  // More than 100ms backward
+            justLooped_ = true;
+        }
+    }
+
+    // Update state for next frame
+    wasPlaying_ = currentlyPlaying;
+    lastPosition_ = currentPosition;
+}
+
 // Metronome/click track methods
 void TracktionEngineWrapper::setMetronomeEnabled(bool enabled) {
     if (currentEdit_) {
