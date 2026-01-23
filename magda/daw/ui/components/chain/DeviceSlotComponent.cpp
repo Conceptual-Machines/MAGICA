@@ -179,12 +179,16 @@ DeviceSlotComponent::DeviceSlotComponent(const magda::DeviceInfo& device) : devi
             updateModsPanel();  // Refresh mod knobs with new link data
 
             // Auto-expand mods panel and select the linked mod
-            if (!modPanelVisible_) {
-                modButton_->setToggleState(true, juce::dontSendNotification);
-                modButton_->setActive(true);
-                setModPanelVisible(true);
+            // BUT only if this device's mod is in link mode (not a parent rack's mod)
+            auto activeModSelection = magda::LinkModeManager::getInstance().getModInLinkMode();
+            if (activeModSelection.isValid() && activeModSelection.parentPath == nodePath_) {
+                if (!modPanelVisible_) {
+                    modButton_->setToggleState(true, juce::dontSendNotification);
+                    modButton_->setActive(true);
+                    setModPanelVisible(true);
+                }
+                magda::SelectionManager::getInstance().selectMod(nodePath_, modIndex);
             }
-            magda::SelectionManager::getInstance().selectMod(nodePath_, modIndex);
         };
         paramSlots_[i]->onModUnlinked = [this](int modIndex, magda::ModTarget target) {
             magda::TrackManager::getInstance().removeDeviceModLink(nodePath_, modIndex, target);
@@ -203,14 +207,25 @@ DeviceSlotComponent::DeviceSlotComponent(const magda::DeviceInfo& device) : devi
             updateParamModulation();
 
             // Auto-expand macros panel and select the linked macro (only if linking, not unlinking)
+            // BUT only if this device's macro is in link mode (not a parent rack's macro)
             if (target.isValid()) {
-                if (!paramPanelVisible_) {
-                    macroButton_->setToggleState(true, juce::dontSendNotification);
-                    macroButton_->setActive(true);
-                    setParamPanelVisible(true);
+                auto activeMacroSelection =
+                    magda::LinkModeManager::getInstance().getMacroInLinkMode();
+                if (activeMacroSelection.isValid() &&
+                    activeMacroSelection.parentPath == nodePath_) {
+                    if (!paramPanelVisible_) {
+                        macroButton_->setToggleState(true, juce::dontSendNotification);
+                        macroButton_->setActive(true);
+                        setParamPanelVisible(true);
+                    }
+                    magda::SelectionManager::getInstance().selectMacro(nodePath_, macroIndex);
                 }
-                magda::SelectionManager::getInstance().selectMacro(nodePath_, macroIndex);
             }
+        };
+        paramSlots_[i]->onMacroValueChanged = [this](int macroIndex, float value) {
+            // Update macro's global value (shown on macro knob)
+            magda::TrackManager::getInstance().setDeviceMacroValue(nodePath_, macroIndex, value);
+            updateParamModulation();
         };
 
         addAndMakeVisible(*paramSlots_[i]);

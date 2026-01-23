@@ -143,11 +143,22 @@ ParamSlotComponent::~ParamSlotComponent() {
 }
 
 void ParamSlotComponent::modLinkModeChanged(bool active, const magda::ModSelection& selection) {
-    isInLinkMode_ = active;
-    activeMod_ = selection;
+    // CRITICAL: Only respond if this parameter is within the scope of the mod's parent
+    bool isInScope = isInScopeOf(selection.parentPath);
+
+    // Only enter link mode if we're in scope
+    isInLinkMode_ = active && isInScope;
+
+    // CRITICAL: Only set activeMod_ when entering AND in scope, clear when exiting
+    if (active && isInScope) {
+        activeMod_ = selection;
+        activeMacro_ = magda::MacroSelection{};  // Clear macro state
+    } else {
+        activeMod_ = magda::ModSelection{};  // Clear mod state on exit
+    }
 
     // Clean up tooltip if link mode is being exited
-    if (!active) {
+    if (!active || !isInScope) {
         isLinkModeDrag_ = false;
         amountLabel_.setVisible(false);
         if (amountLabel_.isOnDesktop()) {
@@ -156,7 +167,7 @@ void ParamSlotComponent::modLinkModeChanged(bool active, const magda::ModSelecti
     }
 
     // Disable value slider interaction when in link mode
-    valueSlider_.setInterceptsMouseClicks(!active, !active);
+    valueSlider_.setInterceptsMouseClicks(!isInLinkMode_, !isInLinkMode_);
 
     // Update cursor if mouse is hovering
     if (isMouseOver()) {
@@ -168,11 +179,22 @@ void ParamSlotComponent::modLinkModeChanged(bool active, const magda::ModSelecti
 }
 
 void ParamSlotComponent::macroLinkModeChanged(bool active, const magda::MacroSelection& selection) {
-    isInLinkMode_ = active;
-    activeMacro_ = selection;
+    // CRITICAL: Only respond if this parameter is within the scope of the macro's parent
+    bool isInScope = isInScopeOf(selection.parentPath);
+
+    // Only enter link mode if we're in scope
+    isInLinkMode_ = active && isInScope;
+
+    // CRITICAL: Only set activeMacro_ when entering AND in scope, clear when exiting
+    if (active && isInScope) {
+        activeMacro_ = selection;
+        activeMod_ = magda::ModSelection{};  // Clear mod state
+    } else {
+        activeMacro_ = magda::MacroSelection{};  // Clear macro state on exit
+    }
 
     // Clean up tooltip if link mode is being exited
-    if (!active) {
+    if (!active || !isInScope) {
         isLinkModeDrag_ = false;
         amountLabel_.setVisible(false);
         if (amountLabel_.isOnDesktop()) {
@@ -181,7 +203,7 @@ void ParamSlotComponent::macroLinkModeChanged(bool active, const magda::MacroSel
     }
 
     // Disable value slider interaction when in link mode
-    valueSlider_.setInterceptsMouseClicks(!active, !active);
+    valueSlider_.setInterceptsMouseClicks(!isInLinkMode_, !isInLinkMode_);
 
     // Update cursor if mouse is hovering
     if (isMouseOver()) {
@@ -359,51 +381,95 @@ void ParamSlotComponent::mouseDown(const juce::MouseEvent& e) {
         return;
     }
 
-    // Handle link mode - prepare for drag to set amount (mods only, macros are click-to-link)
-    if (isInLinkMode_ && e.mods.isLeftButtonDown() && activeMod_.isValid()) {
-        // Mod link mode - get existing link amount or default to 50%
-        float initialAmount = 0.5f;
-        bool isLinked = false;
+    // Handle link mode - prepare for drag to set amount/value
+    if (isInLinkMode_ && e.mods.isLeftButtonDown()) {
+        // Mod link mode - drag to set per-parameter amount
+        if (activeMod_.isValid()) {
+            float initialAmount = 0.5f;
+            bool isLinked = false;
 
-        if (activeMod_.isValid() && availableMods_ && activeMod_.modIndex >= 0 &&
-            activeMod_.modIndex < static_cast<int>(availableMods_->size())) {
-            const auto& mod = (*availableMods_)[static_cast<size_t>(activeMod_.modIndex)];
-            magda::ModTarget thisTarget{deviceId_, paramIndex_};
+            if (availableMods_ && activeMod_.modIndex >= 0 &&
+                activeMod_.modIndex < static_cast<int>(availableMods_->size())) {
+                const auto& mod = (*availableMods_)[static_cast<size_t>(activeMod_.modIndex)];
+                magda::ModTarget thisTarget{deviceId_, paramIndex_};
 
-            const auto* existingLink = mod.getLink(thisTarget);
-            isLinked = existingLink != nullptr ||
-                       (mod.target.deviceId == deviceId_ && mod.target.paramIndex == paramIndex_);
+                const auto* existingLink = mod.getLink(thisTarget);
+                isLinked = existingLink != nullptr || (mod.target.deviceId == deviceId_ &&
+                                                       mod.target.paramIndex == paramIndex_);
 
-            if (isLinked) {
-                initialAmount = existingLink ? existingLink->amount : mod.amount;
+                if (isLinked) {
+                    initialAmount = existingLink ? existingLink->amount : mod.amount;
+                }
             }
+
+            // Start link mode drag for mods
+            isLinkModeDrag_ = true;
+            linkModeDragStartAmount_ = initialAmount;
+            linkModeDragCurrentAmount_ = initialAmount;
+            linkModeDragStartY_ = e.getMouseDownY();
+
+            // Show tooltip-style amount label (orange for mods)
+            int percent = static_cast<int>(initialAmount * 100);
+            amountLabel_.setText(juce::String(percent) + "%", juce::dontSendNotification);
+            amountLabel_.setColour(juce::Label::backgroundColourId,
+                                   DarkTheme::getColour(DarkTheme::ACCENT_ORANGE).withAlpha(0.95f));
+
+            // Add tooltip to desktop so it can render outside component bounds
+            if (!amountLabel_.isOnDesktop()) {
+                amountLabel_.addToDesktop(juce::ComponentPeer::windowIsTemporary |
+                                          juce::ComponentPeer::windowIgnoresMouseClicks);
+            }
+
+            // Position above the parameter cell in screen coordinates
+            auto screenBounds = getScreenBounds();
+            amountLabel_.setBounds(screenBounds.getX(), screenBounds.getY() - 22,
+                                   screenBounds.getWidth(), 20);
+            amountLabel_.setVisible(true);
+            amountLabel_.toFront(true);
+
+            repaint();
+            return;
         }
 
-        // Start link mode drag for mods
-        isLinkModeDrag_ = true;
-        linkModeDragStartAmount_ = initialAmount;
-        linkModeDragCurrentAmount_ = initialAmount;
-        linkModeDragStartY_ = e.getMouseDownY();
+        // Macro link mode - drag to set macro's global value
+        if (activeMacro_.isValid()) {
+            float initialValue = 0.5f;
 
-        // Show tooltip-style amount label
-        int percent = static_cast<int>(initialAmount * 100);
-        amountLabel_.setText(juce::String(percent) + "%", juce::dontSendNotification);
+            if (availableMacros_ && activeMacro_.macroIndex >= 0 &&
+                activeMacro_.macroIndex < static_cast<int>(availableMacros_->size())) {
+                const auto& macro =
+                    (*availableMacros_)[static_cast<size_t>(activeMacro_.macroIndex)];
+                initialValue = macro.value;
+            }
 
-        // Add tooltip to desktop so it can render outside component bounds
-        if (!amountLabel_.isOnDesktop()) {
-            amountLabel_.addToDesktop(juce::ComponentPeer::windowIsTemporary |
-                                      juce::ComponentPeer::windowIgnoresMouseClicks);
+            // Start link mode drag for macros
+            isLinkModeDrag_ = true;  // Reuse same drag flag
+            linkModeDragStartAmount_ = initialValue;
+            linkModeDragCurrentAmount_ = initialValue;
+            linkModeDragStartY_ = e.getMouseDownY();
+
+            // Show tooltip-style value label (purple for macros)
+            int percent = static_cast<int>(initialValue * 100);
+            amountLabel_.setText(juce::String(percent) + "%", juce::dontSendNotification);
+            amountLabel_.setColour(juce::Label::backgroundColourId,
+                                   DarkTheme::getColour(DarkTheme::ACCENT_PURPLE).withAlpha(0.95f));
+
+            // Add tooltip to desktop so it can render outside component bounds
+            if (!amountLabel_.isOnDesktop()) {
+                amountLabel_.addToDesktop(juce::ComponentPeer::windowIsTemporary |
+                                          juce::ComponentPeer::windowIgnoresMouseClicks);
+            }
+
+            // Position above the parameter cell in screen coordinates
+            auto screenBounds = getScreenBounds();
+            amountLabel_.setBounds(screenBounds.getX(), screenBounds.getY() - 22,
+                                   screenBounds.getWidth(), 20);
+            amountLabel_.setVisible(true);
+            amountLabel_.toFront(true);
+
+            repaint();
+            return;
         }
-
-        // Position above the parameter cell in screen coordinates
-        auto screenBounds = getScreenBounds();
-        amountLabel_.setBounds(screenBounds.getX(), screenBounds.getY() - 22,
-                               screenBounds.getWidth(), 20);
-        amountLabel_.setVisible(true);
-        amountLabel_.toFront(true);
-
-        repaint();
-        return;
     }
 
     // Regular click on label area (not slider): select param
@@ -417,7 +483,7 @@ void ParamSlotComponent::mouseDown(const juce::MouseEvent& e) {
 }
 
 void ParamSlotComponent::mouseDrag(const juce::MouseEvent& e) {
-    // Handle link mode drag - vertical drag sets modulation amount
+    // Handle link mode drag - vertical drag sets modulation amount or macro value
     if (isLinkModeDrag_) {
         // Calculate amount based on vertical drag distance
         // Drag down = decrease, drag up = increase
@@ -429,7 +495,11 @@ void ParamSlotComponent::mouseDrag(const juce::MouseEvent& e) {
         // Store current drag amount for visual preview
         linkModeDragCurrentAmount_ = newAmount;
 
-        // Create or update the link
+        // Update tooltip label
+        int percent = static_cast<int>(newAmount * 100);
+        amountLabel_.setText(juce::String(percent) + "%", juce::dontSendNotification);
+
+        // Handle mod drag - set per-parameter amount
         if (activeMod_.isValid() && availableMods_ && activeMod_.modIndex >= 0 &&
             activeMod_.modIndex < static_cast<int>(availableMods_->size())) {
             magda::ModTarget thisTarget{deviceId_, paramIndex_};
@@ -452,9 +522,27 @@ void ParamSlotComponent::mouseDrag(const juce::MouseEvent& e) {
                 }
             }
 
-            // Update tooltip label
-            int percent = static_cast<int>(newAmount * 100);
-            amountLabel_.setText(juce::String(percent) + "%", juce::dontSendNotification);
+            repaint();
+        }
+        // Handle macro drag - set macro's global value and create link if needed
+        else if (activeMacro_.isValid() && availableMacros_ && activeMacro_.macroIndex >= 0 &&
+                 activeMacro_.macroIndex < static_cast<int>(availableMacros_->size())) {
+            const auto& macro = (*availableMacros_)[static_cast<size_t>(activeMacro_.macroIndex)];
+            magda::MacroTarget thisTarget{deviceId_, paramIndex_};
+
+            // Check if already linked
+            bool isLinked =
+                macro.target.deviceId == deviceId_ && macro.target.paramIndex == paramIndex_;
+
+            // Create link on first drag if not already linked
+            if (!isLinked && onMacroLinked) {
+                onMacroLinked(activeMacro_.macroIndex, thisTarget);
+            }
+
+            // Update macro's global value
+            if (onMacroValueChanged) {
+                onMacroValueChanged(activeMacro_.macroIndex, newAmount);
+            }
 
             repaint();
         }
@@ -465,7 +553,7 @@ void ParamSlotComponent::mouseDrag(const juce::MouseEvent& e) {
 }
 
 void ParamSlotComponent::mouseUp(const juce::MouseEvent& /*e*/) {
-    // Clean up link mode drag state (for mods)
+    // Clean up link mode drag state (for both mods and macros)
     if (isLinkModeDrag_) {
         isLinkModeDrag_ = false;
         amountLabel_.setVisible(false);
@@ -476,27 +564,6 @@ void ParamSlotComponent::mouseUp(const juce::MouseEvent& /*e*/) {
         }
 
         repaint();
-        return;
-    }
-
-    // Handle macro link mode - click to link (not drag)
-    if (isInLinkMode_ && activeMacro_.isValid() && availableMacros_ &&
-        activeMacro_.macroIndex >= 0 &&
-        activeMacro_.macroIndex < static_cast<int>(availableMacros_->size())) {
-        const auto& macro = (*availableMacros_)[static_cast<size_t>(activeMacro_.macroIndex)];
-        magda::MacroTarget thisTarget{deviceId_, paramIndex_};
-
-        // Check if already linked
-        bool isLinked =
-            macro.target.deviceId == deviceId_ && macro.target.paramIndex == paramIndex_;
-
-        if (!isLinked) {
-            // Create new link
-            if (onMacroLinked) {
-                onMacroLinked(activeMacro_.macroIndex, thisTarget);
-            }
-        }
-        // Don't exit macro link mode - let user link multiple parameters
         return;
     }
 
@@ -586,10 +653,15 @@ void ParamSlotComponent::paintModulationIndicators(juce::Graphics& g) {
 
     // Bar height (thickness)
     const int barHeight = 3;
-    int y = sliderBounds.getBottom() - 2;
 
-    // If we're dragging in link mode, only show preview of current drag amount
+    // Only draw mod/macro indicators when in link mode
+    if (!isInLinkMode_) {
+        return;
+    }
+
+    // If we're dragging in MOD link mode, only show mod preview at BOTTOM
     if (isLinkModeDrag_ && activeMod_.isValid()) {
+        int y = sliderBounds.getBottom() - 2;
         int barWidth = juce::jmax(1, static_cast<int>(maxWidth * linkModeDragCurrentAmount_));
         g.setColour(DarkTheme::getColour(DarkTheme::ACCENT_ORANGE).withAlpha(0.5f));
         g.fillRoundedRectangle(static_cast<float>(leftX), static_cast<float>(y - barHeight),
@@ -597,34 +669,37 @@ void ParamSlotComponent::paintModulationIndicators(juce::Graphics& g) {
         return;  // Don't draw other indicators while dragging
     }
 
-    // Only draw mod/macro indicators when in link mode
-    if (!isInLinkMode_) {
-        return;
+    // Draw MACRO indicators (purple) at TOP - only when in macro link mode
+    if (activeMacro_.isValid()) {
+        int y = sliderBounds.getY() + 2;
+        auto linkedMacros = getLinkedMacros();
+        for (const auto& [macroIndex, macro] : linkedMacros) {
+            int barWidth = juce::jmax(1, static_cast<int>(maxWidth * macro->value));
+
+            g.setColour(DarkTheme::getColour(DarkTheme::ACCENT_PURPLE).withAlpha(0.5f));
+            g.fillRoundedRectangle(static_cast<float>(leftX), static_cast<float>(y),
+                                   static_cast<float>(barWidth), static_cast<float>(barHeight),
+                                   1.0f);
+
+            y += (barHeight + 1);  // Move down for next bar
+        }
     }
 
-    // Draw mod indicators (orange) - horizontal bars
-    auto linkedMods = getLinkedMods();
-    for (const auto& [modIndex, link] : linkedMods) {
-        float linkAmount = link->amount;
-        int barWidth = juce::jmax(1, static_cast<int>(maxWidth * linkAmount));
+    // Draw MOD indicators (orange) at BOTTOM - only when in mod link mode
+    if (activeMod_.isValid()) {
+        int y = sliderBounds.getBottom() - 2;
+        auto linkedMods = getLinkedMods();
+        for (const auto& [modIndex, link] : linkedMods) {
+            float linkAmount = link->amount;
+            int barWidth = juce::jmax(1, static_cast<int>(maxWidth * linkAmount));
 
-        g.setColour(DarkTheme::getColour(DarkTheme::ACCENT_ORANGE).withAlpha(0.5f));
-        g.fillRoundedRectangle(static_cast<float>(leftX), static_cast<float>(y - barHeight),
-                               static_cast<float>(barWidth), static_cast<float>(barHeight), 1.0f);
+            g.setColour(DarkTheme::getColour(DarkTheme::ACCENT_ORANGE).withAlpha(0.5f));
+            g.fillRoundedRectangle(static_cast<float>(leftX), static_cast<float>(y - barHeight),
+                                   static_cast<float>(barWidth), static_cast<float>(barHeight),
+                                   1.0f);
 
-        y -= (barHeight + 1);
-    }
-
-    // Draw macro indicators (purple) - horizontal bars
-    auto linkedMacros = getLinkedMacros();
-    for (const auto& [macroIndex, macro] : linkedMacros) {
-        int barWidth = juce::jmax(1, static_cast<int>(maxWidth * macro->value));
-
-        g.setColour(DarkTheme::getColour(DarkTheme::ACCENT_PURPLE).withAlpha(0.5f));
-        g.fillRoundedRectangle(static_cast<float>(leftX), static_cast<float>(y - barHeight),
-                               static_cast<float>(barWidth), static_cast<float>(barHeight), 1.0f);
-
-        y -= (barHeight + 1);
+            y -= (barHeight + 1);  // Move up for next bar
+        }
     }
 }
 
@@ -855,6 +930,80 @@ void ParamSlotComponent::itemDropped(const SourceDetails& details) {
     }
 
     repaint();
+}
+
+bool ParamSlotComponent::isInScopeOf(const magda::ChainNodePath& parentPath) const {
+    // Check if this parameter is within the scope of the mod/macro parent
+
+    // Must be on the same track
+    if (devicePath_.trackId != parentPath.trackId) {
+        return false;
+    }
+
+    // Determine if parent and device use legacy (topLevelDeviceId) or modern (steps) paths
+    bool parentIsTopLevel = parentPath.topLevelDeviceId != magda::INVALID_DEVICE_ID;
+    bool deviceIsTopLevel = devicePath_.topLevelDeviceId != magda::INVALID_DEVICE_ID;
+
+    // Case 1: Parent is a top-level device
+    if (parentIsTopLevel) {
+        // Device must also be top-level and match exactly
+        if (!deviceIsTopLevel) {
+            return false;  // Parent is top-level, device is in rack/chain - no match
+        }
+        return devicePath_.topLevelDeviceId == parentPath.topLevelDeviceId;
+    }
+
+    // Case 2: Parent uses steps (rack/chain/device inside rack)
+    if (parentPath.steps.empty()) {
+        return false;
+    }
+
+    // Device must also use steps (not top-level)
+    if (deviceIsTopLevel) {
+        return false;  // Parent is in rack/chain, device is top-level - no match
+    }
+
+    // Both use steps - check scope based on parent type
+    auto parentType = parentPath.getType();
+
+    if (parentType == magda::ChainNodeType::Rack) {
+        // Parent is a rack - parameter must be in a device inside that rack
+        // devicePath should start with rack's path and have additional steps (chain -> device)
+
+        // Must have more steps than parent (to be a descendant)
+        if (devicePath_.steps.size() <= parentPath.steps.size()) {
+            return false;
+        }
+
+        // Check if devicePath starts with parentPath
+        for (size_t i = 0; i < parentPath.steps.size(); ++i) {
+            if (devicePath_.steps[i].type != parentPath.steps[i].type ||
+                devicePath_.steps[i].id != parentPath.steps[i].id) {
+                return false;
+            }
+        }
+
+        return true;
+    } else if (parentType == magda::ChainNodeType::Device) {
+        // Parent is a device - parameter must belong to that exact device
+        // devicePath must match exactly
+
+        if (devicePath_.steps.size() != parentPath.steps.size()) {
+            return false;
+        }
+
+        for (size_t i = 0; i < parentPath.steps.size(); ++i) {
+            if (devicePath_.steps[i].type != parentPath.steps[i].type ||
+                devicePath_.steps[i].id != parentPath.steps[i].id) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    // Other types (Chain, etc.) - for now, don't support
+    return false;
 }
 
 }  // namespace magda::daw::ui

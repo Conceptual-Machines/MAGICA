@@ -22,7 +22,7 @@ MacroKnobComponent::MacroKnobComponent(int macroIndex) : macroIndex_(macroIndex)
     nameLabel_.setInterceptsMouseClicks(false, false);
     addAndMakeVisible(nameLabel_);
 
-    // Value slider - hidden for consistency with mod cells
+    // Value slider - visible for macros (unlike mods)
     valueSlider_.setRange(0.0, 1.0, 0.01);
     valueSlider_.setValue(currentMacro_.value, juce::dontSendNotification);
     valueSlider_.setFont(FontManager::getInstance().getUIFont(9.0f));
@@ -32,8 +32,7 @@ MacroKnobComponent::MacroKnobComponent(int macroIndex) : macroIndex_(macroIndex)
             onValueChanged(currentMacro_.value);
         }
     };
-    valueSlider_.setVisible(false);  // Hide for consistency
-    addChildComponent(valueSlider_);
+    addAndMakeVisible(valueSlider_);
 
     // Link button - toggles link mode for this macro (using link_flat icon)
     linkButton_ = std::make_unique<magda::SvgButton>("Link", BinaryData::link_flat_svg,
@@ -110,7 +109,8 @@ void MacroKnobComponent::resized() {
     // Name label at top
     nameLabel_.setBounds(bounds.removeFromTop(NAME_LABEL_HEIGHT));
 
-    // Value slider is hidden - skip layout
+    // Value slider (visible for macros)
+    valueSlider_.setBounds(bounds.removeFromTop(VALUE_SLIDER_HEIGHT));
 
     // Skip remaining space and position link button at the very bottom
     auto remainingHeight = bounds.getHeight();

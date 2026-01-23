@@ -90,6 +90,7 @@ class ParamSlotComponent : public juce::Component,
     std::function<void(int modIndex, magda::ModTarget target)> onModUnlinked;
     std::function<void(int modIndex, magda::ModTarget target, float amount)> onModAmountChanged;
     std::function<void(int macroIndex, magda::MacroTarget target)> onMacroLinked;
+    std::function<void(int macroIndex, float value)> onMacroValueChanged;
 
     void paint(juce::Graphics& g) override;
     void paintOverChildren(juce::Graphics& g) override;
@@ -155,6 +156,9 @@ class ParamSlotComponent : public juce::Component,
     // If selectedModIndex_ >= 0, only returns that mod's link (if any)
     std::vector<std::pair<int, const magda::ModLink*>> getLinkedMods() const;
     std::vector<std::pair<int, const magda::MacroInfo*>> getLinkedMacros() const;
+
+    // Check if this parameter is within the scope of a mod/macro parent
+    bool isInScopeOf(const magda::ChainNodePath& parentPath) const;
 
     void showLinkMenu();
     void paintModulationIndicators(juce::Graphics& g);
