@@ -101,6 +101,51 @@ void MacroKnobComponent::paint(juce::Graphics& g) {
         g.setColour(DarkTheme::getColour(DarkTheme::BORDER));
         g.drawRoundedRectangle(bounds.toFloat().reduced(0.5f), 3.0f, 1.0f);
     }
+
+    // Draw knob below the name label
+    auto knobBounds = bounds.reduced(1);
+    knobBounds.removeFromTop(NAME_LABEL_HEIGHT);  // Skip name label
+    auto knobArea = knobBounds.removeFromTop(KNOB_SIZE);
+
+    // Center the knob horizontally
+    float knobDiameter = static_cast<float>(KNOB_SIZE - 4);
+    float knobX = knobArea.getCentreX() - knobDiameter / 2.0f;
+    float knobY = knobArea.getCentreY() - knobDiameter / 2.0f;
+    auto knobRect = juce::Rectangle<float>(knobX, knobY, knobDiameter, knobDiameter);
+
+    // Knob body (dark circle)
+    g.setColour(DarkTheme::getColour(DarkTheme::BACKGROUND));
+    g.fillEllipse(knobRect);
+
+    // Knob border
+    g.setColour(DarkTheme::getColour(DarkTheme::BORDER).brighter(0.2f));
+    g.drawEllipse(knobRect.reduced(0.5f), 1.0f);
+
+    // Value arc - draw from 7 o'clock to current value position
+    // Range: 225° (7 o'clock) to -45° (5 o'clock) = 270° total sweep
+    const float startAngle = juce::MathConstants<float>::pi * 1.25f;  // 225° = 7 o'clock
+    const float endAngle = juce::MathConstants<float>::pi * -0.25f;   // -45° = 5 o'clock
+    const float angleRange = startAngle - endAngle;                   // 270°
+    float valueAngle = startAngle - (currentMacro_.value * angleRange);
+
+    // Draw value arc
+    juce::Path arcPath;
+    float arcRadius = knobDiameter / 2.0f - 3.0f;
+    arcPath.addCentredArc(knobRect.getCentreX(), knobRect.getCentreY(), arcRadius, arcRadius, 0.0f,
+                          startAngle, valueAngle, true);
+    g.setColour(DarkTheme::getColour(DarkTheme::ACCENT_PURPLE));
+    g.strokePath(arcPath, juce::PathStrokeType(2.0f));
+
+    // Draw pointer line from center towards value angle
+    float pointerLength = knobDiameter / 2.0f - 5.0f;
+    float pointerX = knobRect.getCentreX() + std::cos(valueAngle) * pointerLength;
+    float pointerY = knobRect.getCentreY() - std::sin(valueAngle) * pointerLength;
+
+    g.setColour(DarkTheme::getTextColour());
+    g.drawLine(knobRect.getCentreX(), knobRect.getCentreY(), pointerX, pointerY, 1.5f);
+
+    // Center dot
+    g.fillEllipse(knobRect.getCentreX() - 2.0f, knobRect.getCentreY() - 2.0f, 4.0f, 4.0f);
 }
 
 void MacroKnobComponent::resized() {
@@ -109,7 +154,10 @@ void MacroKnobComponent::resized() {
     // Name label at top
     nameLabel_.setBounds(bounds.removeFromTop(NAME_LABEL_HEIGHT));
 
-    // Value slider (visible for macros)
+    // Skip knob area (drawn in paint())
+    bounds.removeFromTop(KNOB_SIZE);
+
+    // Value slider below knob
     valueSlider_.setBounds(bounds.removeFromTop(VALUE_SLIDER_HEIGHT));
 
     // Skip remaining space and position link button at the very bottom

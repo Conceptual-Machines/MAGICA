@@ -93,6 +93,7 @@ class MacroKnobComponent : public juce::Component, public magda::LinkModeManager
     bool isDragging_ = false;
     static constexpr int DRAG_THRESHOLD = 5;
 
+    static constexpr int KNOB_SIZE = 28;
     static constexpr int NAME_LABEL_HEIGHT = 11;
     static constexpr int VALUE_SLIDER_HEIGHT = 14;
     static constexpr int LINK_BUTTON_HEIGHT = 12;
