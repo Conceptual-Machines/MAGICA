@@ -435,8 +435,6 @@ void AudioBridge::updateMetering() {
 
 void AudioBridge::timerCallback() {
     // Update metering from level measurers (runs at 30 FPS on message thread)
-    static int debugCounter = 0;
-
     juce::ScopedLock lock(mappingLock_);
 
     for (const auto& [trackId, track] : trackMapping_) {
@@ -455,25 +453,6 @@ void AudioBridge::timerCallback() {
         // Read and clear audio levels from the client (returns DbTimePair)
         auto levelL = client.getAndClearAudioLevel(0);
         auto levelR = client.getAndClearAudioLevel(1);
-
-        // Debug: Print actual dB values for track 1
-        if (trackId == 1 && ++debugCounter % 30 == 0) {  // Once per second
-            float linearL = juce::Decibels::decibelsToGain(levelL.dB);
-            float linearR = juce::Decibels::decibelsToGain(levelR.dB);
-
-            std::cout << "Track 1 LevelMeasurer RAW:" << std::endl;
-            std::cout << "  dB from measurer: " << levelL.dB << " / " << levelR.dB << std::endl;
-            std::cout << "  Linear converted: " << linearL << " / " << linearR << std::endl;
-            std::cout << "  Time: " << levelL.time << std::endl;
-
-            // Also check the track's volume
-            if (track) {
-                std::cout << "  Track volume dB: "
-                          << track->getVolumePlugin()->volParam->getCurrentValue() << std::endl;
-                std::cout << "  Track pan: "
-                          << track->getVolumePlugin()->panParam->getCurrentValue() << std::endl;
-            }
-        }
 
         // Convert from dB to linear gain (0-1)
         data.peakL = juce::Decibels::decibelsToGain(levelL.dB);
