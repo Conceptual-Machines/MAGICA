@@ -56,6 +56,7 @@ class LFOCurveEditorContent : public juce::Component {
     void setupControls();
     void updateControlsFromModInfo();
 
+    static constexpr int HEADER_HEIGHT = 24;
     static constexpr int FOOTER_HEIGHT = 28;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(LFOCurveEditorContent)

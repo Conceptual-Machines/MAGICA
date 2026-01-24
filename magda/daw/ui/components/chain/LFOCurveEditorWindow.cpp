@@ -257,18 +257,31 @@ void LFOCurveEditorContent::updateControlsFromModInfo() {
 }
 
 void LFOCurveEditorContent::paint(juce::Graphics& g) {
+    // Header background
+    auto headerBounds = getLocalBounds().removeFromTop(HEADER_HEIGHT);
+    g.setColour(DarkTheme::getColour(DarkTheme::SURFACE));
+    g.fillRect(headerBounds);
+
+    // Header bottom border
+    g.setColour(DarkTheme::getColour(DarkTheme::BORDER));
+    g.drawHorizontalLine(HEADER_HEIGHT - 1, 0.0f, static_cast<float>(getWidth()));
+
     // Footer background
     auto footerBounds = getLocalBounds().removeFromBottom(FOOTER_HEIGHT);
     g.setColour(DarkTheme::getColour(DarkTheme::SURFACE));
     g.fillRect(footerBounds);
 
     // Footer top border
-    g.setColour(DarkTheme::getColour(DarkTheme::BORDER));
     g.drawHorizontalLine(getHeight() - FOOTER_HEIGHT, 0.0f, static_cast<float>(getWidth()));
 }
 
 void LFOCurveEditorContent::resized() {
     auto bounds = getLocalBounds();
+
+    // Header at top with preset selector
+    auto header = bounds.removeFromTop(HEADER_HEIGHT);
+    header.reduce(6, 3);
+    presetCombo_.setBounds(header.removeFromLeft(90));
 
     // Footer at bottom
     auto footer = bounds.removeFromBottom(FOOTER_HEIGHT);
@@ -294,11 +307,6 @@ void LFOCurveEditorContent::resized() {
     msegToggle_.setBounds(footer.removeFromLeft(modeWidth));
     footer.removeFromLeft(gap * 2);
 
-    // Preset selector
-    constexpr int presetWidth = 70;
-    presetCombo_.setBounds(footer.removeFromLeft(presetWidth));
-    footer.removeFromLeft(gap * 2);
-
     // Grid section: [Grid:][X combo][Y combo][Snap X][Snap Y]
     constexpr int labelWidth = 30;
     constexpr int comboWidth = 38;
@@ -313,7 +321,7 @@ void LFOCurveEditorContent::resized() {
     footer.removeFromLeft(4);
     snapYToggle_.setBounds(footer.removeFromLeft(snapWidth));
 
-    // Curve editor takes remaining space (above footer)
+    // Curve editor takes remaining space (between header and footer)
     curveEditor_.setBounds(bounds.expanded(curveEditor_.getPadding()));
 }
 
