@@ -2203,12 +2203,14 @@ void TrackManager::createDefaultTracks(int count) {
     if (!tracks_.empty()) {
         auto& track1 = tracks_[0];
 
-        // Add a device
+        // Add a built-in tone generator device
         DeviceInfo device;
         device.id = nextDeviceId_++;
-        device.name = "Pro-Q 3";
-        device.manufacturer = "FabFilter";
-        device.format = PluginFormat::VST3;
+        device.name = "Tone Generator";
+        device.pluginId = "tone";  // Built-in plugin ID for AudioBridge
+        device.manufacturer = "MAGDA";
+        device.format = PluginFormat::Internal;
+        device.isInstrument = true;  // Generates audio
         track1.chainElements.push_back(makeDeviceElement(device));
 
         // Add a rack with one chain

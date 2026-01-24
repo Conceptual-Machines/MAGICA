@@ -379,6 +379,9 @@ void AudioBridge::syncTrackPlugins(TrackId trackId) {
             }
         }
     }
+
+    // Ensure LevelMeter is at the end of the plugin chain for metering
+    addLevelMeterToTrack(trackId);
 }
 
 void AudioBridge::ensureTrackMapping(TrackId trackId) {
