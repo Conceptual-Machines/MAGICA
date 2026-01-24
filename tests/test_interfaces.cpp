@@ -85,6 +85,12 @@ class MockTransportInterface : public TransportInterface {
     bool isLooping() const override {
         return looping_;
     }
+    bool justStarted() const override {
+        return false;  // Stub for testing
+    }
+    bool justLooped() const override {
+        return false;  // Stub for testing
+    }
 };
 
 // Mock implementation of TrackInterface for testing

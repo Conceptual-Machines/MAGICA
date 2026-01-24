@@ -172,23 +172,30 @@ DeviceSlotComponent::DeviceSlotComponent(const magda::DeviceInfo& device) : devi
         };
         paramSlots_[i]->onModLinkedWithAmount = [this](int modIndex, magda::ModTarget target,
                                                        float amount) {
-            magda::TrackManager::getInstance().setDeviceModTarget(nodePath_, modIndex, target);
-            magda::TrackManager::getInstance().setDeviceModLinkAmount(nodePath_, modIndex, target,
-                                                                      amount);
-            updateParamModulation();
-            updateModsPanel();  // Refresh mod knobs with new link data
-
-            // Auto-expand mods panel and select the linked mod
-            // BUT only if this device's mod is in link mode (not a parent rack's mod)
+            // Check if the active mod is from this device or a parent rack
             auto activeModSelection = magda::LinkModeManager::getInstance().getModInLinkMode();
             if (activeModSelection.isValid() && activeModSelection.parentPath == nodePath_) {
+                // Device-level mod
+                magda::TrackManager::getInstance().setDeviceModTarget(nodePath_, modIndex, target);
+                magda::TrackManager::getInstance().setDeviceModLinkAmount(nodePath_, modIndex,
+                                                                          target, amount);
+                updateModsPanel();  // Refresh mod knobs with new link data
+
+                // Auto-expand mods panel and select the linked mod
                 if (!modPanelVisible_) {
                     modButton_->setToggleState(true, juce::dontSendNotification);
                     modButton_->setActive(true);
                     setModPanelVisible(true);
                 }
                 magda::SelectionManager::getInstance().selectMod(nodePath_, modIndex);
+            } else if (activeModSelection.isValid()) {
+                // Rack-level mod (use the parent path from the active selection)
+                magda::TrackManager::getInstance().setRackModTarget(activeModSelection.parentPath,
+                                                                    modIndex, target);
+                magda::TrackManager::getInstance().setRackModLinkAmount(
+                    activeModSelection.parentPath, modIndex, target, amount);
             }
+            updateParamModulation();
         };
         paramSlots_[i]->onModUnlinked = [this](int modIndex, magda::ModTarget target) {
             magda::TrackManager::getInstance().removeDeviceModLink(nodePath_, modIndex, target);
@@ -197,11 +204,19 @@ DeviceSlotComponent::DeviceSlotComponent(const magda::DeviceInfo& device) : devi
         };
         paramSlots_[i]->onModAmountChanged = [this](int modIndex, magda::ModTarget target,
                                                     float amount) {
-            // Update per-parameter link amount
-            magda::TrackManager::getInstance().setDeviceModLinkAmount(nodePath_, modIndex, target,
-                                                                      amount);
+            // Check if the active mod is from this device or a parent rack
+            auto activeModSelection = magda::LinkModeManager::getInstance().getModInLinkMode();
+            if (activeModSelection.isValid() && activeModSelection.parentPath == nodePath_) {
+                // Device-level mod
+                magda::TrackManager::getInstance().setDeviceModLinkAmount(nodePath_, modIndex,
+                                                                          target, amount);
+                updateModsPanel();  // Refresh mod knob to show new amount
+            } else if (activeModSelection.isValid()) {
+                // Rack-level mod (use the parent path from the active selection)
+                magda::TrackManager::getInstance().setRackModLinkAmount(
+                    activeModSelection.parentPath, modIndex, target, amount);
+            }
             updateParamModulation();
-            updateModsPanel();  // Refresh mod knob to show new amount
         };
         paramSlots_[i]->onMacroLinked = [this](int macroIndex, magda::MacroTarget target) {
             onMacroTargetChangedInternal(macroIndex, target);
@@ -316,7 +331,8 @@ void DeviceSlotComponent::updateParamModulation() {
     const auto* mods = getModsData();
     const auto* macros = getMacrosData();
 
-    // Get rack-level macros from parent rack
+    // Get rack-level mods and macros from parent rack
+    const magda::ModArray* rackMods = nullptr;
     const magda::MacroArray* rackMacros = nullptr;
     // Build rack path by taking only the rack step (first step should be the rack)
     if (!nodePath_.steps.empty() && nodePath_.steps[0].type == magda::ChainStepType::Rack) {
@@ -324,6 +340,7 @@ void DeviceSlotComponent::updateParamModulation() {
         rackPath.trackId = nodePath_.trackId;
         rackPath.steps.push_back(nodePath_.steps[0]);  // Just the rack step
         if (auto* rack = magda::TrackManager::getInstance().getRackByPath(rackPath)) {
+            rackMods = &rack->mods;
             rackMacros = &rack->macros;
         }
     }
@@ -354,6 +371,7 @@ void DeviceSlotComponent::updateParamModulation() {
         paramSlots_[i]->setDeviceId(device_.id);
         paramSlots_[i]->setDevicePath(nodePath_);  // For param selection
         paramSlots_[i]->setAvailableMods(mods);
+        paramSlots_[i]->setAvailableRackMods(rackMods);  // Pass rack-level mods
         paramSlots_[i]->setAvailableMacros(macros);
         paramSlots_[i]->setAvailableRackMacros(rackMacros);  // Pass rack-level macros
         paramSlots_[i]->setSelectedModIndex(selectedModIndex);
@@ -435,15 +453,15 @@ void DeviceSlotComponent::resizedContent(juce::Rectangle<int> contentArea) {
 }
 
 void DeviceSlotComponent::resizedHeaderExtra(juce::Rectangle<int>& headerArea) {
-    // Header layout: [M] [Macro] [Name...] [gain slider] [UI] [on]
+    // Header layout: [Macro] [M] [Name...] [gain slider] [UI] [on]
     // Note: delete (X) is handled by NodeComponent on the right
 
-    // Mod button on the left (before name)
-    modButton_->setBounds(headerArea.removeFromLeft(BUTTON_SIZE));
+    // Macro button on the left (before name) - matches panel order
+    macroButton_->setBounds(headerArea.removeFromLeft(BUTTON_SIZE));
     headerArea.removeFromLeft(4);
 
-    // Macro button
-    macroButton_->setBounds(headerArea.removeFromLeft(BUTTON_SIZE));
+    // Mod button
+    modButton_->setBounds(headerArea.removeFromLeft(BUTTON_SIZE));
     headerArea.removeFromLeft(4);
 
     // Power button on the right (before delete which is handled by parent)
@@ -463,7 +481,7 @@ void DeviceSlotComponent::resizedHeaderExtra(juce::Rectangle<int>& headerArea) {
 
 void DeviceSlotComponent::resizedCollapsed(juce::Rectangle<int>& area) {
     // Add device-specific buttons vertically when collapsed
-    // Order: X (from base), ON, UI, Mod, Macro
+    // Order: X (from base), ON, UI, Macro, Mod - matches panel order
     int buttonSize = juce::jmin(16, area.getWidth() - 4);
 
     // On/power button (right after X)
@@ -478,20 +496,20 @@ void DeviceSlotComponent::resizedCollapsed(juce::Rectangle<int>& area) {
     uiButton_->setVisible(true);
     area.removeFromTop(4);
 
-    // Mod button
-    modButton_->setBounds(
-        area.removeFromTop(buttonSize).withSizeKeepingCentre(buttonSize, buttonSize));
-    modButton_->setVisible(true);
-    area.removeFromTop(4);
-
     // Macro button
     macroButton_->setBounds(
         area.removeFromTop(buttonSize).withSizeKeepingCentre(buttonSize, buttonSize));
     macroButton_->setVisible(true);
+    area.removeFromTop(4);
+
+    // Mod button
+    modButton_->setBounds(
+        area.removeFromTop(buttonSize).withSizeKeepingCentre(buttonSize, buttonSize));
+    modButton_->setVisible(true);
 }
 
 int DeviceSlotComponent::getModPanelWidth() const {
-    return modPanelVisible_ ? DEFAULT_PANEL_WIDTH : 0;
+    return modPanelVisible_ ? SINGLE_COLUMN_PANEL_WIDTH : 0;
 }
 
 int DeviceSlotComponent::getParamPanelWidth() const {
@@ -541,6 +559,28 @@ void DeviceSlotComponent::onModWaveformChangedInternal(int modIndex, magda::LFOW
 
 void DeviceSlotComponent::onModRateChangedInternal(int modIndex, float rate) {
     magda::TrackManager::getInstance().setDeviceModRate(nodePath_, modIndex, rate);
+}
+
+void DeviceSlotComponent::onModWaveformChangedInternal(int modIndex, magda::LFOWaveform waveform) {
+    magda::TrackManager::getInstance().setDeviceModWaveform(nodePath_, modIndex, waveform);
+}
+
+void DeviceSlotComponent::onModPhaseOffsetChangedInternal(int modIndex, float phaseOffset) {
+    magda::TrackManager::getInstance().setDeviceModPhaseOffset(nodePath_, modIndex, phaseOffset);
+}
+
+void DeviceSlotComponent::onModTempoSyncChangedInternal(int modIndex, bool tempoSync) {
+    magda::TrackManager::getInstance().setDeviceModTempoSync(nodePath_, modIndex, tempoSync);
+}
+
+void DeviceSlotComponent::onModSyncDivisionChangedInternal(int modIndex,
+                                                           magda::SyncDivision division) {
+    magda::TrackManager::getInstance().setDeviceModSyncDivision(nodePath_, modIndex, division);
+}
+
+void DeviceSlotComponent::onModTriggerModeChangedInternal(int modIndex,
+                                                          magda::LFOTriggerMode mode) {
+    magda::TrackManager::getInstance().setDeviceModTriggerMode(nodePath_, modIndex, mode);
 }
 
 void DeviceSlotComponent::onMacroValueChangedInternal(int macroIndex, float value) {
@@ -632,12 +672,29 @@ void DeviceSlotComponent::onModLinkRemovedInternal(int modIndex, magda::ModTarge
     updateParamModulation();
 }
 
+void DeviceSlotComponent::onAddModRequestedInternal(int slotIndex, magda::ModType type,
+                                                    magda::LFOWaveform waveform) {
+    magda::TrackManager::getInstance().addDeviceMod(nodePath_, slotIndex, type, waveform);
+    // Update the mods panel directly to avoid full UI rebuild (which closes the panel)
+    updateModsPanel();
+}
+
+void DeviceSlotComponent::onModRemoveRequestedInternal(int modIndex) {
+    magda::TrackManager::getInstance().removeDeviceMod(nodePath_, modIndex);
+}
+
+void DeviceSlotComponent::onModEnableToggledInternal(int modIndex, bool enabled) {
+    magda::TrackManager::getInstance().setDeviceModEnabled(nodePath_, modIndex, enabled);
+}
+
 void DeviceSlotComponent::onModPageAddRequested(int /*itemsToAdd*/) {
-    magda::TrackManager::getInstance().addDeviceModPage(nodePath_);
+    // Page management is now handled entirely in ModsPanelComponent UI
+    // No need to modify data model - pages are just UI slots for adding mods
 }
 
 void DeviceSlotComponent::onModPageRemoveRequested(int /*itemsToRemove*/) {
-    magda::TrackManager::getInstance().removeDeviceModPage(nodePath_);
+    // Page management is now handled entirely in ModsPanelComponent UI
+    // No need to modify data model - pages are just UI slots for adding mods
 }
 
 void DeviceSlotComponent::onMacroPageAddRequested(int /*itemsToAdd*/) {

@@ -2,6 +2,9 @@
 
 #include <iostream>
 
+#include "../audio/AudioBridge.hpp"
+#include "../core/TrackManager.hpp"
+
 namespace magda {
 
 TracktionEngineWrapper::TracktionEngineWrapper() = default;
@@ -14,6 +17,9 @@ bool TracktionEngineWrapper::initialize() {
     try {
         // Initialize Tracktion Engine
         engine_ = std::make_unique<tracktion::Engine>("MAGDA");
+
+        // Register ToneGeneratorPlugin (not registered by default)
+        engine_->getPluginManager().createBuiltInType<tracktion::ToneGeneratorPlugin>();
 
         // Create a temporary Edit (project) so transport methods work
         auto editFile = juce::File::getSpecialLocation(juce::File::tempDirectory)
@@ -30,7 +36,47 @@ bool TracktionEngineWrapper::initialize() {
                     tempo->setBpm(120.0);
                 }
             }
-            std::cout << "Tracktion Engine initialized with Edit" << std::endl;
+
+            // Create AudioBridge for TrackManager-to-Tracktion synchronization
+            audioBridge_ = std::make_unique<AudioBridge>(*engine_, *currentEdit_);
+            audioBridge_->syncAll();
+
+            // Load a ToneGeneratorPlugin on Track 1 for testing
+            auto& tm = TrackManager::getInstance();
+            if (!tm.getTracks().empty()) {
+                TrackId firstTrackId = tm.getTracks().front().id;
+                testTonePlugin_ = audioBridge_->loadBuiltInPlugin(firstTrackId, "tone");
+                if (testTonePlugin_) {
+                    // Set frequency to 440Hz and level
+                    if (auto* tonePlugin =
+                            dynamic_cast<tracktion::ToneGeneratorPlugin*>(testTonePlugin_.get())) {
+                        tonePlugin->frequency = 440.0f;
+                        tonePlugin->level = 0.7f;
+                        std::cout << "Tone generator configured: 440Hz, level=0.7" << std::endl;
+                    }
+                    // Start disabled - will enable on play
+                    testTonePlugin_->setEnabled(false);
+                    std::cout << "ToneGeneratorPlugin loaded on Track 1 - press Play to hear!"
+                              << std::endl;
+                }
+
+                // Ensure LevelMeter is AFTER the tone generator
+                auto meterPlugin = audioBridge_->addLevelMeterToTrack(firstTrackId);
+                if (meterPlugin) {
+                    auto* track = audioBridge_->getAudioTrack(firstTrackId);
+                    if (track) {
+                        auto& plugins = track->pluginList;
+                        std::cout << "Track 1 has " << plugins.size() << " plugins:" << std::endl;
+                        for (int i = 0; i < plugins.size(); i++) {
+                            auto* p = plugins[i];
+                            std::cout << "  [" << i << "] " << p->getName() << std::endl;
+                        }
+                    }
+                }
+                std::cout << "LevelMeterPlugin added to Track 1" << std::endl;
+            }
+
+            std::cout << "Tracktion Engine initialized with Edit and AudioBridge" << std::endl;
         } else {
             std::cout << "Tracktion Engine initialized (no Edit created)" << std::endl;
         }
@@ -44,6 +90,13 @@ bool TracktionEngineWrapper::initialize() {
 }
 
 void TracktionEngineWrapper::shutdown() {
+    // Release test tone plugin first (before Edit is destroyed)
+    testTonePlugin_.reset();
+
+    // Destroy AudioBridge first (it references Edit and Engine)
+    if (audioBridge_) {
+        audioBridge_.reset();
+    }
     if (currentEdit_) {
         currentEdit_.reset();
     }
@@ -86,6 +139,12 @@ CommandResponse TracktionEngineWrapper::processCommand(const Command& command) {
 // TransportInterface implementation
 void TracktionEngineWrapper::play() {
     if (currentEdit_) {
+        // Enable test tone when playing
+        if (testTonePlugin_) {
+            testTonePlugin_->setEnabled(true);
+            std::cout << "ToneGenerator enabled" << std::endl;
+        }
+
         currentEdit_->getTransport().play(false);
         std::cout << "Playback started" << std::endl;
     }
@@ -94,6 +153,11 @@ void TracktionEngineWrapper::play() {
 void TracktionEngineWrapper::stop() {
     if (currentEdit_) {
         currentEdit_->getTransport().stop(false, false);
+
+        // Disable test tone when stopped
+        if (testTonePlugin_)
+            testTonePlugin_->setEnabled(false);
+
         std::cout << "Playback stopped" << std::endl;
     }
 }
@@ -219,6 +283,41 @@ bool TracktionEngineWrapper::isLooping() const {
         return currentEdit_->getTransport().looping;
     }
     return false;
+}
+
+bool TracktionEngineWrapper::justStarted() const {
+    return justStarted_;
+}
+
+bool TracktionEngineWrapper::justLooped() const {
+    return justLooped_;
+}
+
+void TracktionEngineWrapper::updateTriggerState() {
+    // Reset flags at start of each frame
+    justStarted_ = false;
+    justLooped_ = false;
+
+    bool currentlyPlaying = isPlaying();
+    double currentPosition = getCurrentPosition();
+
+    // Detect play start (was not playing, now playing)
+    if (currentlyPlaying && !wasPlaying_) {
+        justStarted_ = true;
+    }
+
+    // Detect loop (position jumped backward while playing and looping)
+    if (currentlyPlaying && isLooping() && currentPosition < lastPosition_) {
+        // Position went backward - likely a loop
+        // Add a threshold to avoid false positives from small position jitter
+        if (lastPosition_ - currentPosition > 0.1) {  // More than 100ms backward
+            justLooped_ = true;
+        }
+    }
+
+    // Update state for next frame
+    wasPlaying_ = currentlyPlaying;
+    lastPosition_ = currentPosition;
 }
 
 // Metronome/click track methods

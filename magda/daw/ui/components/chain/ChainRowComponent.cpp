@@ -145,6 +145,13 @@ void ChainRowComponent::mouseUp(const juce::MouseEvent& event) {
     magda::SelectionManager::getInstance().selectChainNode(nodePath_);
 }
 
+void ChainRowComponent::mouseDoubleClick(const juce::MouseEvent& /*event*/) {
+    // Double-click toggles expand/collapse of this chain
+    if (onDoubleClick) {
+        onDoubleClick(chainId_);
+    }
+}
+
 void ChainRowComponent::selectionTypeChanged(magda::SelectionType /*newType*/) {
     // Selection type changed - chainNodeSelectionChanged will handle visual update
 }
@@ -162,6 +169,17 @@ void ChainRowComponent::setSelected(bool selected) {
     if (selected_ != selected) {
         selected_ = selected;
         repaint();
+    }
+}
+
+void ChainRowComponent::setNodePath(const magda::ChainNodePath& path) {
+    nodePath_ = path;
+
+    // Check if this chain is currently selected in SelectionManager
+    // This handles the case where selection happened before the row was created
+    const auto& currentSelection = magda::SelectionManager::getInstance().getSelectedChainNode();
+    if (currentSelection.isValid() && currentSelection == nodePath_) {
+        setSelected(true);
     }
 }
 

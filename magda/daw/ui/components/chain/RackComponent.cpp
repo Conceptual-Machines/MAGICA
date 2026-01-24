@@ -250,10 +250,10 @@ void RackComponent::resizedContent(juce::Rectangle<int> contentArea) {
 }
 
 void RackComponent::resizedHeaderExtra(juce::Rectangle<int>& headerArea) {
-    // MOD and MACRO buttons in header (before name)
-    modButton_->setBounds(headerArea.removeFromLeft(20));
-    headerArea.removeFromLeft(4);
+    // MACRO and MOD buttons in header (before name) - matches panel order
     macroButton_->setBounds(headerArea.removeFromLeft(20));
+    headerArea.removeFromLeft(4);
+    modButton_->setBounds(headerArea.removeFromLeft(20));
     headerArea.removeFromLeft(4);
 
     // Volume slider on the right side of header
@@ -262,17 +262,17 @@ void RackComponent::resizedHeaderExtra(juce::Rectangle<int>& headerArea) {
 }
 
 void RackComponent::resizedCollapsed(juce::Rectangle<int>& area) {
-    // Add mod and macro buttons vertically when collapsed
+    // Add macro and mod buttons vertically when collapsed - matches panel order
     int buttonSize = juce::jmin(16, area.getWidth() - 4);
-
-    modButton_->setBounds(
-        area.removeFromTop(buttonSize).withSizeKeepingCentre(buttonSize, buttonSize));
-    modButton_->setVisible(true);
-    area.removeFromTop(4);
 
     macroButton_->setBounds(
         area.removeFromTop(buttonSize).withSizeKeepingCentre(buttonSize, buttonSize));
     macroButton_->setVisible(true);
+    area.removeFromTop(4);
+
+    modButton_->setBounds(
+        area.removeFromTop(buttonSize).withSizeKeepingCentre(buttonSize, buttonSize));
+    modButton_->setVisible(true);
 }
 
 int RackComponent::getPreferredHeight() const {
@@ -399,6 +399,16 @@ void RackComponent::rebuildChainRows() {
             auto row = std::make_unique<ChainRowComponent>(*this, trackId_, rackId_, chain);
             // Set the full nested path (includes parent rack/chain context)
             row->setNodePath(rackPath_.withChain(chain.id));
+            // Wire up double-click to toggle expand/collapse
+            row->onDoubleClick = [this](magda::ChainId chainId) {
+                if (selectedChainId_ == chainId) {
+                    // Already showing this chain - collapse it
+                    hideChainPanel();
+                } else {
+                    // Show this chain
+                    showChainPanel(chainId);
+                }
+            };
             chainRowsContainer_.addAndMakeVisible(*row);
             newRows.push_back(std::move(row));
         }
@@ -536,10 +546,9 @@ void RackComponent::showChainPanel(magda::ChainId chainId) {
 void RackComponent::hideChainPanel() {
     DBG("RackComponent::hideChainPanel called - rackId=" << rackId_ << " isNested="
                                                          << (isNested() ? "yes" : "no"));
-    // Print stack trace hint
-    DBG("  (check call stack to see who called hideChainPanel)");
     selectedChainId_ = magda::INVALID_CHAIN_ID;
-    clearChainSelection();
+    // Don't call clearChainSelection() - let SelectionManager control visual selection
+    // This allows collapsing the chain panel while keeping the chain selected
     if (chainPanel_) {
         chainPanel_->clear();
         childLayoutChanged();
@@ -604,6 +613,26 @@ void RackComponent::onModRateChangedInternal(int modIndex, float rate) {
     magda::TrackManager::getInstance().setRackModRate(rackPath_, modIndex, rate);
 }
 
+void RackComponent::onModWaveformChangedInternal(int modIndex, magda::LFOWaveform waveform) {
+    magda::TrackManager::getInstance().setRackModWaveform(rackPath_, modIndex, waveform);
+}
+
+void RackComponent::onModPhaseOffsetChangedInternal(int modIndex, float phaseOffset) {
+    magda::TrackManager::getInstance().setRackModPhaseOffset(rackPath_, modIndex, phaseOffset);
+}
+
+void RackComponent::onModTempoSyncChangedInternal(int modIndex, bool tempoSync) {
+    magda::TrackManager::getInstance().setRackModTempoSync(rackPath_, modIndex, tempoSync);
+}
+
+void RackComponent::onModSyncDivisionChangedInternal(int modIndex, magda::SyncDivision division) {
+    magda::TrackManager::getInstance().setRackModSyncDivision(rackPath_, modIndex, division);
+}
+
+void RackComponent::onModTriggerModeChangedInternal(int modIndex, magda::LFOTriggerMode mode) {
+    magda::TrackManager::getInstance().setRackModTriggerMode(rackPath_, modIndex, mode);
+}
+
 void RackComponent::onMacroValueChangedInternal(int macroIndex, float value) {
     magda::TrackManager::getInstance().setRackMacroValue(rackPath_, macroIndex, value);
 
@@ -634,12 +663,29 @@ void RackComponent::onMacroClickedInternal(int macroIndex) {
 
 // === Virtual callbacks for page management ===
 
+void RackComponent::onAddModRequestedInternal(int slotIndex, magda::ModType type,
+                                              magda::LFOWaveform waveform) {
+    magda::TrackManager::getInstance().addRackMod(rackPath_, slotIndex, type, waveform);
+    // Update the mods panel directly to avoid full UI rebuild (which closes the panel)
+    updateModsPanel();
+}
+
+void RackComponent::onModRemoveRequestedInternal(int modIndex) {
+    magda::TrackManager::getInstance().removeRackMod(rackPath_, modIndex);
+}
+
+void RackComponent::onModEnableToggledInternal(int modIndex, bool enabled) {
+    magda::TrackManager::getInstance().setRackModEnabled(rackPath_, modIndex, enabled);
+}
+
 void RackComponent::onModPageAddRequested(int /*itemsToAdd*/) {
-    magda::TrackManager::getInstance().addRackModPage(rackPath_);
+    // Page management is now handled entirely in ModsPanelComponent UI
+    // No need to modify data model - pages are just UI slots for adding mods
 }
 
 void RackComponent::onModPageRemoveRequested(int /*itemsToRemove*/) {
-    magda::TrackManager::getInstance().removeRackModPage(rackPath_);
+    // Page management is now handled entirely in ModsPanelComponent UI
+    // No need to modify data model - pages are just UI slots for adding mods
 }
 
 void RackComponent::onMacroPageAddRequested(int /*itemsToAdd*/) {
@@ -658,8 +704,8 @@ int RackComponent::getParamPanelWidth() const {
 }
 
 int RackComponent::getModPanelWidth() const {
-    // Width for 2 columns of mod knobs (2x4 grid)
-    return 130;
+    // Width for single column of mod knobs (1x4 grid)
+    return SINGLE_COLUMN_PANEL_WIDTH;
 }
 
 }  // namespace magda::daw::ui

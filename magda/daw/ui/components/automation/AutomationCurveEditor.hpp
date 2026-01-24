@@ -1,0 +1,120 @@
+#pragma once
+
+#include <juce_gui_basics/juce_gui_basics.h>
+
+#include <functional>
+#include <memory>
+#include <vector>
+
+#include "core/AutomationInfo.hpp"
+#include "core/AutomationManager.hpp"
+#include "core/AutomationTypes.hpp"
+#include "core/SelectionManager.hpp"
+#include "ui/components/common/curve/CurveEditorBase.hpp"
+
+namespace magda {
+
+/**
+ * @brief Curve editing surface for automation data
+ *
+ * Renders automation curves (linear, bezier, step) and manages
+ * point components. Supports drawing tools: Select, Pencil, Line.
+ * Double-click to add point, Delete to remove.
+ *
+ * Extends CurveEditorBase with automation-specific functionality:
+ * - Time-based X coordinate (seconds)
+ * - Integration with AutomationManager for data persistence
+ * - SelectionManager integration for multi-point selection
+ */
+class AutomationCurveEditor : public CurveEditorBase,
+                              public AutomationManagerListener,
+                              public SelectionManagerListener {
+  public:
+    explicit AutomationCurveEditor(AutomationLaneId laneId);
+    ~AutomationCurveEditor() override;
+
+    // AutomationManagerListener
+    void automationLanesChanged() override;
+    void automationLanePropertyChanged(AutomationLaneId laneId) override;
+    void automationPointsChanged(AutomationLaneId laneId) override;
+    void automationPointDragPreview(AutomationLaneId laneId, AutomationPointId pointId,
+                                    double previewTime, double previewValue) override;
+
+    // SelectionManagerListener
+    void selectionTypeChanged(SelectionType newType) override;
+    void automationPointSelectionChanged(const AutomationPointSelection& selection) override;
+
+    // Configuration
+    void setLaneId(AutomationLaneId laneId);
+    AutomationLaneId getLaneId() const {
+        return laneId_;
+    }
+
+    // Draw mode using automation-specific type (delegates to base)
+    void setDrawMode(AutomationDrawMode mode);
+    AutomationDrawMode getAutomationDrawMode() const;
+
+    // Coordinate conversion
+    void setPixelsPerSecond(double pps) {
+        pixelsPerSecond_ = pps;
+    }
+    double getPixelsPerSecond() const {
+        return pixelsPerSecond_;
+    }
+
+    // CurveEditorBase coordinate interface
+    double getPixelsPerX() const override {
+        return pixelsPerSecond_;
+    }
+    double pixelToX(int px) const override;
+    int xToPixel(double x) const override;
+
+    // Snapping (uses base class snapXToGrid)
+    std::function<double(double)> snapTimeToGrid;
+
+    // Clip mode (for clip-based automation)
+    void setClipId(AutomationClipId clipId) {
+        clipId_ = clipId;
+    }
+    AutomationClipId getClipId() const {
+        return clipId_;
+    }
+    void setClipOffset(double offset) {
+        clipOffset_ = offset;
+    }
+
+    // CurveEditorBase data access
+    const std::vector<CurvePoint>& getPoints() const override;
+
+  protected:
+    // CurveEditorBase data mutation callbacks
+    void onPointAdded(double x, double y, CurveType curveType) override;
+    void onPointMoved(uint32_t pointId, double newX, double newY) override;
+    void onPointDeleted(uint32_t pointId) override;
+    void onPointSelected(uint32_t pointId) override;
+    void onTensionChanged(uint32_t pointId, double tension) override;
+    void onHandlesChanged(uint32_t pointId, const CurveHandleData& inHandle,
+                          const CurveHandleData& outHandle) override;
+
+    void syncSelectionState() override;
+    void rebuildPointComponents() override;
+
+  private:
+    AutomationLaneId laneId_;
+    AutomationClipId clipId_ = INVALID_AUTOMATION_CLIP_ID;
+    double clipOffset_ = 0.0;
+    double pixelsPerSecond_ = 100.0;
+
+    // Cached curve points (converted from AutomationPoints)
+    mutable std::vector<CurvePoint> cachedPoints_;
+    mutable bool pointsCacheDirty_ = true;
+
+    void updatePointsCache() const;
+    void deleteSelectedPoints();
+
+    // Convert between AutomationCurveType and CurveType
+    static CurveType toCurveType(AutomationCurveType type);
+    static AutomationCurveType toAutomationCurveType(CurveType type);
+};
+
+}  // namespace magda

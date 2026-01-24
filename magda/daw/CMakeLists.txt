@@ -39,6 +39,7 @@ juce_add_binary_data(MagdaAssets
     ../../assets/icons/add.svg
     ../../assets/icons/remove.svg
     ../../assets/icons/settings.svg
+    ../../assets/icons/settings_nobg.svg
     ../../assets/icons/menu.svg
     ../../assets/icons/close.svg
     ../../assets/icons/check.svg
@@ -57,6 +58,9 @@ juce_add_binary_data(MagdaAssets
     ../../assets/icons/power_on.svg
     ../../assets/icons/rack.svg
     ../../assets/icons/tree.svg
+    ../../assets/icons/bezier.svg
+    ../../assets/icons/curve.svg
+    ../../assets/icons/save.svg
     # Mouse cursors
     ../../assets/icons/mouse_zoom/search.svg
     ../../assets/icons/mouse_zoom/zoom_in.svg
@@ -91,12 +95,16 @@ set(DAW_CORE_SOURCES
     core/ModulatorEngine.cpp
     core/ClipManager.cpp
     core/SelectionManager.cpp
+    core/AutomationManager.cpp
     core/LinkModeManager.cpp
     core/UndoManager.cpp
     core/ClipCommands.cpp
     core/TrackCommands.cpp
     core/MidiNoteCommands.cpp
+    core/ParameterUtils.cpp
     engine/TracktionEngineWrapper.cpp
+    # Audio integration
+    audio/AudioBridge.cpp
     # UI components needed by tests
     ui/components/timeline/TimelineComponent.cpp
     # State management
@@ -175,6 +183,15 @@ set(DAW_UI_SOURCES
     ui/components/pianoroll/PianoRollGridComponent.cpp
     ui/components/pianoroll/PianoRollKeyboard.cpp
     ui/components/pianoroll/VelocityLaneComponent.cpp
+    # Components - Common Curve Editor
+    ui/components/common/curve/CurveEditorBase.cpp
+    ui/components/common/curve/CurvePointComponent.cpp
+    ui/components/common/curve/CurveTensionHandle.cpp
+    ui/components/common/curve/CurveBezierHandle.cpp
+    # Components - Automation
+    ui/components/automation/AutomationCurveEditor.cpp
+    ui/components/automation/AutomationLaneComponent.cpp
+    ui/components/automation/AutomationClipComponent.cpp
     # Components - Mixer
     ui/components/mixer/MasterChannelStrip.cpp
     ui/components/mixer/RoutingSelector.cpp
@@ -192,6 +209,9 @@ set(DAW_UI_SOURCES
     ui/components/chain/ModsPanelComponent.cpp
     ui/components/chain/ModulatorEditorPanel.cpp
     ui/components/chain/MacroEditorPanel.cpp
+    ui/components/chain/LFOCurveEditor.cpp
+    ui/components/chain/LFOCurveEditorWindow.cpp
+    ui/components/chain/LFOPhaseOverlay.cpp
 )
 
 # All DAW headers
@@ -268,6 +288,9 @@ set(DAW_HEADERS
     ui/panels/content/WaveformEditorContent.hpp
     # Audio
     audio/AudioEngineOptimizer.hpp
+    audio/AudioBridge.hpp
+    audio/MeteringBuffer.hpp
+    audio/ParameterQueue.hpp
     # Views
     ui/views/MainView.hpp
     ui/views/SessionView.hpp
@@ -318,9 +341,27 @@ set(DAW_HEADERS
     ui/components/chain/ModsPanelComponent.hpp
     ui/components/chain/ModulatorEditorPanel.hpp
     ui/components/chain/MacroEditorPanel.hpp
+    ui/components/chain/LFOCurveEditor.hpp
     # Core - Macro and Mod
     core/MacroInfo.hpp
     core/ModInfo.hpp
+    # Core - Parameter
+    core/ParameterInfo.hpp
+    core/ParameterUtils.hpp
+    # Core - Automation
+    core/AutomationTypes.hpp
+    core/AutomationInfo.hpp
+    core/AutomationManager.hpp
+    # Components - Common Curve Editor
+    ui/components/common/curve/CurveTypes.hpp
+    ui/components/common/curve/CurveEditorBase.hpp
+    ui/components/common/curve/CurvePointComponent.hpp
+    ui/components/common/curve/CurveTensionHandle.hpp
+    ui/components/common/curve/CurveBezierHandle.hpp
+    # Components - Automation
+    ui/components/automation/AutomationCurveEditor.hpp
+    ui/components/automation/AutomationLaneComponent.hpp
+    ui/components/automation/AutomationClipComponent.hpp
 )
 
 # Create DAW library (core functionality)
@@ -367,6 +408,8 @@ target_include_directories(magda_daw
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/core
     ${CMAKE_CURRENT_SOURCE_DIR}/interfaces
+    ${CMAKE_CURRENT_SOURCE_DIR}/audio
+    ${CMAKE_CURRENT_SOURCE_DIR}/engine
     PRIVATE
     ${CMAKE_SOURCE_DIR}
 )
@@ -394,6 +437,8 @@ target_include_directories(magda_daw_app
     ${CMAKE_CURRENT_SOURCE_DIR}/ui/components/clips
     ${CMAKE_CURRENT_SOURCE_DIR}/ui/components/pianoroll
     ${CMAKE_CURRENT_SOURCE_DIR}/ui/components/chain
+    ${CMAKE_CURRENT_SOURCE_DIR}/ui/components/automation
+    ${CMAKE_CURRENT_SOURCE_DIR}/ui/components/common/curve
     ${CMAKE_SOURCE_DIR}
 )
 

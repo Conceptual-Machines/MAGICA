@@ -16,6 +16,7 @@
 #include "../views/MainView.hpp"
 #include "../views/MixerView.hpp"
 #include "../views/SessionView.hpp"
+#include "audio/AudioBridge.hpp"
 #include "core/Config.hpp"
 #include "core/LinkModeManager.hpp"
 #include "core/ModulatorEngine.hpp"
@@ -65,20 +66,24 @@ class MainWindow::MainComponent::ResizeHandle : public juce::Component {
 };
 
 // MainWindow implementation
-MainWindow::MainWindow()
-    : DocumentWindow("MAGDA", DarkTheme::getBackgroundColour(), DocumentWindow::allButtons) {
+MainWindow::MainWindow(AudioEngine* audioEngine)
+    : DocumentWindow("MAGDA", DarkTheme::getBackgroundColour(), DocumentWindow::allButtons),
+      externalAudioEngine_(audioEngine) {
     setUsingNativeTitleBar(true);
     setResizable(true, true);
 
     // Setup menu bar
     setupMenuBar();
 
-    mainComponent = new MainComponent();
+    mainComponent = new MainComponent(externalAudioEngine_);
     setContentOwned(mainComponent, true);  // Window takes ownership
 
     setSize(1200, 800);
     centreWithSize(getWidth(), getHeight());
     setVisible(true);
+
+    // Start modulation engine at 60 FPS (updates LFO values in background)
+    magda::ModulatorEngine::getInstance().startTimer(16);
 }
 
 MainWindow::~MainWindow() {
@@ -93,8 +98,23 @@ void MainWindow::closeButtonPressed() {
 }
 
 // MainComponent implementation
-MainWindow::MainComponent::MainComponent() {
+MainWindow::MainComponent::MainComponent(AudioEngine* externalEngine) {
     setWantsKeyboardFocus(true);
+
+    // Use external engine if provided, otherwise create our own
+    if (externalEngine) {
+        audioEngine_.reset();  // Don't own it
+        // Just store a reference for use (audioEngine_ will be nullptr, use getter instead)
+        std::cout << "MainComponent using external audio engine" << std::endl;
+    } else {
+        // Create audio engine FIRST (before creating views that need it)
+        audioEngine_ = std::make_unique<TracktionEngineWrapper>();
+        if (!audioEngine_->initialize()) {
+            DBG("Warning: Failed to initialize audio engine");
+        }
+        externalEngine = audioEngine_.get();
+        std::cout << "MainComponent created internal audio engine" << std::endl;
+    }
 
     // Initialize panel sizes from LayoutConfig
     auto& layout = LayoutConfig::getInstance();
@@ -139,8 +159,9 @@ MainWindow::MainComponent::MainComponent() {
     footerBar = std::make_unique<FooterBar>();
     addAndMakeVisible(*footerBar);
 
-    // Create views
-    mainView = std::make_unique<MainView>();
+    // Create views (now audioEngine is valid - use externalEngine which points to either external
+    // or internal)
+    mainView = std::make_unique<MainView>(externalEngine);
     addAndMakeVisible(*mainView);
 
     sessionView = std::make_unique<SessionView>();
@@ -165,7 +186,7 @@ MainWindow::MainComponent::MainComponent() {
 
     setupResizeHandles();
     setupViewModeListener();
-    setupAudioEngine();
+    setupAudioEngineCallbacks(externalEngine);
 }
 
 void MainWindow::MainComponent::setupResizeHandles() {
@@ -231,13 +252,7 @@ void MainWindow::MainComponent::setupViewModeListener() {
     switchToView(currentViewMode);
 }
 
-void MainWindow::MainComponent::setupAudioEngine() {
-    // Initialize audio engine
-    audioEngine_ = std::make_unique<TracktionEngineWrapper>();
-    if (!audioEngine_->initialize()) {
-        DBG("Warning: Failed to initialize audio engine");
-    }
-
+void MainWindow::MainComponent::setupAudioEngineCallbacks() {
     // Register audio engine as listener on TimelineController
     // This enables the observer pattern: UI -> TimelineController -> AudioEngine
     mainView->getTimelineController().addAudioEngineListener(audioEngine_.get());
@@ -316,6 +331,46 @@ bool MainWindow::MainComponent::keyPressed(const juce::KeyPress& key) {
         juce::KeyPress('d', juce::ModifierKeys::commandModifier | juce::ModifierKeys::shiftModifier,
                        0)) {
         daw::ui::DebugDialog::show();
+        return true;
+    }
+
+    // Cmd/Ctrl+Shift+A: Audio Test - Load tone generator and play
+    if (key ==
+        juce::KeyPress('a', juce::ModifierKeys::commandModifier | juce::ModifierKeys::shiftModifier,
+                       0)) {
+        auto* teWrapper = dynamic_cast<TracktionEngineWrapper*>(audioEngine_.get());
+        if (teWrapper) {
+            auto* bridge = teWrapper->getAudioBridge();
+            if (bridge) {
+                // Get first track or create one
+                auto& tm = TrackManager::getInstance();
+                TrackId trackId;
+                if (tm.getTracks().empty()) {
+                    trackId = tm.createTrack("Audio Test", TrackType::Audio);
+                } else {
+                    trackId = tm.getTracks().front().id;
+                }
+
+                // Load a tone generator plugin
+                auto plugin = bridge->loadBuiltInPlugin(trackId, "tone");
+                if (plugin) {
+                    // Set tone generator frequency and level
+                    auto params = plugin->getAutomatableParameters();
+                    for (auto* param : params) {
+                        if (param->getParameterName().containsIgnoreCase("freq")) {
+                            param->setParameter(0.5f, juce::dontSendNotification);  // ~440Hz
+                        } else if (param->getParameterName().containsIgnoreCase("level")) {
+                            param->setParameter(0.3f, juce::dontSendNotification);  // -10dB ish
+                        }
+                    }
+                    std::cout << "Loaded ToneGeneratorPlugin on track " << trackId << std::endl;
+                }
+
+                // Start playback
+                teWrapper->play();
+                std::cout << "Audio test started - press Space to stop" << std::endl;
+            }
+        }
         return true;
     }
 

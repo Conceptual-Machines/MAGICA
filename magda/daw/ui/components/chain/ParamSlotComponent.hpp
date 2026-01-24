@@ -22,7 +22,8 @@ namespace magda::daw::ui {
  */
 class ParamSlotComponent : public juce::Component,
                            public juce::DragAndDropTarget,
-                           public magda::LinkModeManagerListener {
+                           public magda::LinkModeManagerListener,
+                           private juce::Timer {
   public:
     ParamSlotComponent(int paramIndex);
     ~ParamSlotComponent() override;
@@ -50,6 +51,9 @@ class ParamSlotComponent : public juce::Component,
     }
     void setAvailableRackMacros(const magda::MacroArray* rackMacros) {
         availableRackMacros_ = rackMacros;
+    }
+    void setAvailableRackMods(const magda::ModArray* rackMods) {
+        availableRackMods_ = rackMods;
     }
 
     // Contextual selection - when set, only shows this mod's/macro's link
@@ -119,10 +123,21 @@ class ParamSlotComponent : public juce::Component,
     // LinkModeManagerListener implementation
     void modLinkModeChanged(bool active, const magda::ModSelection& selection) override;
     void macroLinkModeChanged(bool active, const magda::MacroSelection& selection) override;
+
+    // Timer callback for animating LFO modulation bars
+    void timerCallback() override;
+
+    // Check if this param has any active mod links
+    bool hasActiveModLinks() const;
+
+    // Update timer state based on whether there are active mod links
+    void updateModTimerState();
+
     int paramIndex_;
     magda::DeviceId deviceId_ = magda::INVALID_DEVICE_ID;
-    magda::ChainNodePath devicePath_;  // For param selection
-    const magda::ModArray* availableMods_ = nullptr;
+    magda::ChainNodePath devicePath_;                         // For param selection
+    const magda::ModArray* availableMods_ = nullptr;          // Device-level mods
+    const magda::ModArray* availableRackMods_ = nullptr;      // Rack-level mods
     const magda::MacroArray* availableMacros_ = nullptr;      // Device-level macros
     const magda::MacroArray* availableRackMacros_ = nullptr;  // Rack-level macros
     int selectedModIndex_ = -1;                               // -1 means no mod selected (show all)

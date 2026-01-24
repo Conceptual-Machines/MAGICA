@@ -185,10 +185,22 @@ class TrackManager {
     // Mod management for racks (path-based for nested rack support)
     void setRackModAmount(const ChainNodePath& rackPath, int modIndex, float amount);
     void setRackModTarget(const ChainNodePath& rackPath, int modIndex, ModTarget target);
+    void setRackModLinkAmount(const ChainNodePath& rackPath, int modIndex, ModTarget target,
+                              float amount);
     void setRackModName(const ChainNodePath& rackPath, int modIndex, const juce::String& name);
     void setRackModType(const ChainNodePath& rackPath, int modIndex, ModType type);
     void setRackModWaveform(const ChainNodePath& rackPath, int modIndex, LFOWaveform waveform);
     void setRackModRate(const ChainNodePath& rackPath, int modIndex, float rate);
+    void setRackModPhaseOffset(const ChainNodePath& rackPath, int modIndex, float phaseOffset);
+    void setRackModWaveform(const ChainNodePath& rackPath, int modIndex, LFOWaveform waveform);
+    void setRackModTempoSync(const ChainNodePath& rackPath, int modIndex, bool tempoSync);
+    void setRackModSyncDivision(const ChainNodePath& rackPath, int modIndex, SyncDivision division);
+    void setRackModTriggerMode(const ChainNodePath& rackPath, int modIndex, LFOTriggerMode mode);
+    void setRackModCurvePreset(const ChainNodePath& rackPath, int modIndex, CurvePreset preset);
+    void addRackMod(const ChainNodePath& rackPath, int slotIndex, ModType type,
+                    LFOWaveform waveform = LFOWaveform::Sine);
+    void removeRackMod(const ChainNodePath& rackPath, int modIndex);
+    void setRackModEnabled(const ChainNodePath& rackPath, int modIndex, bool enabled);
     void addRackModPage(const ChainNodePath& rackPath);
     void removeRackModPage(const ChainNodePath& rackPath);
 
@@ -202,8 +214,26 @@ class TrackManager {
     void setDeviceModType(const ChainNodePath& devicePath, int modIndex, ModType type);
     void setDeviceModWaveform(const ChainNodePath& devicePath, int modIndex, LFOWaveform waveform);
     void setDeviceModRate(const ChainNodePath& devicePath, int modIndex, float rate);
+    void setDeviceModWaveform(const ChainNodePath& devicePath, int modIndex, LFOWaveform waveform);
+    void setDeviceModPhaseOffset(const ChainNodePath& devicePath, int modIndex, float phaseOffset);
+    void setDeviceModTempoSync(const ChainNodePath& devicePath, int modIndex, bool tempoSync);
+    void setDeviceModSyncDivision(const ChainNodePath& devicePath, int modIndex,
+                                  SyncDivision division);
+    void setDeviceModTriggerMode(const ChainNodePath& devicePath, int modIndex,
+                                 LFOTriggerMode mode);
+    void setDeviceModCurvePreset(const ChainNodePath& devicePath, int modIndex, CurvePreset preset);
+    void addDeviceMod(const ChainNodePath& devicePath, int slotIndex, ModType type,
+                      LFOWaveform waveform = LFOWaveform::Sine);
+    void removeDeviceMod(const ChainNodePath& devicePath, int modIndex);
+    void setDeviceModEnabled(const ChainNodePath& devicePath, int modIndex, bool enabled);
     void addDeviceModPage(const ChainNodePath& devicePath);
     void removeDeviceModPage(const ChainNodePath& devicePath);
+
+    // Modulation engine integration - updates LFO values silently (no UI notifications)
+    // bpm parameter is used for tempo-synced LFOs (default 120 if not provided)
+    // transportJustStarted/Looped flags trigger phase reset for Transport trigger mode
+    void updateAllMods(double deltaTime, double bpm = 120.0, bool transportJustStarted = false,
+                       bool transportJustLooped = false);
 
     // Macro management for devices (path-based for nested device support)
     void setDeviceMacroValue(const ChainNodePath& devicePath, int macroIndex, float value);

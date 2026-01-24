@@ -101,6 +101,52 @@ void MacroKnobComponent::paint(juce::Graphics& g) {
         g.setColour(DarkTheme::getColour(DarkTheme::BORDER));
         g.drawRoundedRectangle(bounds.toFloat().reduced(0.5f), 3.0f, 1.0f);
     }
+
+    // Draw knob below the name label
+    auto knobBounds = bounds.reduced(1);
+    knobBounds.removeFromTop(NAME_LABEL_HEIGHT);  // Skip name label
+    auto knobArea = knobBounds.removeFromTop(KNOB_SIZE);
+
+    // Center the knob horizontally
+    float knobDiameter = static_cast<float>(KNOB_SIZE - 4);
+    float knobX = knobArea.getCentreX() - knobDiameter / 2.0f;
+    float knobY = knobArea.getCentreY() - knobDiameter / 2.0f;
+    auto knobRect = juce::Rectangle<float>(knobX, knobY, knobDiameter, knobDiameter);
+
+    // Knob body (dark circle)
+    g.setColour(DarkTheme::getColour(DarkTheme::BACKGROUND));
+    g.fillEllipse(knobRect);
+
+    // Knob border
+    g.setColour(DarkTheme::getColour(DarkTheme::BORDER).brighter(0.2f));
+    g.drawEllipse(knobRect.reduced(0.5f), 1.0f);
+
+    // Value arc - JUCE addCentredArc uses 0 at TOP (12 o'clock), clockwise positive
+    // 7 o'clock = 210° = 7π/6, 5 o'clock = 150° = 5π/6
+    // Sweep clockwise from 7 through 9, 12, 3 to 5 = 300°
+    const float startAngle = juce::MathConstants<float>::pi * (7.0f / 6.0f);  // 7π/6 = 7 o'clock
+    const float sweepRange = juce::MathConstants<float>::pi * (5.0f / 3.0f);  // 300° sweep
+    float valueAngle = startAngle + (currentMacro_.value * sweepRange);
+
+    // Draw value arc
+    juce::Path arcPath;
+    float arcRadius = knobDiameter / 2.0f - 3.0f;
+    arcPath.addCentredArc(knobRect.getCentreX(), knobRect.getCentreY(), arcRadius, arcRadius, 0.0f,
+                          startAngle, valueAngle, true);
+    g.setColour(DarkTheme::getColour(DarkTheme::ACCENT_PURPLE));
+    g.strokePath(arcPath, juce::PathStrokeType(2.0f));
+
+    // Draw pointer line - JUCE angles: 0 at top, clockwise positive
+    // x = sin(angle), y = -cos(angle) for screen coords
+    float pointerLength = knobDiameter / 2.0f - 5.0f;
+    float pointerX = knobRect.getCentreX() + std::sin(valueAngle) * pointerLength;
+    float pointerY = knobRect.getCentreY() - std::cos(valueAngle) * pointerLength;
+
+    g.setColour(DarkTheme::getTextColour());
+    g.drawLine(knobRect.getCentreX(), knobRect.getCentreY(), pointerX, pointerY, 1.5f);
+
+    // Center dot
+    g.fillEllipse(knobRect.getCentreX() - 2.0f, knobRect.getCentreY() - 2.0f, 4.0f, 4.0f);
 }
 
 void MacroKnobComponent::resized() {
@@ -109,22 +155,34 @@ void MacroKnobComponent::resized() {
     // Name label at top
     nameLabel_.setBounds(bounds.removeFromTop(NAME_LABEL_HEIGHT));
 
-    // Value slider (visible for macros)
-    valueSlider_.setBounds(bounds.removeFromTop(VALUE_SLIDER_HEIGHT));
+    // Skip knob area (drawn in paint())
+    bounds.removeFromTop(KNOB_SIZE);
 
-    // Skip remaining space and position link button at the very bottom
-    auto remainingHeight = bounds.getHeight();
-    if (remainingHeight > LINK_BUTTON_HEIGHT) {
-        bounds.removeFromTop(remainingHeight - LINK_BUTTON_HEIGHT);
-    }
-    linkButton_->setBounds(bounds.removeFromTop(LINK_BUTTON_HEIGHT));
+    // Position link button at the very bottom
+    linkButton_->setBounds(bounds.removeFromBottom(LINK_BUTTON_HEIGHT));
+
+    // Value slider right above link button
+    valueSlider_.setBounds(bounds.removeFromBottom(VALUE_SLIDER_HEIGHT));
+}
+
+juce::Rectangle<int> MacroKnobComponent::getKnobBounds() const {
+    auto bounds = getLocalBounds().reduced(1);
+    bounds.removeFromTop(NAME_LABEL_HEIGHT);  // Skip name label
+    return bounds.removeFromTop(KNOB_SIZE);
 }
 
 void MacroKnobComponent::mouseDown(const juce::MouseEvent& e) {
     if (!e.mods.isPopupMenu()) {
-        // Track drag start position
         dragStartPos_ = e.getPosition();
         isDragging_ = false;
+
+        // Check if click is in knob area
+        if (getKnobBounds().contains(e.getPosition())) {
+            isKnobDragging_ = true;
+            dragStartValue_ = currentMacro_.value;
+        } else {
+            isKnobDragging_ = false;
+        }
     }
 }
 
@@ -132,7 +190,25 @@ void MacroKnobComponent::mouseDrag(const juce::MouseEvent& e) {
     if (e.mods.isPopupMenu())
         return;
 
-    // Check if we've moved enough to start a drag
+    if (isKnobDragging_) {
+        // Knob dragging - change value based on vertical movement
+        // Drag up = increase, drag down = decrease
+        float deltaY = static_cast<float>(dragStartPos_.y - e.getPosition().y);
+        float sensitivity = 0.005f;  // Adjust for feel
+        float newValue = juce::jlimit(0.0f, 1.0f, dragStartValue_ + deltaY * sensitivity);
+
+        if (newValue != currentMacro_.value) {
+            currentMacro_.value = newValue;
+            valueSlider_.setValue(newValue, juce::dontSendNotification);
+            repaint();
+            if (onValueChanged) {
+                onValueChanged(newValue);
+            }
+        }
+        return;
+    }
+
+    // Check if we've moved enough to start a link drag
     if (!isDragging_) {
         auto distance = e.getPosition().getDistanceFrom(dragStartPos_);
         if (distance > DRAG_THRESHOLD) {
@@ -159,13 +235,14 @@ void MacroKnobComponent::mouseUp(const juce::MouseEvent& e) {
     if (e.mods.isPopupMenu()) {
         // Right-click shows link menu
         showLinkMenu();
-    } else if (!isDragging_) {
+    } else if (!isDragging_ && !isKnobDragging_) {
         // Left-click (no drag) - select this macro
         if (onClicked) {
             onClicked();
         }
     }
     isDragging_ = false;
+    isKnobDragging_ = false;
 }
 
 void MacroKnobComponent::macroLinkModeChanged(bool active, const magda::MacroSelection& selection) {

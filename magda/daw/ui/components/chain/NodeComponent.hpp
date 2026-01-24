@@ -156,7 +156,7 @@ class NodeComponent : public juce::Component, public magda::SelectionManagerList
 
     // Override to provide custom panel widths
     virtual int getModPanelWidth() const {
-        return DEFAULT_PANEL_WIDTH;
+        return SINGLE_COLUMN_PANEL_WIDTH;  // Mod panel uses single column
     }
     // Extra left panel (between mods and params) - returns modulator editor width when visible
     virtual int getExtraLeftPanelWidth() const;
@@ -203,8 +203,9 @@ class NodeComponent : public juce::Component, public magda::SelectionManagerList
     // Layout constants
     static constexpr int HEADER_HEIGHT = 20;
     static constexpr int BUTTON_SIZE = 16;
-    static constexpr int DEFAULT_PANEL_WIDTH = 100;  // Width for side panels (mods, params)
-    static constexpr int GAIN_PANEL_WIDTH = 32;      // Width for gain panel (right side)
+    static constexpr int DEFAULT_PANEL_WIDTH = 150;  // Width for 2-column panels (params, macros)
+    static constexpr int SINGLE_COLUMN_PANEL_WIDTH = 70;  // Width for 1-column panels (mods)
+    static constexpr int GAIN_PANEL_WIDTH = 32;           // Width for gain panel (right side)
 
     // === Mods/Macros Panel Support ===
 
@@ -229,6 +230,13 @@ class NodeComponent : public juce::Component, public magda::SelectionManagerList
     virtual void onModTypeChangedInternal(int /*modIndex*/, magda::ModType /*type*/) {}
     virtual void onModWaveformChangedInternal(int /*modIndex*/, magda::LFOWaveform /*waveform*/) {}
     virtual void onModRateChangedInternal(int /*modIndex*/, float /*rate*/) {}
+    virtual void onModWaveformChangedInternal(int /*modIndex*/, magda::LFOWaveform /*waveform*/) {}
+    virtual void onModPhaseOffsetChangedInternal(int /*modIndex*/, float /*phaseOffset*/) {}
+    virtual void onModTempoSyncChangedInternal(int /*modIndex*/, bool /*tempoSync*/) {}
+    virtual void onModSyncDivisionChangedInternal(int /*modIndex*/,
+                                                  magda::SyncDivision /*division*/) {}
+    virtual void onModTriggerModeChangedInternal(int /*modIndex*/, magda::LFOTriggerMode /*mode*/) {
+    }
     // Contextual link callbacks (when param is selected and mod amount slider is used)
     virtual void onModLinkAmountChangedInternal(int /*modIndex*/, magda::ModTarget /*target*/,
                                                 float /*amount*/) {}
@@ -246,6 +254,10 @@ class NodeComponent : public juce::Component, public magda::SelectionManagerList
     virtual void onMacroLinkRemovedInternal(int /*macroIndex*/, magda::MacroTarget /*target*/) {}
     virtual void onModClickedInternal(int /*modIndex*/) {}
     virtual void onMacroClickedInternal(int /*macroIndex*/) {}
+    virtual void onAddModRequestedInternal(int /*slotIndex*/, magda::ModType /*type*/,
+                                           magda::LFOWaveform /*waveform*/) {}
+    virtual void onModRemoveRequestedInternal(int /*modIndex*/) {}
+    virtual void onModEnableToggledInternal(int /*modIndex*/, bool /*enabled*/) {}
 
     // Virtual callbacks for page management (subclasses implement to persist)
     virtual void onModPageAddRequested(int /*itemsToAdd*/) {}

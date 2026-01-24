@@ -173,6 +173,20 @@ void PagedControlPanel::paint(juce::Graphics& g) {
     // Background
     g.setColour(DarkTheme::getColour(DarkTheme::BACKGROUND).brighter(0.02f));
     g.fillRect(getLocalBounds());
+
+    // Show empty state message if no items
+    if (getTotalItemCount() == 0 && canAddPage_) {
+        g.setColour(DarkTheme::getSecondaryTextColour());
+        g.setFont(FontManager::getInstance().getUIFont(10.0f));
+        auto bounds = getLocalBounds().reduced(4);
+        // Skip nav area if it exists
+        int totalPages = getTotalPages();
+        bool showNav = totalPages > 1 || canAddPage_ || canRemovePage_;
+        if (showNav) {
+            bounds.removeFromTop(NAV_HEIGHT);
+        }
+        g.drawText("Click + to add", bounds, juce::Justification::centred);
+    }
 }
 
 void PagedControlPanel::resized() {
@@ -213,14 +227,15 @@ void PagedControlPanel::resized() {
     if (visibleCount <= 0)
         return;
 
-    int rows = (visibleCount + GRID_COLUMNS - 1) / GRID_COLUMNS;
-    int itemWidth = (bounds.getWidth() - GRID_SPACING) / GRID_COLUMNS;
+    int gridCols = getGridColumns();
+    int rows = (visibleCount + gridCols - 1) / gridCols;
+    int itemWidth = (bounds.getWidth() - (gridCols - 1) * GRID_SPACING) / gridCols;
     int itemHeight = (bounds.getHeight() - (rows - 1) * GRID_SPACING) / rows;
 
     int firstIdx = getFirstVisibleIndex();
     for (int i = 0; i < visibleCount; ++i) {
-        int col = i % GRID_COLUMNS;
-        int row = i / GRID_COLUMNS;
+        int col = i % gridCols;
+        int row = i / gridCols;
         int x = bounds.getX() + col * (itemWidth + GRID_SPACING);
         int y = bounds.getY() + row * (itemHeight + GRID_SPACING);
 

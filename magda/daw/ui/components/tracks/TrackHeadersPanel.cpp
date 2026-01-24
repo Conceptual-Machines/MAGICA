@@ -4,11 +4,15 @@
 #include <cmath>
 #include <functional>
 
+#include "../../../audio/AudioBridge.hpp"
+#include "../../../core/SelectionManager.hpp"
+#include "../../../core/TrackCommands.hpp"
+#include "../../../core/UndoManager.hpp"
+#include "../../../engine/TracktionEngineWrapper.hpp"
 #include "../../themes/DarkTheme.hpp"
 #include "../../themes/FontManager.hpp"
-#include "core/SelectionManager.hpp"
-#include "core/TrackCommands.hpp"
-#include "core/UndoManager.hpp"
+#include "../automation/AutomationLaneComponent.hpp"
+#include "BinaryData.h"
 
 namespace magda {
 
@@ -49,10 +53,15 @@ class TrackMeter : public juce::Component {
         auto leftBar = bounds.withWidth(barWidth);
         auto rightBar = bounds.withWidth(barWidth).withX(bounds.getX() + barWidth + gap);
 
-        // Background for each bar
-        g.setColour(DarkTheme::getColour(DarkTheme::SURFACE));
+        // Background for each bar (darker background)
+        g.setColour(juce::Colour(0xFF1A1A1A));
         g.fillRoundedRectangle(leftBar, 2.0f);
         g.fillRoundedRectangle(rightBar, 2.0f);
+
+        // Draw border so meters are always visible
+        g.setColour(juce::Colour(0xFF404040));
+        g.drawRoundedRectangle(leftBar, 2.0f, 1.0f);
+        g.drawRoundedRectangle(rightBar, 2.0f, 1.0f);
 
         // Draw level fills
         drawMeterBar(g, leftBar, levelL_);
@@ -175,6 +184,15 @@ TrackHeadersPanel::TrackHeader::TrackHeader(const juce::String& trackName) : nam
                             DarkTheme::getColour(DarkTheme::TEXT_PRIMARY));
     recordButton->setClickingTogglesState(true);
 
+    // Automation button (bezier curve icon)
+    automationButton = std::make_unique<SvgButton>("Automation", BinaryData::bezier_svg,
+                                                   BinaryData::bezier_svgSize);
+    automationButton->setTooltip("Show automation lanes");
+    automationButton->setColour(juce::TextButton::buttonColourId,
+                                DarkTheme::getColour(DarkTheme::SURFACE));
+    automationButton->setColour(juce::TextButton::buttonOnColourId,
+                                DarkTheme::getColour(DarkTheme::ACCENT_BLUE));
+
     // Volume label (shows dB, draggable)
     volumeLabel = std::make_unique<DraggableValueLabel>(DraggableValueLabel::Format::Decibels);
     volumeLabel->setRange(MIN_DB, MAX_DB, 0.0);  // -60 to +6 dB, default 0 dB
@@ -253,16 +271,15 @@ TrackHeadersPanel::TrackHeader::TrackHeader(const juce::String& trackName) : nam
 
     // Meter component (stereo level display)
     meterComponent = std::make_unique<TrackMeter>();
-    // Set demo levels so meters are visible
-    static_cast<TrackMeter*>(meterComponent.get())->setLevels(0.6f, 0.4f);
+    // Levels will be set by timerCallback reading from AudioBridge
 
     // MIDI activity indicator
     midiIndicator = std::make_unique<MidiActivityIndicator>();
-    // Set demo activity so indicator is visible
-    static_cast<MidiActivityIndicator*>(midiIndicator.get())->setActivity(0.3f);
 }
 
-TrackHeadersPanel::TrackHeadersPanel() {
+TrackHeadersPanel::TrackHeadersPanel(AudioEngine* audioEngine) : audioEngine_(audioEngine) {
+    std::cout << "TrackHeadersPanel created with audioEngine=" << (audioEngine ? "valid" : "NULL")
+              << std::endl;
     setSize(TRACK_HEADER_WIDTH, 400);
 
     // Register as TrackManager listener
@@ -272,13 +289,69 @@ TrackHeadersPanel::TrackHeadersPanel() {
     ViewModeController::getInstance().addListener(this);
     currentViewMode_ = ViewModeController::getInstance().getViewMode();
 
+    // Register as AutomationManager listener
+    AutomationManager::getInstance().addListener(this);
+
     // Build tracks from TrackManager
     tracksChanged();
+
+    // Start timer for metering updates (30 FPS)
+    startTimerHz(30);
 }
 
 TrackHeadersPanel::~TrackHeadersPanel() {
+    stopTimer();
     TrackManager::getInstance().removeListener(this);
     ViewModeController::getInstance().removeListener(this);
+    AutomationManager::getInstance().removeListener(this);
+}
+
+void TrackHeadersPanel::timerCallback() {
+    // Get metering data from AudioBridge
+    static int uiTimerCounter = 0;
+    if (++uiTimerCounter % 90 == 0) {  // Every 3 seconds
+        std::cout << "TrackHeadersPanel timer running" << std::endl;
+    }
+
+    if (!audioEngine_) {
+        if (uiTimerCounter % 90 == 0) {
+            std::cout << "  No audioEngine_!" << std::endl;
+        }
+        return;
+    }
+
+    auto* teWrapper = dynamic_cast<TracktionEngineWrapper*>(audioEngine_);
+    if (!teWrapper) {
+        if (uiTimerCounter % 90 == 0) {
+            std::cout << "  audioEngine_ is not TracktionEngineWrapper!" << std::endl;
+        }
+        return;
+    }
+
+    auto* bridge = teWrapper->getAudioBridge();
+    if (!bridge) {
+        if (uiTimerCounter % 90 == 0) {
+            std::cout << "  No AudioBridge!" << std::endl;
+        }
+        return;
+    }
+
+    auto& meteringBuffer = bridge->getMeteringBuffer();
+
+    // Update meters for all visible tracks
+    for (auto& header : trackHeaders) {
+        MeterData data;
+        if (meteringBuffer.popLevels(header->trackId, data)) {
+            if (uiTimerCounter % 30 == 0 && header->trackId == 1) {  // Once per second for track 1
+                std::cout << "  UI got meter data for track 1: L=" << data.peakL
+                          << " R=" << data.peakR << std::endl;
+            }
+            if (header->meterComponent) {
+                static_cast<TrackMeter*>(header->meterComponent.get())
+                    ->setLevels(data.peakL, data.peakR);
+            }
+        }
+    }
 }
 
 void TrackHeadersPanel::viewModeChanged(ViewMode mode, const AudioEngineProfile& /*profile*/) {
@@ -337,6 +410,7 @@ void TrackHeadersPanel::tracksChanged() {
         addAndMakeVisible(*header->muteButton);
         addAndMakeVisible(*header->soloButton);
         addAndMakeVisible(*header->recordButton);
+        addAndMakeVisible(*header->automationButton);
         addAndMakeVisible(*header->volumeLabel);
         addAndMakeVisible(*header->panLabel);
         addAndMakeVisible(*header->audioInSelector);
@@ -376,6 +450,9 @@ void TrackHeadersPanel::tracksChanged() {
     for (auto trackId : topLevelTracks) {
         addTrackRecursive(trackId, 0);
     }
+
+    // Sync automation lane visibility from AutomationManager
+    syncAutomationLaneVisibility();
 
     updateTrackHeaderLayout();
     repaint();
@@ -426,7 +503,7 @@ void TrackHeadersPanel::paint(juce::Graphics& g) {
     g.setColour(DarkTheme::getColour(DarkTheme::BORDER));
     g.drawRect(getLocalBounds(), 1);
 
-    // Draw track headers
+    // Draw track headers and automation lane headers
     for (size_t i = 0; i < trackHeaders.size(); ++i) {
         auto headerArea = getTrackHeaderArea(static_cast<int>(i));
         if (headerArea.intersects(getLocalBounds())) {
@@ -437,6 +514,9 @@ void TrackHeadersPanel::paint(juce::Graphics& g) {
             auto resizeArea = getResizeHandleArea(static_cast<int>(i));
             paintResizeHandle(g, resizeArea);
         }
+
+        // Draw automation lane headers for this track
+        paintAutomationLaneHeaders(g, static_cast<int>(i));
     }
 
     // Draw drag-and-drop feedback on top
@@ -460,6 +540,7 @@ void TrackHeadersPanel::addTrack() {
     addAndMakeVisible(*header->muteButton);
     addAndMakeVisible(*header->soloButton);
     addAndMakeVisible(*header->recordButton);
+    addAndMakeVisible(*header->automationButton);
     addAndMakeVisible(*header->volumeLabel);
     addAndMakeVisible(*header->panLabel);
     addAndMakeVisible(*header->audioInSelector);
@@ -535,18 +616,85 @@ int TrackHeadersPanel::getTrackHeight(int trackIndex) const {
 
 int TrackHeadersPanel::getTotalTracksHeight() const {
     int totalHeight = 0;
-    for (const auto& header : trackHeaders) {
-        totalHeight += static_cast<int>(header->height * verticalZoom);
+    for (size_t i = 0; i < trackHeaders.size(); ++i) {
+        totalHeight += getTrackTotalHeight(static_cast<int>(i));
     }
     return totalHeight;
 }
 
 int TrackHeadersPanel::getTrackYPosition(int trackIndex) const {
     int yPosition = 0;
-    for (int i = 0; i < trackIndex && i < trackHeaders.size(); ++i) {
-        yPosition += static_cast<int>(trackHeaders[i]->height * verticalZoom);
+    for (int i = 0; i < trackIndex && i < static_cast<int>(trackHeaders.size()); ++i) {
+        yPosition += getTrackTotalHeight(i);
     }
     return yPosition;
+}
+
+int TrackHeadersPanel::getTrackTotalHeight(int trackIndex) const {
+    if (trackIndex < 0 || trackIndex >= static_cast<int>(trackHeaders.size())) {
+        return 0;
+    }
+
+    // Base track height
+    int totalHeight = static_cast<int>(trackHeaders[trackIndex]->height * verticalZoom);
+
+    // Add visible automation lanes
+    if (trackIndex < static_cast<int>(visibleTrackIds_.size())) {
+        TrackId trackId = visibleTrackIds_[trackIndex];
+        totalHeight += getVisibleAutomationLanesHeight(trackId);
+    }
+
+    return totalHeight;
+}
+
+int TrackHeadersPanel::getVisibleAutomationLanesHeight(TrackId trackId) const {
+    int totalHeight = 0;
+
+    auto it = visibleAutomationLanes_.find(trackId);
+    if (it != visibleAutomationLanes_.end()) {
+        auto& manager = AutomationManager::getInstance();
+        for (auto laneId : it->second) {
+            const auto* lane = manager.getLane(laneId);
+            if (lane && lane->visible) {
+                // Apply vertical zoom to automation lane height (header + content + resize handle)
+                int laneHeight = lane->expanded ? (AutomationLaneComponent::HEADER_HEIGHT +
+                                                   static_cast<int>(lane->height * verticalZoom) +
+                                                   AutomationLaneComponent::RESIZE_HANDLE_HEIGHT)
+                                                : AutomationLaneComponent::HEADER_HEIGHT;
+                totalHeight += laneHeight;
+            }
+        }
+    }
+
+    return totalHeight;
+}
+
+void TrackHeadersPanel::syncAutomationLaneVisibility() {
+    visibleAutomationLanes_.clear();
+
+    auto& manager = AutomationManager::getInstance();
+
+    for (auto trackId : visibleTrackIds_) {
+        auto laneIds = manager.getLanesForTrack(trackId);
+        for (auto laneId : laneIds) {
+            const auto* lane = manager.getLane(laneId);
+            if (lane && lane->visible) {
+                visibleAutomationLanes_[trackId].push_back(laneId);
+            }
+        }
+    }
+}
+
+void TrackHeadersPanel::automationLanesChanged() {
+    syncAutomationLaneVisibility();
+    updateTrackHeaderLayout();
+    repaint();
+}
+
+void TrackHeadersPanel::automationLanePropertyChanged(AutomationLaneId /*laneId*/) {
+    syncAutomationLaneVisibility();
+    updateTrackHeaderLayout();
+    repaint();
 }
 
 void TrackHeadersPanel::setVerticalZoom(double zoom) {
@@ -668,6 +816,11 @@ void TrackHeadersPanel::setupTrackHeaderWithId(TrackHeader& header, int trackId)
             header.pan = static_cast<float>(header.panLabel->getValue());
             TrackManager::getInstance().setTrackPan(trackId, header.pan);
         }
+    };
+
+    // Automation button callback - shows automation lane menu
+    header.automationButton->onClick = [this, trackId, &header]() {
+        showAutomationMenu(trackId, header.automationButton.get());
     };
 
     // Routing selector callbacks - sync enabled state back to header flags
@@ -884,7 +1037,7 @@ void TrackHeadersPanel::updateTrackHeaderLayout() {
                 int availableSpace = tcpArea.getHeight() - totalContentHeight;
                 int rowGap = numRows > 1 ? std::max(2, availableSpace / (numRows - 1)) : 2;
 
-                // M S R buttons row (always visible, now on top)
+                // M S R A buttons row (always visible, now on top)
                 auto buttonsRow = tcpArea.removeFromTop(contentRowHeight);
                 header.muteButton->setBounds(buttonsRow.removeFromLeft(smallButtonSize));
                 buttonsRow.removeFromLeft(buttonGap);
@@ -892,6 +1045,9 @@ void TrackHeadersPanel::updateTrackHeaderLayout() {
                 buttonsRow.removeFromLeft(buttonGap);
                 header.recordButton->setBounds(buttonsRow.removeFromLeft(smallButtonSize));
                 header.recordButton->setVisible(true);
+                buttonsRow.removeFromLeft(buttonGap);
+                header.automationButton->setBounds(buttonsRow.removeFromLeft(smallButtonSize));
+                header.automationButton->setVisible(true);
 
                 tcpArea.removeFromTop(rowGap);
 
@@ -963,7 +1119,7 @@ void TrackHeadersPanel::updateTrackHeaderLayout() {
 
             } else if (trackHeight >= 55) {
                 // MEDIUM LAYOUT: Buttons + volume/pan only
-                // Row 1: M S R [volume] [pan]
+                // Row 1: M S R A [volume] [pan]
                 auto row1 = tcpArea.removeFromTop(rowHeight);
                 header.muteButton->setBounds(row1.removeFromLeft(smallButtonSize));
                 row1.removeFromLeft(spacing);
@@ -971,6 +1127,9 @@ void TrackHeadersPanel::updateTrackHeaderLayout() {
                 row1.removeFromLeft(spacing);
                 header.recordButton->setBounds(row1.removeFromLeft(smallButtonSize));
                 header.recordButton->setVisible(true);
+                row1.removeFromLeft(spacing);
+                header.automationButton->setBounds(row1.removeFromLeft(smallButtonSize));
+                header.automationButton->setVisible(true);
                 row1.removeFromLeft(spacing + 2);
 
                 header.volumeLabel->setBounds(row1.removeFromLeft(volumeLabelWidth));
@@ -984,7 +1143,7 @@ void TrackHeadersPanel::updateTrackHeaderLayout() {
 
             } else {
                 // SMALL LAYOUT: Buttons + volume/pan on same row
-                // Row 1: M S R [volume] [pan]
+                // Row 1: M S R A [volume] [pan]
                 auto row1 = tcpArea.removeFromTop(rowHeight);
                 header.muteButton->setBounds(row1.removeFromLeft(smallButtonSize));
                 row1.removeFromLeft(spacing);
@@ -992,6 +1151,9 @@ void TrackHeadersPanel::updateTrackHeaderLayout() {
                 row1.removeFromLeft(spacing);
                 header.recordButton->setBounds(row1.removeFromLeft(smallButtonSize));
                 header.recordButton->setVisible(true);
+                row1.removeFromLeft(spacing);
+                header.automationButton->setBounds(row1.removeFromLeft(smallButtonSize));
+                header.automationButton->setVisible(true);
                 row1.removeFromLeft(spacing + 2);
 
                 header.volumeLabel->setBounds(row1.removeFromLeft(volumeLabelWidth));
@@ -1497,6 +1659,149 @@ void TrackHeadersPanel::paintDropTargetGroupHighlight(juce::Graphics& g) {
     // Draw subtle fill
     g.setColour(DarkTheme::getColour(DarkTheme::ACCENT_ORANGE).withAlpha(0.15f));
     g.fillRect(targetArea);
+}
+
+void TrackHeadersPanel::showAutomationMenu(TrackId trackId, juce::Component* relativeTo) {
+    auto& automationManager = AutomationManager::getInstance();
+
+    juce::PopupMenu menu;
+    menu.addSectionHeader("Show Automation Lane");
+    menu.addSeparator();
+
+    // Get existing lanes for this track
+    auto existingLanes = automationManager.getLanesForTrack(trackId);
+
+    // Add existing lanes first (with toggle indicator)
+    if (!existingLanes.empty()) {
+        for (auto laneId : existingLanes) {
+            const auto* lane = automationManager.getLane(laneId);
+            if (lane) {
+                juce::String name = lane->target.getDisplayName();
+                bool isVisible = lane->visible;
+                menu.addItem(1000 + laneId, name, true, isVisible);
+            }
+        }
+        menu.addSeparator();
+    }
+
+    // "Add New Lane" submenu with common targets
+    juce::PopupMenu addNewMenu;
+
+    // Track volume
+    AutomationTarget volumeTarget;
+    volumeTarget.type = AutomationTargetType::TrackVolume;
+    volumeTarget.trackId = trackId;
+    addNewMenu.addItem(1, "Track Volume");
+
+    // Track pan
+    AutomationTarget panTarget;
+    panTarget.type = AutomationTargetType::TrackPan;
+    panTarget.trackId = trackId;
+    addNewMenu.addItem(2, "Track Pan");
+
+    menu.addSubMenu("Add New Lane...", addNewMenu);
+
+    // Show menu
+    auto options = juce::PopupMenu::Options();
+    if (relativeTo) {
+        options = options.withTargetComponent(relativeTo);
+    }
+
+    menu.showMenuAsync(options, [this, trackId](int result) {
+        if (result == 0)
+            return;
+
+        auto& automationManager = AutomationManager::getInstance();
+
+        if (result >= 1000) {
+            // Toggle existing lane visibility
+            AutomationLaneId laneId = result - 1000;
+            const auto* lane = automationManager.getLane(laneId);
+            if (lane) {
+                bool newVisible = !lane->visible;
+                // Defer visibility change to avoid destroying listeners during notification loop
+                juce::MessageManager::callAsync([laneId, newVisible]() {
+                    AutomationManager::getInstance().setLaneVisible(laneId, newVisible);
+                });
+            }
+        } else if (result == 1) {
+            // Create track volume automation lane
+            AutomationTarget target;
+            target.type = AutomationTargetType::TrackVolume;
+            target.trackId = trackId;
+            auto laneId = automationManager.getOrCreateLane(target, AutomationLaneType::Absolute);
+            automationManager.setLaneVisible(laneId, true);
+            if (onShowAutomationLane) {
+                onShowAutomationLane(trackId, laneId);
+            }
+        } else if (result == 2) {
+            // Create track pan automation lane
+            AutomationTarget target;
+            target.type = AutomationTargetType::TrackPan;
+            target.trackId = trackId;
+            auto laneId = automationManager.getOrCreateLane(target, AutomationLaneType::Absolute);
+            automationManager.setLaneVisible(laneId, true);
+            if (onShowAutomationLane) {
+                onShowAutomationLane(trackId, laneId);
+            }
+        }
+    });
+}
+
+// ============================================================================
+// Automation Lane Header Painting
+// ============================================================================
+
+void TrackHeadersPanel::paintAutomationLaneHeaders(juce::Graphics& g, int trackIndex) {
+    if (trackIndex < 0 || trackIndex >= static_cast<int>(visibleTrackIds_.size())) {
+        return;
+    }
+
+    TrackId trackId = visibleTrackIds_[trackIndex];
+    auto it = visibleAutomationLanes_.find(trackId);
+    if (it == visibleAutomationLanes_.end() || it->second.empty()) {
+        return;
+    }
+
+    auto& manager = AutomationManager::getInstance();
+
+    // Calculate Y position: after track header
+    int y = getTrackYPosition(trackIndex) +
+            static_cast<int>(trackHeaders[trackIndex]->height * verticalZoom);
+
+    for (auto laneId : it->second) {
+        const auto* lane = manager.getLane(laneId);
+        if (!lane || !lane->visible) {
+            continue;
+        }
+
+        // Calculate lane height (same as in getVisibleAutomationLanesHeight)
+        int laneHeight = lane->expanded ? (AutomationLaneComponent::HEADER_HEIGHT +
+                                           static_cast<int>(lane->height * verticalZoom) +
+                                           AutomationLaneComponent::RESIZE_HANDLE_HEIGHT)
+                                        : AutomationLaneComponent::HEADER_HEIGHT;
+
+        // Header area for this automation lane
+        auto headerArea =
+            juce::Rectangle<int>(0, y, getWidth(), AutomationLaneComponent::HEADER_HEIGHT);
+
+        // Header background
+        g.setColour(juce::Colour(0xFF252525));
+        g.fillRect(headerArea);
+
+        // Header border
+        g.setColour(juce::Colour(0xFF333333));
+        g.drawHorizontalLine(headerArea.getBottom() - 1, static_cast<float>(headerArea.getX()),
+                             static_cast<float>(headerArea.getRight()));
+
+        // Parameter name
+        g.setColour(juce::Colour(0xFFCCCCCC));
+        g.setFont(11.0f);
+        auto nameArea = headerArea.reduced(4, 2);
+        g.drawText(lane->getDisplayName(), nameArea, juce::Justification::centredLeft);
+
+        y += laneHeight;
+    }
 }
 
 }  // namespace magda

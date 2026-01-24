@@ -9,7 +9,7 @@
 
 namespace magda {
 
-constexpr int MODS_PER_PAGE = 8;
+constexpr int MODS_PER_PAGE = 4;
 constexpr int DEFAULT_MOD_PAGES = 2;
 constexpr int NUM_MODS = MODS_PER_PAGE * DEFAULT_MOD_PAGES;
 
@@ -19,9 +19,67 @@ constexpr int NUM_MODS = MODS_PER_PAGE * DEFAULT_MOD_PAGES;
 enum class ModType { LFO, Envelope, Random, Follower };
 
 /**
- * @brief LFO waveform shape
+ * @brief LFO waveform shapes
  */
-enum class LFOWaveform { Sine, Triangle, Square, Saw, ReverseSaw };
+enum class LFOWaveform {
+    Sine,
+    Triangle,
+    Square,
+    Saw,
+    ReverseSaw,
+    Custom  // User-defined curve from curve editor
+};
+
+/**
+ * @brief Tempo sync divisions for LFO rate
+ */
+enum class SyncDivision {
+    Whole = 1,            // 1 bar (4 beats)
+    Half = 2,             // 1/2 note
+    Quarter = 4,          // 1/4 note (1 beat)
+    Eighth = 8,           // 1/8 note
+    Sixteenth = 16,       // 1/16 note
+    ThirtySecond = 32,    // 1/32 note
+    DottedHalf = 3,       // 1/2 + 1/4
+    DottedQuarter = 6,    // 1/4 + 1/8
+    DottedEighth = 12,    // 1/8 + 1/16
+    TripletHalf = 33,     // 1/2 triplet
+    TripletQuarter = 66,  // 1/4 triplet
+    TripletEighth = 132   // 1/8 triplet
+};
+
+/**
+ * @brief Curve presets for Custom waveform
+ */
+enum class CurvePreset {
+    Triangle,     // Simple triangle
+    Sine,         // Smooth sine-like curve
+    RampUp,       // Linear ramp up
+    RampDown,     // Linear ramp down
+    SCurve,       // S-curve (smooth transition)
+    Exponential,  // Exponential rise/fall
+    Logarithmic,  // Logarithmic rise/fall
+    Custom        // User-edited curve
+};
+
+/**
+ * @brief A point on a custom curve (for LFO Custom waveform)
+ */
+struct CurvePointData {
+    float phase = 0.0f;    // 0.0 to 1.0, position in cycle
+    float value = 0.5f;    // 0.0 to 1.0, output value
+    float tension = 0.0f;  // -3 to +3, curve tension
+};
+
+/**
+ * @brief LFO trigger modes
+ */
+enum class LFOTriggerMode {
+    Free,       // Continuous, never resets
+    Transport,  // Reset on transport start/loop
+    MIDI,       // Reset on MIDI note-on (stubbed)
+    Audio       // Reset on audio transient (stubbed)
+};
 
 /**
  * @brief Target for a mod link (which device parameter it modulates)
@@ -66,7 +124,37 @@ struct ModInfo {
     ModId id = INVALID_MOD_ID;
     juce::String name;  // e.g., "LFO 1" or user-defined
     ModType type = ModType::LFO;
-    float rate = 1.0f;           // Rate/speed of modulation (Hz for LFO)
+    bool enabled = true;                       // Whether the mod is active
+    float rate = 1.0f;                         // Rate/speed of modulation (Hz)
+    LFOWaveform waveform = LFOWaveform::Sine;  // LFO waveform shape
+    float phase = 0.0f;                        // 0.0 to 1.0, current position in cycle
+    float phaseOffset = 0.0f;                  // 0.0 to 1.0, phase offset (adds to phase)
+    float value = 0.5f;                        // 0.0 to 1.0, current LFO output
+
+    // Tempo sync settings
+    bool tempoSync = false;                             // Use tempo-synced rate instead of Hz
+    SyncDivision syncDivision = SyncDivision::Quarter;  // Musical division when synced
+
+    // Trigger mode settings
+    LFOTriggerMode triggerMode = LFOTriggerMode::Free;  // When to reset phase
+    bool triggered = false;                             // Set true when trigger fires (for UI dot)
+
+    // Loop/One-shot mode
+    bool oneShot = false;  // If true, play once and hold at end value
+
+    // MSEG loop region (for Custom waveform)
+    bool useLoopRegion = false;  // Enable loop between loopStart and loopEnd
+    float loopStart = 0.0f;      // Loop region start phase (0-1)
+    float loopEnd = 1.0f;        // Loop region end phase (0-1)
+
+    // Advanced receiver settings (for future MIDI/Audio trigger modes)
+    int midiChannel = 0;  // 0 = any, 1-16 = specific
+    int midiNote = -1;    // -1 = any, 0-127 = specific
+
+    // Custom curve settings (when waveform == Custom)
+    CurvePreset curvePreset = CurvePreset::Triangle;
+    std::vector<CurvePointData> curvePoints;  // User-defined curve points
+
     std::vector<ModLink> links;  // All parameter links for this mod
 
     // Modulation output
@@ -157,8 +245,11 @@ using ModArray = std::vector<ModInfo>;
 
 /**
  * @brief Initialize a ModArray with default values
+ *
+ * By default, creates an empty array. Users add mods via + button.
+ * Pass numMods > 0 to pre-populate (for testing or legacy support).
  */
-inline ModArray createDefaultMods(int numMods = NUM_MODS) {
+inline ModArray createDefaultMods(int numMods = 0) {
     ModArray mods;
     mods.reserve(numMods);
     for (int i = 0; i < numMods; ++i) {
@@ -181,7 +272,7 @@ inline void addModPage(ModArray& mods) {
  * @brief Remove a page of mods (8 mods) from an existing array
  * @return true if page was removed, false if at minimum size
  */
-inline bool removeModPage(ModArray& mods, int minMods = NUM_MODS) {
+inline bool removeModPage(ModArray& mods, int minMods = 0) {
     if (static_cast<int>(mods.size()) <= minMods) {
         return false;  // At minimum size
     }
