@@ -207,6 +207,42 @@ void LFOCurveEditor::onHandlesChanged(uint32_t pointId, const CurveHandleData& i
     notifyWaveformChanged();
 }
 
+void LFOCurveEditor::onPointDragPreview(uint32_t pointId, double newX, double newY) {
+    // Update ModInfo during drag for fluid mini waveform preview
+    if (!modInfo_)
+        return;
+
+    // Find and update the point in ModInfo
+    for (auto& cp : modInfo_->curvePoints) {
+        // Find by matching position (since we don't store IDs in ModInfo)
+        // This works because points are sorted and we update in real-time
+        for (const auto& p : points_) {
+            if (p.id == pointId) {
+                // Find the corresponding point in curvePoints by original position
+                if (std::abs(cp.phase - static_cast<float>(p.x)) < 0.001f) {
+                    cp.phase = static_cast<float>(newX);
+                    cp.value = static_cast<float>(newY);
+                    return;
+                }
+            }
+        }
+    }
+}
+
+void LFOCurveEditor::onTensionDragPreview(uint32_t pointId, double tension) {
+    // Update ModInfo during drag for fluid mini waveform preview
+    if (!modInfo_)
+        return;
+
+    // Find and update the tension in ModInfo
+    for (size_t i = 0; i < points_.size(); ++i) {
+        if (points_[i].id == pointId && i < modInfo_->curvePoints.size()) {
+            modInfo_->curvePoints[i].tension = static_cast<float>(tension);
+            return;
+        }
+    }
+}
+
 void LFOCurveEditor::paintGrid(juce::Graphics& g) {
     auto bounds = getLocalBounds();
 

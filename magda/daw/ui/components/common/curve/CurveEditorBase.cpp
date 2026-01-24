@@ -369,6 +369,9 @@ void CurveEditorBase::rebuildPointComponents() {
             // Update tension handle positions that depend on this point
             updateTensionHandlePositions();
 
+            // Notify subclass for fluid preview updates
+            onPointDragPreview(pointId, newX, newY);
+
             repaint();
         };
 
@@ -439,6 +442,9 @@ void CurveEditorBase::rebuildPointComponents() {
                         break;
                     }
                 }
+
+                // Notify subclass for fluid preview updates
+                onTensionDragPreview(pointId, tension);
 
                 repaint();
             };

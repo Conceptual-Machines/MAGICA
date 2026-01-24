@@ -59,6 +59,10 @@ class LFOCurveEditor : public CurveEditorBase, private juce::Timer {
     void onHandlesChanged(uint32_t pointId, const CurveHandleData& inHandle,
                           const CurveHandleData& outHandle) override;
 
+    // Preview callbacks for fluid mini waveform updates
+    void onPointDragPreview(uint32_t pointId, double newX, double newY) override;
+    void onTensionDragPreview(uint32_t pointId, double tension) override;
+
     void paintGrid(juce::Graphics& g) override;
 
     // Paint override to add phase indicator

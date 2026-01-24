@@ -124,6 +124,14 @@ class CurveEditorBase : public juce::Component {
     virtual void onHandlesChanged(uint32_t pointId, const CurveHandleData& inHandle,
                                   const CurveHandleData& outHandle) = 0;
 
+    // Preview callbacks for fluid updates during drag (optional override)
+    virtual void onPointDragPreview(uint32_t pointId, double newX, double newY) {
+        juce::ignoreUnused(pointId, newX, newY);
+    }
+    virtual void onTensionDragPreview(uint32_t pointId, double tension) {
+        juce::ignoreUnused(pointId, tension);
+    }
+
     // Helper to get effective position during preview
     std::pair<double, double> getEffectivePosition(const CurvePoint& p) const;
 

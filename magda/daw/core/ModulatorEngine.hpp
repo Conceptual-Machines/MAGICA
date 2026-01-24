@@ -204,20 +204,19 @@ class ModulatorEngine : public juce::Timer {
         float t = (phaseSpan > 0.0001f) ? (localPhase / phaseSpan) : 0.0f;
         t = std::clamp(t, 0.0f, 1.0f);
 
-        // Apply tension-based interpolation
+        // Apply tension-based interpolation (same formula as CurveEditorBase)
         float tension = p1->tension;
         if (std::abs(tension) < 0.001f) {
             // Linear interpolation
             return p1->value + t * (p2->value - p1->value);
         } else {
-            // Tension-based curve (same formula as CurveEditorBase)
             float curvedT;
             if (tension > 0) {
-                // Ease out - fast start, slow end
-                curvedT = 1.0f - std::pow(1.0f - t, 1.0f + tension);
-            } else {
                 // Ease in - slow start, fast end
-                curvedT = std::pow(t, 1.0f - tension);
+                curvedT = std::pow(t, 1.0f + tension * 2.0f);
+            } else {
+                // Ease out - fast start, slow end
+                curvedT = 1.0f - std::pow(1.0f - t, 1.0f - tension * 2.0f);
             }
             return p1->value + curvedT * (p2->value - p1->value);
         }
