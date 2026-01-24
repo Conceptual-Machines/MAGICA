@@ -8,6 +8,7 @@
 #include "core/ModInfo.hpp"
 #include "core/ModulatorEngine.hpp"
 #include "ui/components/chain/LFOCurveEditor.hpp"
+#include "ui/components/chain/LFOCurveEditorWindow.hpp"
 #include "ui/components/common/SvgButton.hpp"
 #include "ui/components/common/TextSlider.hpp"
 
@@ -145,6 +146,7 @@ class ModulatorEditorPanel : public juce::Component, private juce::Timer {
     std::function<void(bool tempoSync)> onTempoSyncChanged;
     std::function<void(magda::SyncDivision division)> onSyncDivisionChanged;
     std::function<void(magda::LFOTriggerMode mode)> onTriggerModeChanged;
+    std::function<void()> onCurveChanged;  // Fires when curve points are edited
 
     void paint(juce::Graphics& g) override;
     void resized() override;
@@ -163,8 +165,10 @@ class ModulatorEditorPanel : public juce::Component, private juce::Timer {
     juce::Label nameLabel_;
     juce::ComboBox waveformCombo_;  // LFO shape selector (Sine, Triangle, etc.)
     WaveformDisplay waveformDisplay_;
-    magda::LFOCurveEditor curveEditor_;  // Custom waveform editor
-    bool isCurveMode_ = false;           // True when waveform is Custom
+    magda::LFOCurveEditor curveEditor_;                        // Custom waveform editor
+    std::unique_ptr<magda::SvgButton> curveEditorButton_;      // Button to open external editor
+    std::unique_ptr<LFOCurveEditorWindow> curveEditorWindow_;  // External editor window
+    bool isCurveMode_ = false;                                 // True when waveform is Custom
     juce::TextButton syncToggle_;
     juce::ComboBox syncDivisionCombo_;
     TextSlider rateSlider_{TextSlider::Format::Decimal};

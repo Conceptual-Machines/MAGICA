@@ -57,7 +57,7 @@ class CurveTensionHandle : public juce::Component {
     bool isDragging_ = false;
     bool isHovered_ = false;
     bool slopeGoesDown_ = false;  // True if curve segment goes downward
-    int dragStartY_ = 0;
+    int dragStartY_ = 0;          // Parent-relative Y at drag start
     double dragStartTension_ = 0.0;
 };
 

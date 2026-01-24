@@ -8,14 +8,40 @@ namespace magda {
 LFOCurveEditor::LFOCurveEditor() {
     setName("LFOCurveEditor");
 
-    // Start timer for phase indicator animation
-    startTimer(33);  // 30 FPS
+    // Padding allows edge dots to extend beyond content area without clipping
+    // Parent component should expand bounds by this amount
+    setPadding(4);
 
     rebuildPointComponents();
+    startTimer(33);  // 30 FPS animation for phase indicator
 }
 
 LFOCurveEditor::~LFOCurveEditor() {
     stopTimer();
+}
+
+void LFOCurveEditor::syncFromModInfo() {
+    if (!modInfo_)
+        return;
+
+    // Update local points from modInfo->curvePoints without rebuilding components
+    // This is used for syncing with external editor during drag
+    for (size_t i = 0; i < points_.size() && i < modInfo_->curvePoints.size(); ++i) {
+        points_[i].x = static_cast<double>(modInfo_->curvePoints[i].phase);
+        points_[i].y = static_cast<double>(modInfo_->curvePoints[i].value);
+        points_[i].tension = static_cast<double>(modInfo_->curvePoints[i].tension);
+    }
+
+    // Update point component positions
+    for (size_t i = 0; i < pointComponents_.size() && i < points_.size(); ++i) {
+        pointComponents_[i]->updateFromPoint(points_[i]);
+        int px = xToPixel(points_[i].x);
+        int py = yToPixel(points_[i].y);
+        pointComponents_[i]->setCentrePosition(px, py);
+    }
+
+    updateTensionHandlePositions();
+    repaint();
 }
 
 void LFOCurveEditor::setModInfo(ModInfo* mod) {
@@ -23,6 +49,9 @@ void LFOCurveEditor::setModInfo(ModInfo* mod) {
 
     // Load curve points from ModInfo
     points_.clear();
+
+    // Reset point ID counter on reload to keep IDs stable
+    nextPointId_ = 1;
 
     if (mod && !mod->curvePoints.empty()) {
         // Load from ModInfo
@@ -35,6 +64,9 @@ void LFOCurveEditor::setModInfo(ModInfo* mod) {
             point.curveType = CurveType::Linear;
             points_.push_back(point);
         }
+        // Sort by x position
+        std::sort(points_.begin(), points_.end(),
+                  [](const CurvePoint& a, const CurvePoint& b) { return a.x < b.x; });
         // Ensure first and last points are pinned to edges
         if (!points_.empty()) {
             points_.front().x = 0.0;
@@ -69,34 +101,6 @@ void LFOCurveEditor::setModInfo(ModInfo* mod) {
 
     rebuildPointComponents();
     repaint();
-}
-
-void LFOCurveEditor::timerCallback() {
-    // Repaint to update phase indicator
-    repaint();
-}
-
-void LFOCurveEditor::paint(juce::Graphics& g) {
-    // Call base class paint for curve rendering
-    CurveEditorBase::paint(g);
-
-    // Draw phase indicator if we have modInfo with current phase
-    if (modInfo_ && getWidth() > 0 && getHeight() > 0) {
-        float phase = modInfo_->phase;
-        float value = modInfo_->value;
-
-        // Calculate position
-        int x = xToPixel(static_cast<double>(phase));
-        int y = yToPixel(static_cast<double>(value));
-
-        // Draw indicator dot
-        g.setColour(curveColour_);
-        g.fillEllipse(static_cast<float>(x - 4), static_cast<float>(y - 4), 8.0f, 8.0f);
-
-        // Draw white outline
-        g.setColour(juce::Colours::white);
-        g.drawEllipse(static_cast<float>(x - 4), static_cast<float>(y - 4), 8.0f, 8.0f, 1.5f);
-    }
 }
 
 double LFOCurveEditor::getPixelsPerX() const {
@@ -139,28 +143,38 @@ void LFOCurveEditor::onPointAdded(double x, double y, CurveType curveType) {
     points_.insert(insertPos, newPoint);
 
     rebuildPointComponents();
+    repaint();  // Force full repaint after structural change
     notifyWaveformChanged();
 }
 
-void LFOCurveEditor::onPointMoved(uint32_t pointId, double newX, double newY) {
+void LFOCurveEditor::constrainPointPosition(uint32_t pointId, double& x, double& y) {
     // Clamp values
-    newX = juce::jlimit(0.0, 1.0, newX);
-    newY = juce::jlimit(0.0, 1.0, newY);
+    x = juce::jlimit(0.0, 1.0, x);
+    y = juce::jlimit(0.0, 1.0, y);
 
-    // Check if this is the first or last point (they should be pinned to edges)
-    bool isFirstPoint = !points_.empty() && points_.front().id == pointId;
-    bool isLastPoint = !points_.empty() && points_.back().id == pointId;
+    // Find the point being moved and check if it's currently at an edge
+    // We identify edge points by their current x value, not array position
+    for (const auto& point : points_) {
+        if (point.id == pointId) {
+            // If this point is currently at x=0, pin it there
+            if (std::abs(point.x) < 0.001) {
+                x = 0.0;
+            }
+            // If this point is currently at x=1, pin it there
+            else if (std::abs(point.x - 1.0) < 0.001) {
+                x = 1.0;
+            }
+            break;
+        }
+    }
+}
+
+void LFOCurveEditor::onPointMoved(uint32_t pointId, double newX, double newY) {
+    // Position is already constrained by constrainPointPosition
 
     for (auto& point : points_) {
         if (point.id == pointId) {
-            // First point is pinned to x=0, last point to x=1
-            if (isFirstPoint) {
-                point.x = 0.0;
-            } else if (isLastPoint) {
-                point.x = 1.0;
-            } else {
-                point.x = newX;
-            }
+            point.x = newX;
             point.y = newY;
             break;
         }
@@ -171,6 +185,7 @@ void LFOCurveEditor::onPointMoved(uint32_t pointId, double newX, double newY) {
               [](const CurvePoint& a, const CurvePoint& b) { return a.x < b.x; });
 
     rebuildPointComponents();
+    repaint();  // Force full repaint after structural change
     notifyWaveformChanged();
 }
 
@@ -188,6 +203,7 @@ void LFOCurveEditor::onPointDeleted(uint32_t pointId) {
     }
 
     rebuildPointComponents();
+    repaint();  // Force full repaint after structural change
     notifyWaveformChanged();
 }
 
@@ -233,24 +249,33 @@ void LFOCurveEditor::onPointDragPreview(uint32_t pointId, double newX, double ne
     if (!modInfo_)
         return;
 
-    // Check if this is the first or last point (they should be pinned to edges)
-    bool isFirstPoint = !points_.empty() && points_.front().id == pointId;
-    bool isLastPoint = !points_.empty() && points_.back().id == pointId;
-
-    // Pin first/last points to edges
-    if (isFirstPoint) {
-        newX = 0.0;
-    } else if (isLastPoint) {
-        newX = 1.0;
-    }
-
+    // Position is already constrained by constrainPointPosition in the base class
     // Find and update the point in ModInfo by index
+    bool found = false;
     for (size_t i = 0; i < points_.size() && i < modInfo_->curvePoints.size(); ++i) {
         if (points_[i].id == pointId) {
             modInfo_->curvePoints[i].phase = static_cast<float>(newX);
             modInfo_->curvePoints[i].value = static_cast<float>(newY);
-            return;
+            found = true;
+            DBG("LFOCurveEditor::onPointDragPreview - updated point " + juce::String(pointId) +
+                " at index " + juce::String((int)i) + " to (" + juce::String(newX) + ", " +
+                juce::String(newY) + ")");
+            DBG("  modInfo_ ptr: " + juce::String::toHexString((juce::int64)modInfo_) +
+                ", curvePoints.size: " + juce::String((int)modInfo_->curvePoints.size()));
+            break;
         }
+    }
+    if (!found) {
+        DBG("LFOCurveEditor::onPointDragPreview - point " + juce::String(pointId) + " NOT FOUND!");
+        DBG("  points_.size: " + juce::String((int)points_.size()) +
+            ", modInfo_->curvePoints.size: " + juce::String((int)modInfo_->curvePoints.size()));
+    }
+
+    if (onDragPreview) {
+        DBG("LFOCurveEditor::onPointDragPreview - calling onDragPreview callback");
+        onDragPreview();
+    } else {
+        DBG("LFOCurveEditor::onPointDragPreview - onDragPreview callback NOT SET!");
     }
 }
 
@@ -263,9 +288,92 @@ void LFOCurveEditor::onTensionDragPreview(uint32_t pointId, double tension) {
     for (size_t i = 0; i < points_.size(); ++i) {
         if (points_[i].id == pointId && i < modInfo_->curvePoints.size()) {
             modInfo_->curvePoints[i].tension = static_cast<float>(tension);
-            return;
+            break;
         }
     }
+
+    if (onDragPreview) {
+        onDragPreview();
+    }
+}
+
+bool LFOCurveEditor::keyPressed(const juce::KeyPress& key) {
+    if (key == juce::KeyPress('c') || key == juce::KeyPress('C')) {
+        showCrosshair_ = !showCrosshair_;
+        repaint();
+        return true;
+    }
+    return CurveEditorBase::keyPressed(key);
+}
+
+void LFOCurveEditor::timerCallback() {
+    if (!modInfo_)
+        return;
+
+    // Only repaint if phase/value changed (and only the indicator region)
+    float newPhase = modInfo_->phase;
+    float newValue = modInfo_->value;
+
+    if (std::abs(newPhase - lastPhase_) > 0.001f || std::abs(newValue - lastValue_) > 0.001f) {
+        // Repaint old indicator region
+        repaint(getIndicatorBounds());
+
+        // Update and repaint new region
+        lastPhase_ = newPhase;
+        lastValue_ = newValue;
+        repaint(getIndicatorBounds());
+    }
+}
+
+juce::Rectangle<int> LFOCurveEditor::getIndicatorBounds() const {
+    auto content = getContentBounds();
+    int x = content.getX() + static_cast<int>(lastPhase_ * content.getWidth());
+    int y = content.getY() + static_cast<int>((1.0f - lastValue_) * content.getHeight());
+
+    // Return a small region around the indicator dot
+    constexpr int margin = 8;
+    return juce::Rectangle<int>(x - margin, y - margin, margin * 2, margin * 2);
+}
+
+void LFOCurveEditor::paint(juce::Graphics& g) {
+    // Let base class paint background, grid, curve
+    CurveEditorBase::paint(g);
+
+    // Paint phase indicator on top
+    paintPhaseIndicator(g);
+}
+
+void LFOCurveEditor::paintPhaseIndicator(juce::Graphics& g) {
+    if (!modInfo_)
+        return;
+
+    auto content = getContentBounds();
+    float phase = modInfo_->phase;
+    float value = modInfo_->value;
+
+    int x = content.getX() + static_cast<int>(phase * content.getWidth());
+    int y = content.getY() + static_cast<int>((1.0f - value) * content.getHeight());
+
+    // Draw crosshair lines (toggle with 'C' key)
+    if (showCrosshair_) {
+        g.setColour(curveColour_.withAlpha(0.4f));
+        g.drawVerticalLine(x, static_cast<float>(content.getY()),
+                           static_cast<float>(content.getBottom()));
+        g.drawHorizontalLine(y, static_cast<float>(content.getX()),
+                             static_cast<float>(content.getRight()));
+    }
+
+    // Draw indicator dot
+    constexpr float dotSize = 5.0f;
+    constexpr float dotRadius = dotSize / 2.0f;
+    g.setColour(curveColour_);
+    g.fillEllipse(static_cast<float>(x) - dotRadius, static_cast<float>(y) - dotRadius, dotSize,
+                  dotSize);
+
+    // Draw white outline
+    g.setColour(juce::Colours::white);
+    g.drawEllipse(static_cast<float>(x) - dotRadius, static_cast<float>(y) - dotRadius, dotSize,
+                  dotSize, 1.0f);
 }
 
 void LFOCurveEditor::paintGrid(juce::Graphics& g) {

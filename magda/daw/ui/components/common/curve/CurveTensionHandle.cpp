@@ -44,7 +44,8 @@ void CurveTensionHandle::paint(juce::Graphics& g) {
 void CurveTensionHandle::mouseDown(const juce::MouseEvent& e) {
     if (e.mods.isLeftButtonDown()) {
         isDragging_ = true;
-        dragStartY_ = e.y;
+        // Use parent-relative coordinates so moving the component doesn't affect drag calculation
+        dragStartY_ = e.getEventRelativeTo(getParentComponent()).y;
         dragStartTension_ = tension_;
         repaint();
     }
@@ -54,10 +55,14 @@ void CurveTensionHandle::mouseDrag(const juce::MouseEvent& e) {
     if (!isDragging_)
         return;
 
+    // Use parent-relative coordinates (component moves during drag, so can't use
+    // component-relative)
+    int parentY = e.getEventRelativeTo(getParentComponent()).y;
+
     // Dragging up bends curve outward (away from straight line)
     // 50 pixels of drag = full range
     // Normal: -1 to +1, Shift held: -3 to +3 for extreme squared curves
-    int deltaY = e.y - dragStartY_;  // Inverted: drag down = positive tension
+    int deltaY = parentY - dragStartY_;
 
     // Invert direction when curve goes downward so "up" always means "outward"
     if (slopeGoesDown_) {

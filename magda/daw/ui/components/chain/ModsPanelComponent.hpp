@@ -69,6 +69,9 @@ class ModsPanelComponent : public PagedControlPanel {
     // Set which mod is selected (orange highlight)
     void setSelectedModIndex(int modIndex);
 
+    // Force repaint of all waveform displays (for curve editor sync)
+    void repaintWaveforms();
+
     // Callbacks
     std::function<void(int modIndex, float amount)> onModAmountChanged;
     std::function<void(int modIndex, magda::ModTarget target)> onModTargetChanged;

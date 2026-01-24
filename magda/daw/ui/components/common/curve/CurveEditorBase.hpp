@@ -139,6 +139,11 @@ class CurveEditorBase : public juce::Component {
     virtual void onHandlesChanged(uint32_t pointId, const CurveHandleData& inHandle,
                                   const CurveHandleData& outHandle) = 0;
 
+    // Constrain point position during drag (override to pin edge points, etc.)
+    virtual void constrainPointPosition(uint32_t pointId, double& x, double& y) {
+        juce::ignoreUnused(pointId, x, y);
+    }
+
     // Preview callbacks for fluid updates during drag (optional override)
     virtual void onPointDragPreview(uint32_t pointId, double newX, double newY) {
         juce::ignoreUnused(pointId, newX, newY);

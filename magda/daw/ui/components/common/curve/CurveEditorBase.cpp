@@ -1,6 +1,7 @@
 #include "CurveEditorBase.hpp"
 
 #include <algorithm>
+#include <map>
 
 namespace magda {
 
@@ -46,25 +47,46 @@ void CurveEditorBase::paintCurve(juce::Graphics& g) {
     if (points.empty())
         return;
 
+    // Clear stale preview state if the preview point no longer exists
+    if (previewPointId_ != INVALID_CURVE_POINT_ID) {
+        bool found = false;
+        for (const auto& p : points) {
+            if (p.id == previewPointId_) {
+                found = true;
+                break;
+            }
+        }
+        if (!found) {
+            previewPointId_ = INVALID_CURVE_POINT_ID;
+        }
+    }
+    if (tensionPreviewPointId_ != INVALID_CURVE_POINT_ID) {
+        bool found = false;
+        for (const auto& p : points) {
+            if (p.id == tensionPreviewPointId_) {
+                found = true;
+                break;
+            }
+        }
+        if (!found) {
+            tensionPreviewPointId_ = INVALID_CURVE_POINT_ID;
+        }
+    }
+
     // Create path for curve
     juce::Path curvePath;
     bool pathStarted = false;
 
     // Handle edge behavior based on loop mode
     if (shouldLoop()) {
-        // For looping (LFO): Connect last point back to first
+        // For looping (LFO): Edge points are pinned at x=0 and x=1
+        // Just start at the first point - no extra wrap segment needed
         if (!points.empty()) {
             auto [firstX, firstY] = getEffectivePosition(points.front());
-            auto [lastX, lastY] = getEffectivePosition(points.back());
-
-            // Start at left edge with wrapped value from last point
-            int startPixelY = yToPixel(lastY);
-            curvePath.startNewSubPath(0.0f, static_cast<float>(startPixelY));
-
-            // Draw to first point
             int firstPixelX = xToPixel(firstX);
             int firstPixelY = yToPixel(firstY);
-            curvePath.lineTo(static_cast<float>(firstPixelX), static_cast<float>(firstPixelY));
+            curvePath.startNewSubPath(static_cast<float>(firstPixelX),
+                                      static_cast<float>(firstPixelY));
             pathStarted = true;
         }
     } else {
@@ -108,13 +130,8 @@ void CurveEditorBase::paintCurve(juce::Graphics& g) {
 
     // Handle edge behavior at the end
     if (shouldLoop()) {
-        // For looping: Connect last point to wrapped first point at right edge
-        if (!points.empty()) {
-            auto [firstX, firstY] = getEffectivePosition(points.front());
-            int width = getWidth();
-            int endPixelY = yToPixel(firstY);
-            curvePath.lineTo(static_cast<float>(width), static_cast<float>(endPixelY));
-        }
+        // For looping (LFO): Edge points are pinned at x=0 and x=1
+        // The curve ends at the last point - no extra segment needed
     } else {
         // For non-looping: Extend to right edge at last point's value
         if (!points.empty()) {
@@ -132,8 +149,10 @@ void CurveEditorBase::paintCurve(juce::Graphics& g) {
 
     // Optional: fill under curve
     juce::Path fillPath = curvePath;
-    fillPath.lineTo(static_cast<float>(getWidth()), static_cast<float>(getHeight()));
-    fillPath.lineTo(0.0f, static_cast<float>(getHeight()));
+    auto content = getContentBounds();
+    fillPath.lineTo(static_cast<float>(content.getRight()),
+                    static_cast<float>(content.getBottom()));
+    fillPath.lineTo(static_cast<float>(content.getX()), static_cast<float>(content.getBottom()));
     fillPath.closeSubPath();
     g.setColour(curveColour_.withAlpha(0.13f));
     g.fillPath(fillPath);
@@ -143,8 +162,19 @@ void CurveEditorBase::renderCurveSegment(juce::Path& path, const CurvePoint& p1,
                                          const CurvePoint& p2, double effectiveTension) {
     auto [x1, y1] = getEffectivePosition(p1);
     auto [x2, y2] = getEffectivePosition(p2);
+    int pixelX1 = xToPixel(x1);
+    int pixelY1 = yToPixel(y1);
     int pixelX2 = xToPixel(x2);
     int pixelY2 = yToPixel(y2);
+
+    // DEBUG: Check if path current position matches p1
+    auto currentPos = path.getCurrentPosition();
+    if (std::abs(currentPos.x - pixelX1) > 2 || std::abs(currentPos.y - pixelY1) > 2) {
+        DBG("!!! PATH MISMATCH !!! pathPos=(" + juce::String(currentPos.x) + "," +
+            juce::String(currentPos.y) + ")" + " p1Pixel=(" + juce::String(pixelX1) + "," +
+            juce::String(pixelY1) + ")" + " p1=(" + juce::String(x1) + "," + juce::String(y1) +
+            ")");
+    }
 
     switch (p1.curveType) {
         case CurveType::Linear: {
@@ -179,9 +209,6 @@ void CurveEditorBase::renderCurveSegment(juce::Path& path, const CurvePoint& p1,
 
         case CurveType::Bezier: {
             // Calculate control points using effective positions
-            int pixelX1 = xToPixel(x1);
-            int pixelY1 = yToPixel(y1);
-
             float cp1X = pixelX1 + static_cast<float>(p1.outHandle.x * getPixelsPerX());
             float cp1Y = pixelY1 - static_cast<float>(p1.outHandle.y * getPixelsPerY());
             float cp2X = pixelX2 + static_cast<float>(p2.inHandle.x * getPixelsPerX());
@@ -335,6 +362,10 @@ std::pair<double, double> CurveEditorBase::getEffectivePosition(const CurvePoint
 }
 
 void CurveEditorBase::rebuildPointComponents() {
+    // Clear preview state when structure changes
+    previewPointId_ = INVALID_CURVE_POINT_ID;
+    tensionPreviewPointId_ = INVALID_CURVE_POINT_ID;
+
     pointComponents_.clear();
     handleComponents_.clear();
     tensionHandles_.clear();
@@ -348,10 +379,18 @@ void CurveEditorBase::rebuildPointComponents() {
         pc->onPointSelected = [this](uint32_t pointId) { onPointSelected(pointId); };
 
         pc->onPointMoved = [this](uint32_t pointId, double newX, double newY) {
+            // Clear preview state - drag is complete
+            previewPointId_ = INVALID_CURVE_POINT_ID;
+
+            // Allow subclass to constrain position (e.g., pin edge points)
+            constrainPointPosition(pointId, newX, newY);
             onPointMoved(pointId, newX, newY);
         };
 
         pc->onPointDragPreview = [this](uint32_t pointId, double newX, double newY) {
+            // Allow subclass to constrain position (e.g., pin edge points)
+            constrainPointPosition(pointId, newX, newY);
+
             // Update preview state directly
             previewPointId_ = pointId;
             previewX_ = newX;

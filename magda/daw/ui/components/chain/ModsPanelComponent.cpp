@@ -218,6 +218,14 @@ void ModsPanelComponent::setSelectedModIndex(int modIndex) {
     }
 }
 
+void ModsPanelComponent::repaintWaveforms() {
+    DBG("ModsPanelComponent::repaintWaveforms - repainting " + juce::String((int)knobs_.size()) +
+        " knobs");
+    for (auto& knob : knobs_) {
+        knob->repaintWaveform();
+    }
+}
+
 void ModsPanelComponent::paint(juce::Graphics& g) {
     // Call base class paint for background
     PagedControlPanel::paint(g);

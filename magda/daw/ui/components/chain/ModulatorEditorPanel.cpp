@@ -12,8 +12,7 @@ ModulatorEditorPanel::ModulatorEditorPanel() {
     // Intercept mouse clicks to prevent propagation to parent
     setInterceptsMouseClicks(true, true);
 
-    // Start timer for trigger indicator animation
-    startTimer(33);  // 30 FPS
+    startTimer(33);  // 30 FPS for waveform animation
 
     // Name label at top
     nameLabel_.setFont(FontManager::getInstance().getUIFontBold(10.0f));
@@ -47,14 +46,78 @@ ModulatorEditorPanel::ModulatorEditorPanel() {
     // Waveform display (for standard LFO shapes)
     addAndMakeVisible(waveformDisplay_);
 
-    // Curve editor (for curve mode - bezier editing)
+    // Curve editor (for curve mode - bezier editing with integrated phase indicator)
     curveEditor_.setVisible(false);
     curveEditor_.setCurveColour(DarkTheme::getColour(DarkTheme::ACCENT_ORANGE));
     curveEditor_.onWaveformChanged = [this]() {
         // Curve points are stored directly in ModInfo by LFOCurveEditor
+        // Sync external editor window if open
+        if (curveEditorWindow_ && curveEditorWindow_->isVisible()) {
+            curveEditorWindow_->getCurveEditor().setModInfo(curveEditor_.getModInfo());
+        }
+        // Notify parent (NodeComponent) to update MiniWaveformDisplay
+        if (onCurveChanged) {
+            onCurveChanged();
+        }
+        repaint();
+    };
+    curveEditor_.onDragPreview = [this]() {
+        DBG("ModulatorEditorPanel::onDragPreview callback fired");
+        // Sync external editor during drag for fluid preview
+        if (curveEditorWindow_ && curveEditorWindow_->isVisible()) {
+            curveEditorWindow_->getCurveEditor().repaint();
+        }
+        // Notify parent for fluid MiniWaveformDisplay update
+        if (onCurveChanged) {
+            DBG("  -> calling onCurveChanged");
+            onCurveChanged();
+        } else {
+            DBG("  -> onCurveChanged NOT SET!");
+        }
         repaint();
     };
     addChildComponent(curveEditor_);
+
+    // Button to open external curve editor window
+    curveEditorButton_ = std::make_unique<magda::SvgButton>("Edit Curve", BinaryData::curve_svg,
+                                                            BinaryData::curve_svgSize);
+    curveEditorButton_->setNormalColor(DarkTheme::getSecondaryTextColour());
+    curveEditorButton_->setHoverColor(DarkTheme::getTextColour());
+    curveEditorButton_->setActiveColor(DarkTheme::getColour(DarkTheme::BACKGROUND));
+    curveEditorButton_->setActiveBackgroundColor(DarkTheme::getColour(DarkTheme::ACCENT_ORANGE));
+    curveEditorButton_->onClick = [this]() {
+        if (!curveEditorWindow_) {
+            auto* modInfo = const_cast<magda::ModInfo*>(liveModPtr_ ? liveModPtr_ : &currentMod_);
+            curveEditorWindow_ = std::make_unique<LFOCurveEditorWindow>(
+                modInfo,
+                [this]() {
+                    // Sync embedded editor when external editor changes
+                    curveEditor_.setModInfo(curveEditor_.getModInfo());
+                    if (onCurveChanged) {
+                        onCurveChanged();
+                    }
+                    repaint();
+                },
+                [this]() {
+                    // Sync embedded editor from ModInfo during external window drag
+                    curveEditor_.syncFromModInfo();
+                    // Notify parent for fluid MiniWaveformDisplay update during drag
+                    if (onCurveChanged) {
+                        onCurveChanged();
+                    }
+                    repaint();
+                });
+            curveEditorButton_->setActive(true);
+        } else if (curveEditorWindow_->isVisible()) {
+            curveEditorWindow_->setVisible(false);
+            curveEditorButton_->setActive(false);
+        } else {
+            curveEditorWindow_->setVisible(true);
+            curveEditorWindow_->toFront(true);
+            curveEditorButton_->setActive(true);
+        }
+    };
+    addChildComponent(curveEditorButton_.get());
 
     // Sync toggle button (small square button style)
     syncToggle_.setButtonText("Free");
@@ -202,14 +265,17 @@ void ModulatorEditorPanel::updateFromMod() {
     // Show/hide appropriate controls based on curve mode
     waveformCombo_.setVisible(!isCurveMode_);
 
-    // In curve mode, always show the bezier curve editor
+    // In curve mode, show the curve editor and edit button
     curveEditor_.setVisible(isCurveMode_);
+    curveEditorButton_->setVisible(isCurveMode_);
     waveformDisplay_.setVisible(!isCurveMode_);
 
     if (isCurveMode_) {
         // Pass ModInfo to curve editor for loading/saving curve points
-        curveEditor_.setModInfo(
-            const_cast<magda::ModInfo*>(liveModPtr_ ? liveModPtr_ : &currentMod_));
+        auto* modInfo = const_cast<magda::ModInfo*>(liveModPtr_ ? liveModPtr_ : &currentMod_);
+        DBG("ModulatorEditorPanel::updateFromMod - curveEditor modInfo ptr: " +
+            juce::String::toHexString((juce::int64)modInfo));
+        curveEditor_.setModInfo(modInfo);
     } else {
         // LFO mode - show waveform shape
         waveformCombo_.setSelectedId(static_cast<int>(currentMod_.waveform) + 1,
@@ -289,8 +355,14 @@ void ModulatorEditorPanel::paint(juce::Graphics& g) {
 void ModulatorEditorPanel::resized() {
     auto bounds = getLocalBounds().reduced(6);
 
-    // Name label at top
-    nameLabel_.setBounds(bounds.removeFromTop(18));
+    // Name label at top with curve edit button on right (in curve mode)
+    auto headerRow = bounds.removeFromTop(18);
+    if (isCurveMode_) {
+        int editButtonWidth = 18;
+        curveEditorButton_->setBounds(headerRow.removeFromRight(editButtonWidth));
+        headerRow.removeFromRight(4);  // Gap
+    }
+    nameLabel_.setBounds(headerRow);
     bounds.removeFromTop(6);
 
     if (!isCurveMode_) {
@@ -305,7 +377,9 @@ void ModulatorEditorPanel::resized() {
     int displayHeight = isCurveMode_ ? 70 : 46;
     auto waveformArea = bounds.removeFromTop(displayHeight);
     waveformDisplay_.setBounds(waveformArea);
-    curveEditor_.setBounds(waveformArea);
+    // Expand curve editor bounds by its padding so the curve content fills the visual area
+    // while dots can extend into the padding without clipping
+    curveEditor_.setBounds(waveformArea.expanded(curveEditor_.getPadding()));
     bounds.removeFromTop(6);
 
     // Rate row: [Sync button] [Rate slider/division combo]

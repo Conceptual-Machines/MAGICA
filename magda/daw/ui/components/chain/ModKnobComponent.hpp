@@ -24,12 +24,20 @@ class MiniWaveformDisplay : public juce::Component, private juce::Timer {
 
     void setModInfo(const magda::ModInfo* mod) {
         mod_ = mod;
+        DBG("MiniWaveformDisplay::setModInfo - mod_ ptr: " +
+            juce::String::toHexString((juce::int64)mod_));
         repaint();
     }
 
     void paint(juce::Graphics& g) override {
         if (!mod_) {
             return;
+        }
+
+        // Debug: log curvePoints size on each paint
+        if (mod_->waveform == magda::LFOWaveform::Custom && !mod_->curvePoints.empty()) {
+            DBG("MiniWaveformDisplay::paint - curvePoints[0].value=" +
+                juce::String(mod_->curvePoints[0].value));
         }
 
         auto bounds = getLocalBounds().toFloat();
@@ -118,6 +126,11 @@ class ModKnobComponent : public juce::Component, public magda::LinkModeManagerLi
     void setSelected(bool selected);
     bool isSelected() const {
         return selected_;
+    }
+
+    // Force repaint of the waveform display (for curve editor sync)
+    void repaintWaveform() {
+        waveformDisplay_.repaint();
     }
 
     // Callbacks

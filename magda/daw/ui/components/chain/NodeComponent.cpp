@@ -984,6 +984,12 @@ void NodeComponent::initializeModsMacrosPanels() {
             onModTriggerModeChangedInternal(selectedModIndex_, mode);
         }
     };
+    modulatorEditorPanel_->onCurveChanged = [this]() {
+        // Force repaint of waveform displays for immediate curve editor sync
+        if (modsPanel_) {
+            modsPanel_->repaintWaveforms();
+        }
+    };
     addChildComponent(*modulatorEditorPanel_);
 
     // Create macro editor panel

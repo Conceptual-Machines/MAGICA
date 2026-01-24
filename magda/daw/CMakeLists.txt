@@ -59,6 +59,7 @@ juce_add_binary_data(MagdaAssets
     ../../assets/icons/rack.svg
     ../../assets/icons/tree.svg
     ../../assets/icons/bezier.svg
+    ../../assets/icons/curve.svg
     # Mouse cursors
     ../../assets/icons/mouse_zoom/search.svg
     ../../assets/icons/mouse_zoom/zoom_in.svg
@@ -206,6 +207,8 @@ set(DAW_UI_SOURCES
     ui/components/chain/ModulatorEditorPanel.cpp
     ui/components/chain/MacroEditorPanel.cpp
     ui/components/chain/LFOCurveEditor.cpp
+    ui/components/chain/LFOCurveEditorWindow.cpp
+    ui/components/chain/LFOPhaseOverlay.cpp
 )
 
 # All DAW headers
