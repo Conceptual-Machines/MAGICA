@@ -418,6 +418,7 @@ void AudioBridge::updateMetering() {
 
 void AudioBridge::timerCallback() {
     // Update metering from level measurers (runs at 30 FPS on message thread)
+    static int debugCounter = 0;
 
     juce::ScopedLock lock(mappingLock_);
 
@@ -437,6 +438,12 @@ void AudioBridge::timerCallback() {
         // Read and clear audio levels from the client (returns DbTimePair)
         auto levelL = client.getAndClearAudioLevel(0);
         auto levelR = client.getAndClearAudioLevel(1);
+
+        // Debug: Print actual dB values for track 1
+        if (trackId == 1 && ++debugCounter % 30 == 0) {  // Once per second
+            std::cout << "Track 1 LevelMeasurer: " << levelL.dB << " dB / " << levelR.dB << " dB"
+                      << std::endl;
+        }
 
         // Convert from dB to linear gain (0-1)
         data.peakL = juce::Decibels::decibelsToGain(levelL.dB);
@@ -470,6 +477,8 @@ te::Plugin::Ptr AudioBridge::createToneGenerator(te::AudioTrack* track) {
         if (auto* toneGen = dynamic_cast<te::ToneGeneratorPlugin*>(plugin.get())) {
             toneGen->frequency = 440.0f;  // A4 note
             toneGen->level = 0.25f;       // Quarter amplitude for -12dB
+            std::cout << "ToneGenerator created: freq=" << toneGen->frequency
+                      << "Hz, level=" << toneGen->level << " (-12dB target)" << std::endl;
         }
     }
     return plugin;

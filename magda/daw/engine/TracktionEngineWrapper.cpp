@@ -3,6 +3,7 @@
 #include <iostream>
 
 #include "../audio/AudioBridge.hpp"
+#include "../core/DeviceInfo.hpp"
 #include "../core/TrackManager.hpp"
 
 namespace magda {
@@ -104,7 +105,24 @@ CommandResponse TracktionEngineWrapper::processCommand(const Command& command) {
 // TransportInterface implementation
 void TracktionEngineWrapper::play() {
     if (currentEdit_) {
-        // Enable test tone when playing
+        // Enable all tone generators/instruments when playing
+        if (audioBridge_) {
+            auto& tm = TrackManager::getInstance();
+            for (const auto& track : tm.getTracks()) {
+                for (const auto& element : track.chainElements) {
+                    if (std::holds_alternative<DeviceInfo>(element)) {
+                        const auto& device = std::get<DeviceInfo>(element);
+                        if (device.isInstrument && device.format == PluginFormat::Internal) {
+                            auto plugin = audioBridge_->getPlugin(device.id);
+                            if (plugin) {
+                                plugin->setEnabled(true);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         currentEdit_->getTransport().play(false);
         std::cout << "Playback started" << std::endl;
     }
@@ -114,7 +132,24 @@ void TracktionEngineWrapper::stop() {
     if (currentEdit_) {
         currentEdit_->getTransport().stop(false, false);
 
-        // Disable test tone when stopped
+        // Disable all tone generators when stopped
+        if (audioBridge_) {
+            auto& tm = TrackManager::getInstance();
+            for (const auto& track : tm.getTracks()) {
+                for (const auto& element : track.chainElements) {
+                    if (std::holds_alternative<DeviceInfo>(element)) {
+                        const auto& device = std::get<DeviceInfo>(element);
+                        if (device.isInstrument && device.format == PluginFormat::Internal) {
+                            auto plugin = audioBridge_->getPlugin(device.id);
+                            if (plugin) {
+                                plugin->setEnabled(false);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         std::cout << "Playback stopped" << std::endl;
     }
 }
