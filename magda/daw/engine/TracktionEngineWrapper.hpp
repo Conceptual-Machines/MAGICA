@@ -11,6 +11,9 @@
 
 namespace magda {
 
+// Forward declaration
+class AudioBridge;
+
 /**
  * @brief Tracktion Engine implementation of AudioEngine
  *
@@ -130,10 +133,51 @@ class TracktionEngineWrapper : public AudioEngine,
     std::vector<std::string> getAvailableEffects() const override;
     std::vector<std::string> getTrackEffects(const std::string& track_id) const override;
 
+    // =========================================================================
+    // Audio Bridge Access
+    // =========================================================================
+
+    /**
+     * @brief Get the AudioBridge for TrackManager-to-Tracktion synchronization
+     * @return Pointer to AudioBridge, or nullptr if not initialized
+     */
+    AudioBridge* getAudioBridge() {
+        return audioBridge_.get();
+    }
+    const AudioBridge* getAudioBridge() const {
+        return audioBridge_.get();
+    }
+
+    /**
+     * @brief Get the Tracktion Engine instance
+     */
+    tracktion::Engine* getEngine() {
+        return engine_.get();
+    }
+    const tracktion::Engine* getEngine() const {
+        return engine_.get();
+    }
+
+    /**
+     * @brief Get the current Edit (project)
+     */
+    tracktion::Edit* getEdit() {
+        return currentEdit_.get();
+    }
+    const tracktion::Edit* getEdit() const {
+        return currentEdit_.get();
+    }
+
   private:
     // Tracktion Engine components
     std::unique_ptr<tracktion::Engine> engine_;
     std::unique_ptr<tracktion::Edit> currentEdit_;
+
+    // Audio bridge for TrackManager synchronization
+    std::unique_ptr<AudioBridge> audioBridge_;
+
+    // Test tone generator (for Phase 1 testing)
+    tracktion::Plugin::Ptr testTonePlugin_;
 
     // Transport trigger state tracking
     bool wasPlaying_ = false;    // Previous frame's playing state

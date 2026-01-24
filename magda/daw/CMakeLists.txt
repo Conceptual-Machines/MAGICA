@@ -103,6 +103,8 @@ set(DAW_CORE_SOURCES
     core/MidiNoteCommands.cpp
     core/ParameterUtils.cpp
     engine/TracktionEngineWrapper.cpp
+    # Audio integration
+    audio/AudioBridge.cpp
     # UI components needed by tests
     ui/components/timeline/TimelineComponent.cpp
     # State management
@@ -286,6 +288,9 @@ set(DAW_HEADERS
     ui/panels/content/WaveformEditorContent.hpp
     # Audio
     audio/AudioEngineOptimizer.hpp
+    audio/AudioBridge.hpp
+    audio/MeteringBuffer.hpp
+    audio/ParameterQueue.hpp
     # Views
     ui/views/MainView.hpp
     ui/views/SessionView.hpp
@@ -403,6 +408,8 @@ target_include_directories(magda_daw
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/core
     ${CMAKE_CURRENT_SOURCE_DIR}/interfaces
+    ${CMAKE_CURRENT_SOURCE_DIR}/audio
+    ${CMAKE_CURRENT_SOURCE_DIR}/engine
     PRIVATE
     ${CMAKE_SOURCE_DIR}
 )

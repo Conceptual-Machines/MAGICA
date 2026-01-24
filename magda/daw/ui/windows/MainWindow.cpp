@@ -16,6 +16,7 @@
 #include "../views/MainView.hpp"
 #include "../views/MixerView.hpp"
 #include "../views/SessionView.hpp"
+#include "audio/AudioBridge.hpp"
 #include "core/Config.hpp"
 #include "core/LinkModeManager.hpp"
 #include "core/ModulatorEngine.hpp"
@@ -316,6 +317,46 @@ bool MainWindow::MainComponent::keyPressed(const juce::KeyPress& key) {
         juce::KeyPress('d', juce::ModifierKeys::commandModifier | juce::ModifierKeys::shiftModifier,
                        0)) {
         daw::ui::DebugDialog::show();
+        return true;
+    }
+
+    // Cmd/Ctrl+Shift+A: Audio Test - Load tone generator and play
+    if (key ==
+        juce::KeyPress('a', juce::ModifierKeys::commandModifier | juce::ModifierKeys::shiftModifier,
+                       0)) {
+        auto* teWrapper = dynamic_cast<TracktionEngineWrapper*>(audioEngine_.get());
+        if (teWrapper) {
+            auto* bridge = teWrapper->getAudioBridge();
+            if (bridge) {
+                // Get first track or create one
+                auto& tm = TrackManager::getInstance();
+                TrackId trackId;
+                if (tm.getTracks().empty()) {
+                    trackId = tm.createTrack("Audio Test", TrackType::Audio);
+                } else {
+                    trackId = tm.getTracks().front().id;
+                }
+
+                // Load a tone generator plugin
+                auto plugin = bridge->loadBuiltInPlugin(trackId, "tone");
+                if (plugin) {
+                    // Set tone generator frequency and level
+                    auto params = plugin->getAutomatableParameters();
+                    for (auto* param : params) {
+                        if (param->getParameterName().containsIgnoreCase("freq")) {
+                            param->setParameter(0.5f, juce::dontSendNotification);  // ~440Hz
+                        } else if (param->getParameterName().containsIgnoreCase("level")) {
+                            param->setParameter(0.3f, juce::dontSendNotification);  // -10dB ish
+                        }
+                    }
+                    std::cout << "Loaded ToneGeneratorPlugin on track " << trackId << std::endl;
+                }
+
+                // Start playback
+                teWrapper->play();
+                std::cout << "Audio test started - press Space to stop" << std::endl;
+            }
+        }
         return true;
     }
 
