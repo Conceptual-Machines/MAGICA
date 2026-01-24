@@ -70,8 +70,8 @@ class CurvePointComponent : public juce::Component {
     std::function<void(uint32_t, const CurveHandleData&, const CurveHandleData&)> onHandlesChanged;
 
     // Size constants
-    static constexpr int POINT_SIZE = 8;
-    static constexpr int POINT_SIZE_SELECTED = 10;
+    static constexpr int POINT_SIZE = 6;
+    static constexpr int POINT_SIZE_SELECTED = 8;
     static constexpr int HIT_SIZE = 16;
 
   private:
