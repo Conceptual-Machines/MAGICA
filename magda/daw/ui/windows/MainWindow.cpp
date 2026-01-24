@@ -260,22 +260,21 @@ void MainWindow::MainComponent::setupAudioEngineCallbacks(AudioEngine* engine) {
     mainView->getTimelineController().addAudioEngineListener(engine);
 
     // Create position timer for playhead updates (AudioEngine -> UI)
+    // Timer runs continuously and detects play/stop state changes
     positionTimer_ =
         std::make_unique<PlaybackPositionTimer>(*engine, mainView->getTimelineController());
+    positionTimer_->start();  // Start once and keep running
 
     // Wire transport callbacks - just dispatch events, TimelineController notifies audio engine
     transportPanel->onPlay = [this]() {
         mainView->getTimelineController().dispatch(StartPlaybackEvent{});
-        positionTimer_->start();
     };
 
     transportPanel->onStop = [this]() {
-        positionTimer_->stop();
         mainView->getTimelineController().dispatch(StopPlaybackEvent{});
     };
 
     transportPanel->onPause = [this]() {
-        positionTimer_->stop();
         // For now, treat pause like stop for playhead behavior
         mainView->getTimelineController().dispatch(StopPlaybackEvent{});
     };
@@ -283,7 +282,6 @@ void MainWindow::MainComponent::setupAudioEngineCallbacks(AudioEngine* engine) {
     transportPanel->onRecord = [this]() {
         // TODO: Add RecordPlaybackEvent for proper recording state
         mainView->getTimelineController().dispatch(StartPlaybackEvent{});
-        positionTimer_->start();
     };
 
     transportPanel->onLoop = [this](bool enabled) {

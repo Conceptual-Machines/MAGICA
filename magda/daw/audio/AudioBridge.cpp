@@ -472,9 +472,18 @@ void AudioBridge::updateTransportState(bool isPlaying, bool justStarted, bool ju
     justStartedFlag_.store(justStarted, std::memory_order_release);
     justLoopedFlag_.store(justLooped, std::memory_order_release);
 
-    // Process transport gating for devices in Transport trigger mode
-    // This needs to be done on the audio thread, but we can enable/disable plugins from here
-    // since Tracktion Engine's plugin enable/disable is thread-safe
+    // Log state changes for debugging
+    static bool lastPlaying = false;
+    bool stateChanged = (isPlaying != lastPlaying);
+
+    if (stateChanged) {
+        std::cout << "=== Transport state changed: " << (isPlaying ? "PLAYING" : "STOPPED")
+                  << " (justStarted=" << justStarted << ", justLooped=" << justLooped << ")"
+                  << std::endl;
+    }
+
+    // Always check all devices in Transport mode, not just on state changes
+    // This handles trigger mode changes (e.g., Free→Transport while stopped)
     juce::ScopedLock lock(mappingLock_);
 
     for (const auto& [deviceId, processor] : deviceProcessors_) {
@@ -484,12 +493,45 @@ void AudioBridge::updateTransportState(bool isPlaying, bool justStarted, bool ju
             // 0 = Free (always play), 1 = Transport (play with transport), 2 = MIDI (not
             // implemented yet)
             if (triggerMode == 1) {  // Transport mode
-                auto plugin = getPlugin(deviceId);
-                if (plugin) {
-                    plugin->setEnabled(isPlaying);
+                bool isMuted = transportMutedLevels_.find(deviceId) != transportMutedLevels_.end();
+
+                if (isPlaying && isMuted) {
+                    // Restore level when playing
+                    auto it = transportMutedLevels_.find(deviceId);
+                    if (it != transportMutedLevels_.end()) {
+                        float restoredLevel = it->second;
+                        toneProc->setLevel(restoredLevel);
+                        transportMutedLevels_.erase(it);
+                        std::cout << "    Transport PLAYING - restoring level to " << restoredLevel
+                                  << std::endl;
+                    }
+                } else if (!isPlaying && !isMuted) {
+                    // Mute when stopped - store current level first
+                    float currentLevel = toneProc->getLevel();
+                    if (currentLevel > 0.0f) {  // Only mute if not already at 0
+                        transportMutedLevels_[deviceId] = currentLevel;
+                        toneProc->setLevel(0.0f);
+                        std::cout << "    Transport STOPPED - muting level (was " << currentLevel
+                                  << ")" << std::endl;
+                    }
+                }
+            } else {
+                // Free or MIDI mode - ensure not in muted map
+                auto it = transportMutedLevels_.find(deviceId);
+                if (it != transportMutedLevels_.end()) {
+                    // Switched from Transport to Free/MIDI - restore level
+                    float restoredLevel = it->second;
+                    toneProc->setLevel(restoredLevel);
+                    transportMutedLevels_.erase(it);
+                    std::cout << "    Switched to Free mode - restoring level to " << restoredLevel
+                              << std::endl;
                 }
             }
         }
+    }
+
+    if (stateChanged) {
+        lastPlaying = isPlaying;
     }
 }
 
@@ -542,9 +584,9 @@ te::Plugin::Ptr AudioBridge::createToneGenerator(te::AudioTrack* track) {
     if (!track)
         return nullptr;
 
-    // Create tone generator plugin via PluginCache
-    // ToneGeneratorProcessor will handle parameter configuration
-    auto plugin = edit_.getPluginCache().createNewPlugin(te::ToneGeneratorPlugin::xmlTypeName, {});
+    // Create 4OSC synth plugin via PluginCache
+    // FourOscProcessor will handle parameter configuration
+    auto plugin = edit_.getPluginCache().createNewPlugin(te::FourOscPlugin::xmlTypeName, {});
     if (plugin) {
         track->pluginList.insertPlugin(plugin, -1, nullptr);
     }
@@ -585,10 +627,12 @@ te::Plugin::Ptr AudioBridge::loadDeviceAsPlugin(TrackId trackId, const DeviceInf
 
     if (device.format == PluginFormat::Internal) {
         // Map internal device types to Tracktion plugins and create processors
-        if (device.pluginId.containsIgnoreCase("tone")) {
-            plugin = createToneGenerator(track);
+        if (device.pluginId.containsIgnoreCase("4osc") ||
+            device.pluginId.containsIgnoreCase("tone")) {  // Support legacy "tone" for now
+            plugin = createToneGenerator(track);           // Now creates FourOscPlugin
             if (plugin) {
                 processor = std::make_unique<ToneGeneratorProcessor>(device.id, plugin);
+                // ToneGeneratorProcessor will configure 4OSC to use only oscillator 1
             }
         } else if (device.pluginId.containsIgnoreCase("volume")) {
             plugin = createVolumeAndPan(track);

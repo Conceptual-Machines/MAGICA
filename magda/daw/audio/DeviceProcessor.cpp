@@ -345,10 +345,13 @@ int ToneGeneratorProcessor::getOscType() const {
 }
 
 void ToneGeneratorProcessor::setTriggerMode(int mode) {
+    int oldMode = triggerMode_;
     triggerMode_ = juce::jlimit(0, 2, mode);
     DBG("ToneGen::setTriggerMode " << triggerMode_ << " (0=free, 1=transport, 2=midi)");
-    // TODO: Implement transport sync and MIDI trigger
-    // For now, this just stores the mode
+
+    // When trigger mode changes, we need to re-evaluate transport state immediately
+    // This is handled by the AudioBridge when it polls updateTriggerState()
+    // The next timer tick will apply the correct gating based on the new mode
 }
 
 int ToneGeneratorProcessor::getTriggerMode() const {

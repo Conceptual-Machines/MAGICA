@@ -2255,15 +2255,15 @@ void TrackManager::createDefaultTracks(int count) {
     if (!tracks_.empty()) {
         auto& track1 = tracks_[0];
 
-        // Add a built-in tone generator device
+        // Add a built-in 4OSC synth device (MIDI-triggered with ADSR)
         DeviceInfo device;
         device.id = nextDeviceId_++;
-        device.name = "Tone Generator";
-        device.pluginId = "tone";  // Built-in plugin ID for AudioBridge
-        device.manufacturer = "MAGDA";
+        device.name = "4OSC Synth";
+        device.pluginId = "4osc";  // Built-in 4OSC plugin ID for AudioBridge
+        device.manufacturer = "Tracktion";
         device.format = PluginFormat::Internal;
-        device.isInstrument = true;  // Generates audio
-        device.gainDb = 0.0f;        // Unity gain (Level param controls output)
+        device.isInstrument = true;  // Generates audio (MIDI synth)
+        device.gainDb = 0.0f;        // Unity gain (synth level controls output)
         device.gainValue = 1.0f;     // Linear equivalent
         track1.chainElements.push_back(makeDeviceElement(device));
 
