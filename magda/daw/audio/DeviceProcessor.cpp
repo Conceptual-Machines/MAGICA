@@ -216,9 +216,11 @@ void ToneGeneratorProcessor::setFrequency(float hz) {
         // Clamp to valid range
         hz = juce::jlimit(20.0f, 20000.0f, hz);
 
-        // ONLY set the CachedValue - don't touch the parameter
-        // The parameter normalization was causing incorrect frequency
-        tone->frequency = hz;
+        // Set via AutomatableParameter - this is the proper Tracktion Engine way
+        // The parameter will automatically sync to the CachedValue
+        if (tone->frequencyParam) {
+            tone->frequencyParam->setParameter(hz, juce::dontSendNotification);
+        }
     }
 }
 
@@ -231,8 +233,10 @@ float ToneGeneratorProcessor::getFrequency() const {
 
 void ToneGeneratorProcessor::setLevel(float level) {
     if (auto* tone = getTonePlugin()) {
-        // ONLY set the CachedValue - don't touch the parameter
-        tone->level = level;
+        // Set via AutomatableParameter - proper Tracktion Engine way
+        if (tone->levelParam) {
+            tone->levelParam->setParameter(level, juce::dontSendNotification);
+        }
     }
 }
 
@@ -249,8 +253,10 @@ void ToneGeneratorProcessor::setOscType(int type) {
         // TE enum: 0=sin, 1=triangle, 2=sawUp, 3=sawDown, 4=square, 5=noise
         float teType = (type == 0) ? 0.0f : 5.0f;  // 0→sin, 1→noise
 
-        // ONLY set the CachedValue - don't touch the parameter
-        tone->oscType = teType;
+        // Set via AutomatableParameter - proper Tracktion Engine way
+        if (tone->oscTypeParam) {
+            tone->oscTypeParam->setParameter(teType, juce::dontSendNotification);
+        }
     }
 }
 
