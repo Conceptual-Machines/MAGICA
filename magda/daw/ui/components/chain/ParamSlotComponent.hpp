@@ -5,6 +5,7 @@
 #include "core/LinkModeManager.hpp"
 #include "core/MacroInfo.hpp"
 #include "core/ModInfo.hpp"
+#include "core/ParameterInfo.hpp"
 #include "core/SelectionManager.hpp"
 #include "core/TypeIds.hpp"
 #include "ui/components/common/TextSlider.hpp"
@@ -30,6 +31,7 @@ class ParamSlotComponent : public juce::Component,
 
     void setParamName(const juce::String& name);
     void setParamValue(double value);
+    void setParameterInfo(const magda::ParameterInfo& info);  // Set full param info for formatting
     void setShowEmptyText(bool show);  // Show "-" instead of value for empty slots
     void setFonts(const juce::Font& labelFont, const juce::Font& valueFont);
 
@@ -147,6 +149,9 @@ class ParamSlotComponent : public juce::Component,
 
     juce::Label nameLabel_;
     TextSlider valueSlider_{TextSlider::Format::Decimal};
+    std::unique_ptr<juce::ComboBox> discreteCombo_;   // For discrete/choice parameters
+    std::unique_ptr<juce::ToggleButton> boolToggle_;  // For boolean parameters
+    magda::ParameterInfo paramInfo_;                  // Parameter metadata for formatting
 
     // Shift+drag state for mod amount editing
     bool isModAmountDrag_ = false;

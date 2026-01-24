@@ -356,6 +356,117 @@ void ParamSlotComponent::setShowEmptyText(bool show) {
     valueSlider_.setShowEmptyText(show);
 }
 
+void ParamSlotComponent::setParameterInfo(const magda::ParameterInfo& info) {
+    paramInfo_ = info;
+
+    // Hide all widgets first
+    valueSlider_.setVisible(false);
+    if (discreteCombo_)
+        discreteCombo_->setVisible(false);
+    if (boolToggle_)
+        boolToggle_->setVisible(false);
+
+    // Set up display based on parameter type
+    if (info.scale == magda::ParameterScale::Boolean) {
+        // Boolean parameter - show toggle button
+        if (!boolToggle_) {
+            boolToggle_ = std::make_unique<juce::ToggleButton>();
+            boolToggle_->setColour(juce::ToggleButton::textColourId, juce::Colours::white);
+            boolToggle_->setColour(juce::ToggleButton::tickColourId,
+                                   DarkTheme::getColour(DarkTheme::ACCENT_BLUE));
+            boolToggle_->onClick = [this]() {
+                if (onValueChanged) {
+                    onValueChanged(boolToggle_->getToggleState() ? 1.0 : 0.0);
+                }
+            };
+            addAndMakeVisible(*boolToggle_);
+        }
+
+        boolToggle_->setToggleState(info.currentValue >= 0.5, juce::dontSendNotification);
+        boolToggle_->setButtonText(info.currentValue >= 0.5 ? "On" : "Off");
+        boolToggle_->setVisible(true);
+
+    } else if (info.scale == magda::ParameterScale::Discrete && !info.choices.empty()) {
+        // Discrete parameter - show ComboBox
+        if (!discreteCombo_) {
+            discreteCombo_ = std::make_unique<juce::ComboBox>();
+            discreteCombo_->setColour(juce::ComboBox::backgroundColourId,
+                                      DarkTheme::getColour(DarkTheme::SURFACE));
+            discreteCombo_->setColour(juce::ComboBox::textColourId, juce::Colours::white);
+            discreteCombo_->setColour(juce::ComboBox::outlineColourId,
+                                      DarkTheme::getColour(DarkTheme::BORDER));
+            discreteCombo_->onChange = [this]() {
+                if (onValueChanged) {
+                    // Convert selection index to normalized 0-1 value
+                    int selected = discreteCombo_->getSelectedItemIndex();
+                    int numChoices = static_cast<int>(paramInfo_.choices.size());
+                    double normalized =
+                        numChoices > 1 ? static_cast<double>(selected) / (numChoices - 1) : 0.0;
+                    onValueChanged(normalized);
+                }
+            };
+            addAndMakeVisible(*discreteCombo_);
+        }
+
+        // Populate choices
+        discreteCombo_->clear();
+        int id = 1;
+        for (const auto& choice : info.choices) {
+            discreteCombo_->addItem(choice, id++);
+        }
+
+        // Set current selection from normalized value
+        int numChoices = static_cast<int>(info.choices.size());
+        int selectedIndex =
+            static_cast<int>(std::round(info.currentValue * (numChoices > 1 ? numChoices - 1 : 0)));
+        discreteCombo_->setSelectedItemIndex(juce::jlimit(0, numChoices - 1, selectedIndex),
+                                             juce::dontSendNotification);
+        discreteCombo_->setVisible(true);
+
+    } else {
+        // Continuous parameter - use slider with proper formatting
+        valueSlider_.setVisible(true);
+
+        // Set up value display formatting based on scale/unit
+        if (info.scale == magda::ParameterScale::Logarithmic && info.unit == "Hz") {
+            // Frequency - show as Hz
+            valueSlider_.setValueFormatter([this](double normalized) {
+                float hz = paramInfo_.minValue * std::pow(paramInfo_.maxValue / paramInfo_.minValue,
+                                                          static_cast<float>(normalized));
+                if (hz >= 1000.0f) {
+                    return juce::String(hz / 1000.0f, 2) + " kHz";
+                }
+                return juce::String(static_cast<int>(hz)) + " Hz";
+            });
+        } else if (info.unit == "dB") {
+            // Decibels
+            valueSlider_.setValueFormatter([this](double normalized) {
+                float db = paramInfo_.minValue + static_cast<float>(normalized) *
+                                                     (paramInfo_.maxValue - paramInfo_.minValue);
+                if (db <= -60.0f) {
+                    return juce::String("-inf");
+                }
+                return juce::String(db, 1) + " dB";
+            });
+        } else if (info.unit == "%") {
+            // Percentage
+            valueSlider_.setValueFormatter([](double normalized) {
+                return juce::String(static_cast<int>(normalized * 100)) + "%";
+            });
+        } else if (info.unit.isEmpty() && info.minValue == 0.0f && info.maxValue == 1.0f) {
+            // Generic 0-1 linear - show as percentage
+            valueSlider_.setValueFormatter([](double normalized) {
+                return juce::String(static_cast<int>(normalized * 100)) + "%";
+            });
+        } else {
+            // Default - show raw normalized value
+            valueSlider_.setValueFormatter(nullptr);
+        }
+    }
+
+    resized();
+}
+
 void ParamSlotComponent::setFonts(const juce::Font& labelFont, const juce::Font& valueFont) {
     nameLabel_.setFont(labelFont);
     valueSlider_.setFont(valueFont);
@@ -406,8 +517,16 @@ void ParamSlotComponent::resized() {
     int labelHeight = juce::jmin(12, getHeight() / 3);
     nameLabel_.setBounds(bounds.removeFromTop(labelHeight));
 
-    // Value slider takes the rest
-    valueSlider_.setBounds(bounds);
+    // Value control takes the rest - show appropriate widget
+    if (discreteCombo_ && discreteCombo_->isVisible()) {
+        discreteCombo_->setBounds(bounds);
+    } else if (boolToggle_ && boolToggle_->isVisible()) {
+        // Center the toggle button
+        auto toggleBounds = bounds.withSizeKeepingCentre(bounds.getWidth(), 20);
+        boolToggle_->setBounds(toggleBounds);
+    } else {
+        valueSlider_.setBounds(bounds);
+    }
 }
 
 void ParamSlotComponent::mouseEnter(const juce::MouseEvent& /*e*/) {

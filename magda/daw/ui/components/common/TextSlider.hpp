@@ -96,6 +96,12 @@ class TextSlider : public juce::Component, public juce::Label::Listener {
         updateLabel();
     }
 
+    // Custom value formatter - takes normalized value (0-1), returns display string
+    void setValueFormatter(std::function<juce::String(double)> formatter) {
+        valueFormatter_ = std::move(formatter);
+        updateLabel();
+    }
+
     void setShiftDragStartValue(float value) {
         shiftDragStartValue_ = value;
     }
@@ -240,11 +246,18 @@ class TextSlider : public juce::Component, public juce::Label::Listener {
     bool rightClickEditsText_ = true;
     juce::String emptyText_ = "-";
     bool showEmptyText_ = false;
+    std::function<juce::String(double)> valueFormatter_;  // Custom value formatting
 
     void updateLabel() {
         // Show empty text instead of value when disabled/empty
         if (showEmptyText_) {
             label_.setText(emptyText_, juce::dontSendNotification);
+            return;
+        }
+
+        // Use custom formatter if provided
+        if (valueFormatter_) {
+            label_.setText(valueFormatter_(value_), juce::dontSendNotification);
             return;
         }
 

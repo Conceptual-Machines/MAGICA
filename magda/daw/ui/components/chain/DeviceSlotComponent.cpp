@@ -167,10 +167,11 @@ DeviceSlotComponent::DeviceSlotComponent(const magda::DeviceInfo& device) : devi
         paramSlots_[i] = std::make_unique<ParamSlotComponent>(i);
         paramSlots_[i]->setDeviceId(device.id);
 
-        // Set param name/value from DeviceInfo.parameters if available
+        // Set param info from DeviceInfo.parameters if available
         if (i < numParams) {
             const auto& param = device.parameters[static_cast<size_t>(i)];
             paramSlots_[i]->setParamName(param.name);
+            paramSlots_[i]->setParameterInfo(param);  // Sets up proper widget and formatting
             paramSlots_[i]->setParamValue(param.currentValue);
             paramSlots_[i]->setShowEmptyText(false);
             paramSlots_[i]->setEnabled(true);
@@ -359,6 +360,7 @@ void DeviceSlotComponent::updateFromDevice(const magda::DeviceInfo& device) {
         if (i < numParams) {
             const auto& param = device.parameters[static_cast<size_t>(i)];
             paramSlots_[i]->setParamName(param.name);
+            paramSlots_[i]->setParameterInfo(param);  // Sets up proper widget and formatting
             paramSlots_[i]->setParamValue(param.currentValue);
             paramSlots_[i]->setShowEmptyText(false);
             paramSlots_[i]->setEnabled(true);
