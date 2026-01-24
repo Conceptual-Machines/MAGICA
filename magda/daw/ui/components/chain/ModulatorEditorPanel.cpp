@@ -62,17 +62,13 @@ ModulatorEditorPanel::ModulatorEditorPanel() {
         repaint();
     };
     curveEditor_.onDragPreview = [this]() {
-        DBG("ModulatorEditorPanel::onDragPreview callback fired");
         // Sync external editor during drag for fluid preview
         if (curveEditorWindow_ && curveEditorWindow_->isVisible()) {
             curveEditorWindow_->getCurveEditor().repaint();
         }
         // Notify parent for fluid MiniWaveformDisplay update
         if (onCurveChanged) {
-            DBG("  -> calling onCurveChanged");
             onCurveChanged();
-        } else {
-            DBG("  -> onCurveChanged NOT SET!");
         }
         repaint();
     };
@@ -148,6 +144,37 @@ ModulatorEditorPanel::ModulatorEditorPanel() {
         }
     };
     addChildComponent(curveEditorButton_.get());
+
+    // Curve preset selector (shown in curve mode below the name)
+    curvePresetCombo_.addItem("Triangle", static_cast<int>(magda::CurvePreset::Triangle) + 1);
+    curvePresetCombo_.addItem("Sine", static_cast<int>(magda::CurvePreset::Sine) + 1);
+    curvePresetCombo_.addItem("Ramp Up", static_cast<int>(magda::CurvePreset::RampUp) + 1);
+    curvePresetCombo_.addItem("Ramp Down", static_cast<int>(magda::CurvePreset::RampDown) + 1);
+    curvePresetCombo_.addItem("S-Curve", static_cast<int>(magda::CurvePreset::SCurve) + 1);
+    curvePresetCombo_.addItem("Exp", static_cast<int>(magda::CurvePreset::Exponential) + 1);
+    curvePresetCombo_.addItem("Log", static_cast<int>(magda::CurvePreset::Logarithmic) + 1);
+    curvePresetCombo_.setTextWhenNothingSelected("Preset");
+    curvePresetCombo_.setColour(juce::ComboBox::backgroundColourId,
+                                DarkTheme::getColour(DarkTheme::SURFACE));
+    curvePresetCombo_.setColour(juce::ComboBox::textColourId, DarkTheme::getTextColour());
+    curvePresetCombo_.setColour(juce::ComboBox::outlineColourId,
+                                DarkTheme::getColour(DarkTheme::BORDER));
+    curvePresetCombo_.setLookAndFeel(&SmallComboBoxLookAndFeel::getInstance());
+    curvePresetCombo_.onChange = [this]() {
+        int id = curvePresetCombo_.getSelectedId();
+        if (id > 0) {
+            auto preset = static_cast<magda::CurvePreset>(id - 1);
+            curveEditor_.loadPreset(preset);
+            // Sync external editor if open
+            if (curveEditorWindow_ && curveEditorWindow_->isVisible()) {
+                curveEditorWindow_->getCurveEditor().setModInfo(curveEditor_.getModInfo());
+            }
+            if (onCurveChanged) {
+                onCurveChanged();
+            }
+        }
+    };
+    addChildComponent(curvePresetCombo_);
 
     // Sync toggle button (small square button style)
     syncToggle_.setButtonText("Free");
@@ -295,16 +322,15 @@ void ModulatorEditorPanel::updateFromMod() {
     // Show/hide appropriate controls based on curve mode
     waveformCombo_.setVisible(!isCurveMode_);
 
-    // In curve mode, show the curve editor and edit button
+    // In curve mode, show the curve editor, edit button, and preset selector
     curveEditor_.setVisible(isCurveMode_);
     curveEditorButton_->setVisible(isCurveMode_);
+    curvePresetCombo_.setVisible(isCurveMode_);
     waveformDisplay_.setVisible(!isCurveMode_);
 
     if (isCurveMode_) {
         // Pass ModInfo to curve editor for loading/saving curve points
         auto* modInfo = const_cast<magda::ModInfo*>(liveModPtr_ ? liveModPtr_ : &currentMod_);
-        DBG("ModulatorEditorPanel::updateFromMod - curveEditor modInfo ptr: " +
-            juce::String::toHexString((juce::int64)modInfo));
         curveEditor_.setModInfo(modInfo);
     } else {
         // LFO mode - show waveform shape
@@ -344,10 +370,13 @@ void ModulatorEditorPanel::paint(juce::Graphics& g) {
     auto bounds = getLocalBounds().reduced(6);
     bounds.removeFromTop(18 + 6);  // Skip name label + gap
 
-    // "Waveform" label (only shown for LFO mode, not curve mode)
+    // Skip the area below name - different for curve vs LFO mode
     g.setColour(DarkTheme::getSecondaryTextColour());
     g.setFont(FontManager::getInstance().getUIFont(8.0f));
-    if (!isCurveMode_) {
+    if (isCurveMode_) {
+        bounds.removeFromTop(18 + 4);  // Skip preset combo + gap
+    } else {
+        // "Waveform" label (only shown for LFO mode)
         g.drawText("Waveform", bounds.removeFromTop(10), juce::Justification::centredLeft);
         bounds.removeFromTop(18 + 4);  // Skip waveform selector + gap
     }
@@ -398,7 +427,11 @@ void ModulatorEditorPanel::resized() {
     nameLabel_.setBounds(headerRow);
     bounds.removeFromTop(6);
 
-    if (!isCurveMode_) {
+    if (isCurveMode_) {
+        // Curve mode: show preset selector below name
+        curvePresetCombo_.setBounds(bounds.removeFromTop(18));
+        bounds.removeFromTop(4);
+    } else {
         // LFO mode: show waveform label + selector
         bounds.removeFromTop(10);  // "Waveform" label
         waveformCombo_.setBounds(bounds.removeFromTop(18));

@@ -273,25 +273,13 @@ void LFOCurveEditor::onPointDragPreview(uint32_t pointId, double newX, double ne
             modInfo_->curvePoints[i].phase = static_cast<float>(newX);
             modInfo_->curvePoints[i].value = static_cast<float>(newY);
             found = true;
-            DBG("LFOCurveEditor::onPointDragPreview - updated point " + juce::String(pointId) +
-                " at index " + juce::String((int)i) + " to (" + juce::String(newX) + ", " +
-                juce::String(newY) + ")");
-            DBG("  modInfo_ ptr: " + juce::String::toHexString((juce::int64)modInfo_) +
-                ", curvePoints.size: " + juce::String((int)modInfo_->curvePoints.size()));
             break;
         }
     }
-    if (!found) {
-        DBG("LFOCurveEditor::onPointDragPreview - point " + juce::String(pointId) + " NOT FOUND!");
-        DBG("  points_.size: " + juce::String((int)points_.size()) +
-            ", modInfo_->curvePoints.size: " + juce::String((int)modInfo_->curvePoints.size()));
-    }
+    (void)found;
 
     if (onDragPreview) {
-        DBG("LFOCurveEditor::onPointDragPreview - calling onDragPreview callback");
         onDragPreview();
-    } else {
-        DBG("LFOCurveEditor::onPointDragPreview - onDragPreview callback NOT SET!");
     }
 }
 
@@ -503,14 +491,18 @@ void LFOCurveEditor::loadPreset(CurvePreset preset) {
             addPoint(1.0, 0.0);
             break;
 
-        case CurvePreset::Sine:
-            // Approximate sine with tension curves
-            addPoint(0.0, 0.5);
-            addPoint(0.25, 1.0, 0.5);
-            addPoint(0.5, 0.5);
-            addPoint(0.75, 0.0, 0.5);
-            addPoint(1.0, 0.5);
+        case CurvePreset::Sine: {
+            // Sine wave with 5 points + tension for smooth curves
+            // Tension shapes the curve between points:
+            //   negative = ease-out (fast start, slow end)
+            //   positive = ease-in (slow start, fast end)
+            addPoint(0.0, 0.5, -0.7);  // Start at mid, rising with ease-out
+            addPoint(0.25, 1.0, 0.7);  // Peak, falling with ease-in
+            addPoint(0.5, 0.5, -0.7);  // Mid crossing, falling with ease-out
+            addPoint(0.75, 0.0, 0.7);  // Trough, rising with ease-in
+            addPoint(1.0, 0.5);        // End at mid
             break;
+        }
 
         case CurvePreset::RampUp:
             addPoint(0.0, 0.0);
@@ -523,20 +515,21 @@ void LFOCurveEditor::loadPreset(CurvePreset preset) {
             break;
 
         case CurvePreset::SCurve:
-            addPoint(0.0, 0.0);
-            addPoint(0.5, 0.5, 1.0);  // S-curve tension
+            // S-curve with tension for smooth shape
+            addPoint(0.0, 0.0, 0.8);   // Ease-in at start
+            addPoint(0.5, 0.5, -0.8);  // Ease-out toward end
             addPoint(1.0, 1.0);
             break;
 
         case CurvePreset::Exponential:
-            addPoint(0.0, 0.0);
-            addPoint(0.5, 0.1, -0.8);
+            // Exponential curve using tension
+            addPoint(0.0, 0.0, 1.2);  // Strong ease-in
             addPoint(1.0, 1.0);
             break;
 
         case CurvePreset::Logarithmic:
-            addPoint(0.0, 0.0);
-            addPoint(0.5, 0.9, 0.8);
+            // Logarithmic curve using tension
+            addPoint(0.0, 0.0, -1.2);  // Strong ease-out
             addPoint(1.0, 1.0);
             break;
 

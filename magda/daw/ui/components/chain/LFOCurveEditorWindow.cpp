@@ -165,7 +165,6 @@ void LFOCurveEditorContent::setupControls() {
         }
     };
     addAndMakeVisible(presetCombo_);
-    DBG("presetCombo_ added, visible: " + juce::String(presetCombo_.isVisible() ? "yes" : "no"));
 
     // Grid label
     gridLabel_.setText("Grid:", juce::dontSendNotification);
@@ -284,9 +283,6 @@ void LFOCurveEditorContent::resized() {
     header.reduce(6, 3);
     auto presetBounds = header.removeFromLeft(90);
     presetCombo_.setBounds(presetBounds);
-    DBG("presetCombo_ bounds: " + presetBounds.toString() +
-        ", visible: " + juce::String(presetCombo_.isVisible() ? "yes" : "no") +
-        ", parent: " + juce::String(presetCombo_.getParentComponent() ? "yes" : "no"));
 
     // Footer at bottom
     auto footer = bounds.removeFromBottom(FOOTER_HEIGHT);
@@ -332,7 +328,6 @@ void LFOCurveEditorContent::resized() {
     auto editorBounds =
         bounds.withX(bounds.getX() - padding).withWidth(bounds.getWidth() + padding * 2);
     curveEditor_.setBounds(editorBounds);
-    DBG("curveEditor_ bounds: " + editorBounds.toString());
 
     // Bring preset combo to front to ensure it's not hidden
     presetCombo_.toFront(false);

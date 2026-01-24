@@ -169,6 +169,7 @@ class ModulatorEditorPanel : public juce::Component, private juce::Timer {
     std::unique_ptr<magda::SvgButton> curveEditorButton_;      // Button to open external editor
     std::unique_ptr<LFOCurveEditorWindow> curveEditorWindow_;  // External editor window
     bool isCurveMode_ = false;                                 // True when waveform is Custom
+    juce::ComboBox curvePresetCombo_;                          // Preset selector for curve mode
     juce::TextButton syncToggle_;
     juce::ComboBox syncDivisionCombo_;
     TextSlider rateSlider_{TextSlider::Format::Decimal};
