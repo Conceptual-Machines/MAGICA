@@ -172,6 +172,7 @@ DeviceSlotComponent::DeviceSlotComponent(const magda::DeviceInfo& device) : devi
             const auto& param = device.parameters[static_cast<size_t>(i)];
             paramSlots_[i]->setParamName(param.name);
             paramSlots_[i]->setParamValue(param.currentValue);
+            paramSlots_[i]->setShowEmptyText(false);
             paramSlots_[i]->setEnabled(true);
 
             // Wire up value change callback only for valid params
@@ -189,7 +190,7 @@ DeviceSlotComponent::DeviceSlotComponent(const magda::DeviceInfo& device) : devi
         } else {
             // Empty slot - show dash and disable interaction
             paramSlots_[i]->setParamName("-");
-            paramSlots_[i]->setParamValue(0.0);
+            paramSlots_[i]->setShowEmptyText(true);
             paramSlots_[i]->setEnabled(false);
             paramSlots_[i]->onValueChanged = nullptr;  // No callback for empty slots
         }
@@ -359,6 +360,7 @@ void DeviceSlotComponent::updateFromDevice(const magda::DeviceInfo& device) {
             const auto& param = device.parameters[static_cast<size_t>(i)];
             paramSlots_[i]->setParamName(param.name);
             paramSlots_[i]->setParamValue(param.currentValue);
+            paramSlots_[i]->setShowEmptyText(false);
             paramSlots_[i]->setEnabled(true);
             paramSlots_[i]->setVisible(true);
 
@@ -368,9 +370,9 @@ void DeviceSlotComponent::updateFromDevice(const magda::DeviceInfo& device) {
                     nodePath_, i, static_cast<float>(value));
             };
         } else {
-            // Empty slot
+            // Empty slot - show dash instead of value
             paramSlots_[i]->setParamName("-");
-            paramSlots_[i]->setParamValue(0.0);
+            paramSlots_[i]->setShowEmptyText(true);
             paramSlots_[i]->setEnabled(false);
             paramSlots_[i]->onValueChanged = nullptr;
             paramSlots_[i]->setVisible(true);  // Still visible but disabled

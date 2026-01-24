@@ -352,6 +352,10 @@ void ParamSlotComponent::setParamValue(double value) {
     valueSlider_.setValue(value, juce::dontSendNotification);
 }
 
+void ParamSlotComponent::setShowEmptyText(bool show) {
+    valueSlider_.setShowEmptyText(show);
+}
+
 void ParamSlotComponent::setFonts(const juce::Font& labelFont, const juce::Font& valueFont) {
     nameLabel_.setFont(labelFont);
     valueSlider_.setFont(valueFont);

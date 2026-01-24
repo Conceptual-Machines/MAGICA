@@ -86,6 +86,16 @@ class TextSlider : public juce::Component, public juce::Label::Listener {
         rightClickEditsText_ = shouldEdit;
     }
 
+    void setEmptyText(const juce::String& text) {
+        emptyText_ = text;
+        updateLabel();
+    }
+
+    void setShowEmptyText(bool show) {
+        showEmptyText_ = show;
+        updateLabel();
+    }
+
     void setShiftDragStartValue(float value) {
         shiftDragStartValue_ = value;
     }
@@ -228,8 +238,16 @@ class TextSlider : public juce::Component, public juce::Label::Listener {
     bool isShiftDrag_ = false;
     float shiftDragStartValue_ = 0.5f;
     bool rightClickEditsText_ = true;
+    juce::String emptyText_ = "-";
+    bool showEmptyText_ = false;
 
     void updateLabel() {
+        // Show empty text instead of value when disabled/empty
+        if (showEmptyText_) {
+            label_.setText(emptyText_, juce::dontSendNotification);
+            return;
+        }
+
         juce::String text;
 
         switch (format_) {

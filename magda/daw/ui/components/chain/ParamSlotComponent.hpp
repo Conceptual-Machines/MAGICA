@@ -30,6 +30,7 @@ class ParamSlotComponent : public juce::Component,
 
     void setParamName(const juce::String& name);
     void setParamValue(double value);
+    void setShowEmptyText(bool show);  // Show "-" instead of value for empty slots
     void setFonts(const juce::Font& labelFont, const juce::Font& valueFont);
 
     // Set the device this param belongs to (for mod/macro lookups)
