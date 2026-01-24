@@ -145,8 +145,6 @@ class ModulatorEditorPanel : public juce::Component, private juce::Timer {
     std::function<void(bool tempoSync)> onTempoSyncChanged;
     std::function<void(magda::SyncDivision division)> onSyncDivisionChanged;
     std::function<void(magda::LFOTriggerMode mode)> onTriggerModeChanged;
-    std::function<void(magda::CurvePreset preset)> onCurvePresetChanged;
-    std::function<void()> onOpenCurveEditor;  // Opens curve editor in new window
 
     void paint(juce::Graphics& g) override;
     void resized() override;
@@ -163,8 +161,7 @@ class ModulatorEditorPanel : public juce::Component, private juce::Timer {
 
     // UI Components
     juce::Label nameLabel_;
-    juce::ComboBox waveformCombo_;     // LFO shape selector (Sine, Triangle, etc.)
-    juce::ComboBox curvePresetCombo_;  // Curve preset selector (for Custom waveform)
+    juce::ComboBox waveformCombo_;  // LFO shape selector (Sine, Triangle, etc.)
     WaveformDisplay waveformDisplay_;
     magda::LFOCurveEditor curveEditor_;  // Custom waveform editor
     bool isCurveMode_ = false;           // True when waveform is Custom

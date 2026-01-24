@@ -984,16 +984,6 @@ void NodeComponent::initializeModsMacrosPanels() {
             onModTriggerModeChangedInternal(selectedModIndex_, mode);
         }
     };
-    modulatorEditorPanel_->onCurvePresetChanged = [this](magda::CurvePreset preset) {
-        if (selectedModIndex_ >= 0) {
-            onModCurvePresetChangedInternal(selectedModIndex_, preset);
-        }
-    };
-    modulatorEditorPanel_->onOpenCurveEditor = [this]() {
-        if (selectedModIndex_ >= 0) {
-            onOpenCurveEditorInternal(selectedModIndex_);
-        }
-    };
     addChildComponent(*modulatorEditorPanel_);
 
     // Create macro editor panel

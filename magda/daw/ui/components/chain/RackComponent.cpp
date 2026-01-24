@@ -630,10 +630,6 @@ void RackComponent::onModTriggerModeChangedInternal(int modIndex, magda::LFOTrig
     magda::TrackManager::getInstance().setRackModTriggerMode(rackPath_, modIndex, mode);
 }
 
-void RackComponent::onModCurvePresetChangedInternal(int modIndex, magda::CurvePreset preset) {
-    magda::TrackManager::getInstance().setRackModCurvePreset(rackPath_, modIndex, preset);
-}
-
 void RackComponent::onMacroValueChangedInternal(int macroIndex, float value) {
     magda::TrackManager::getInstance().setRackMacroValue(rackPath_, macroIndex, value);
 

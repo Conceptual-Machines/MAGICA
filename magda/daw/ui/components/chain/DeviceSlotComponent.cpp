@@ -579,10 +579,6 @@ void DeviceSlotComponent::onModTriggerModeChangedInternal(int modIndex,
     magda::TrackManager::getInstance().setDeviceModTriggerMode(nodePath_, modIndex, mode);
 }
 
-void DeviceSlotComponent::onModCurvePresetChangedInternal(int modIndex, magda::CurvePreset preset) {
-    magda::TrackManager::getInstance().setDeviceModCurvePreset(nodePath_, modIndex, preset);
-}
-
 void DeviceSlotComponent::onMacroValueChangedInternal(int macroIndex, float value) {
     magda::TrackManager::getInstance().setDeviceMacroValue(nodePath_, macroIndex, value);
     updateParamModulation();  // Refresh param indicators to show new value

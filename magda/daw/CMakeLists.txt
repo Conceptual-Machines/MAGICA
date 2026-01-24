@@ -179,10 +179,12 @@ set(DAW_UI_SOURCES
     ui/components/pianoroll/PianoRollGridComponent.cpp
     ui/components/pianoroll/PianoRollKeyboard.cpp
     ui/components/pianoroll/VelocityLaneComponent.cpp
+    # Components - Common Curve Editor
+    ui/components/common/curve/CurveEditorBase.cpp
+    ui/components/common/curve/CurvePointComponent.cpp
+    ui/components/common/curve/CurveTensionHandle.cpp
+    ui/components/common/curve/CurveBezierHandle.cpp
     # Components - Automation
-    ui/components/automation/AutomationPointComponent.cpp
-    ui/components/automation/BezierHandleComponent.cpp
-    ui/components/automation/TensionHandleComponent.cpp
     ui/components/automation/AutomationCurveEditor.cpp
     ui/components/automation/AutomationLaneComponent.cpp
     ui/components/automation/AutomationClipComponent.cpp
@@ -203,6 +205,7 @@ set(DAW_UI_SOURCES
     ui/components/chain/ModsPanelComponent.cpp
     ui/components/chain/ModulatorEditorPanel.cpp
     ui/components/chain/MacroEditorPanel.cpp
+    ui/components/chain/LFOCurveEditor.cpp
 )
 
 # All DAW headers
@@ -329,6 +332,7 @@ set(DAW_HEADERS
     ui/components/chain/ModsPanelComponent.hpp
     ui/components/chain/ModulatorEditorPanel.hpp
     ui/components/chain/MacroEditorPanel.hpp
+    ui/components/chain/LFOCurveEditor.hpp
     # Core - Macro and Mod
     core/MacroInfo.hpp
     core/ModInfo.hpp
@@ -339,10 +343,13 @@ set(DAW_HEADERS
     core/AutomationTypes.hpp
     core/AutomationInfo.hpp
     core/AutomationManager.hpp
+    # Components - Common Curve Editor
+    ui/components/common/curve/CurveTypes.hpp
+    ui/components/common/curve/CurveEditorBase.hpp
+    ui/components/common/curve/CurvePointComponent.hpp
+    ui/components/common/curve/CurveTensionHandle.hpp
+    ui/components/common/curve/CurveBezierHandle.hpp
     # Components - Automation
-    ui/components/automation/AutomationPointComponent.hpp
-    ui/components/automation/BezierHandleComponent.hpp
-    ui/components/automation/TensionHandleComponent.hpp
     ui/components/automation/AutomationCurveEditor.hpp
     ui/components/automation/AutomationLaneComponent.hpp
     ui/components/automation/AutomationClipComponent.hpp
@@ -420,6 +427,7 @@ target_include_directories(magda_daw_app
     ${CMAKE_CURRENT_SOURCE_DIR}/ui/components/pianoroll
     ${CMAKE_CURRENT_SOURCE_DIR}/ui/components/chain
     ${CMAKE_CURRENT_SOURCE_DIR}/ui/components/automation
+    ${CMAKE_CURRENT_SOURCE_DIR}/ui/components/common/curve
     ${CMAKE_SOURCE_DIR}
 )
 

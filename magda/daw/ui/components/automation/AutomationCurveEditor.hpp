@@ -6,13 +6,11 @@
 #include <memory>
 #include <vector>
 
-#include "AutomationPointComponent.hpp"
-#include "BezierHandleComponent.hpp"
-#include "TensionHandleComponent.hpp"
 #include "core/AutomationInfo.hpp"
 #include "core/AutomationManager.hpp"
 #include "core/AutomationTypes.hpp"
 #include "core/SelectionManager.hpp"
+#include "ui/components/common/curve/CurveEditorBase.hpp"
 
 namespace magda {
 
@@ -20,26 +18,20 @@ namespace magda {
  * @brief Curve editing surface for automation data
  *
  * Renders automation curves (linear, bezier, step) and manages
- * AutomationPointComponents. Supports drawing tools: Select, Pencil, Line.
+ * point components. Supports drawing tools: Select, Pencil, Line.
  * Double-click to add point, Delete to remove.
+ *
+ * Extends CurveEditorBase with automation-specific functionality:
+ * - Time-based X coordinate (seconds)
+ * - Integration with AutomationManager for data persistence
+ * - SelectionManager integration for multi-point selection
  */
-class AutomationCurveEditor : public juce::Component,
+class AutomationCurveEditor : public CurveEditorBase,
                               public AutomationManagerListener,
                               public SelectionManagerListener {
   public:
-    AutomationCurveEditor(AutomationLaneId laneId);
+    explicit AutomationCurveEditor(AutomationLaneId laneId);
     ~AutomationCurveEditor() override;
-
-    // Component
-    void paint(juce::Graphics& g) override;
-    void resized() override;
-
-    // Mouse interaction
-    void mouseDown(const juce::MouseEvent& e) override;
-    void mouseDrag(const juce::MouseEvent& e) override;
-    void mouseUp(const juce::MouseEvent& e) override;
-    void mouseDoubleClick(const juce::MouseEvent& e) override;
-    bool keyPressed(const juce::KeyPress& key) override;
 
     // AutomationManagerListener
     void automationLanesChanged() override;
@@ -58,12 +50,9 @@ class AutomationCurveEditor : public juce::Component,
         return laneId_;
     }
 
-    void setDrawMode(AutomationDrawMode mode) {
-        drawMode_ = mode;
-    }
-    AutomationDrawMode getDrawMode() const {
-        return drawMode_;
-    }
+    // Draw mode using automation-specific type (delegates to base)
+    void setDrawMode(AutomationDrawMode mode);
+    AutomationDrawMode getAutomationDrawMode() const;
 
     // Coordinate conversion
     void setPixelsPerSecond(double pps) {
@@ -73,16 +62,14 @@ class AutomationCurveEditor : public juce::Component,
         return pixelsPerSecond_;
     }
 
-    double getPixelsPerValue() const {
-        return getHeight() > 0 ? getHeight() : 100.0;
+    // CurveEditorBase coordinate interface
+    double getPixelsPerX() const override {
+        return pixelsPerSecond_;
     }
+    double pixelToX(int px) const override;
+    int xToPixel(double x) const override;
 
-    double pixelToTime(int x) const;
-    int timeToPixel(double time) const;
-    double pixelToValue(int y) const;
-    int valueToPixel(double value) const;
-
-    // Snapping
+    // Snapping (uses base class snapXToGrid)
     std::function<double(double)> snapTimeToGrid;
 
     // Clip mode (for clip-based automation)
@@ -96,50 +83,38 @@ class AutomationCurveEditor : public juce::Component,
         clipOffset_ = offset;
     }
 
+    // CurveEditorBase data access
+    const std::vector<CurvePoint>& getPoints() const override;
+
+  protected:
+    // CurveEditorBase data mutation callbacks
+    void onPointAdded(double x, double y, CurveType curveType) override;
+    void onPointMoved(uint32_t pointId, double newX, double newY) override;
+    void onPointDeleted(uint32_t pointId) override;
+    void onPointSelected(uint32_t pointId) override;
+    void onTensionChanged(uint32_t pointId, double tension) override;
+    void onHandlesChanged(uint32_t pointId, const CurveHandleData& inHandle,
+                          const CurveHandleData& outHandle) override;
+
+    void syncSelectionState() override;
+    void rebuildPointComponents() override;
+
   private:
     AutomationLaneId laneId_;
     AutomationClipId clipId_ = INVALID_AUTOMATION_CLIP_ID;
     double clipOffset_ = 0.0;
-
-    AutomationDrawMode drawMode_ = AutomationDrawMode::Select;
     double pixelsPerSecond_ = 100.0;
 
-    std::vector<std::unique_ptr<AutomationPointComponent>> pointComponents_;
-    std::vector<std::unique_ptr<BezierHandleComponent>> handleComponents_;
-    std::vector<std::unique_ptr<TensionHandleComponent>> tensionHandles_;
+    // Cached curve points (converted from AutomationPoints)
+    mutable std::vector<CurvePoint> cachedPoints_;
+    mutable bool pointsCacheDirty_ = true;
 
-    // Drawing state
-    bool isDrawing_ = false;
-    std::vector<juce::Point<int>> drawingPath_;
-    juce::Point<int> lineStartPoint_;
-
-    // Drag preview state
-    AutomationPointId previewPointId_ = INVALID_AUTOMATION_POINT_ID;
-    double previewTime_ = 0.0;
-    double previewValue_ = 0.0;
-
-    // Tension preview state
-    AutomationPointId tensionPreviewPointId_ = INVALID_AUTOMATION_POINT_ID;
-    double tensionPreviewValue_ = 0.0;
-
-    // Rebuild
-    void rebuildPointComponents();
-    void updatePointPositions();
-    void updateTensionHandlePositions();  // For preview updates during point drag
-    void syncSelectionState();
-
-    // Drawing
-    void paintCurve(juce::Graphics& g);
-    void paintGrid(juce::Graphics& g);
-    void paintDrawingPreview(juce::Graphics& g);
-
-    // Point access
-    const std::vector<AutomationPoint>& getPoints() const;
-    void addPointAt(double time, double value, AutomationCurveType curveType);
+    void updatePointsCache() const;
     void deleteSelectedPoints();
 
-    // Pencil drawing
-    void createPointsFromDrawingPath();
+    // Convert between AutomationCurveType and CurveType
+    static CurveType toCurveType(AutomationCurveType type);
+    static AutomationCurveType toAutomationCurveType(CurveType type);
 };
 
 }  // namespace magda

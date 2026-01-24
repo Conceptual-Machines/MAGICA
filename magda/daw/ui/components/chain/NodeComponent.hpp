@@ -257,8 +257,6 @@ class NodeComponent : public juce::Component, public magda::SelectionManagerList
                                            magda::LFOWaveform /*waveform*/) {}
     virtual void onModRemoveRequestedInternal(int /*modIndex*/) {}
     virtual void onModEnableToggledInternal(int /*modIndex*/, bool /*enabled*/) {}
-    virtual void onModCurvePresetChangedInternal(int /*modIndex*/, magda::CurvePreset /*preset*/) {}
-    virtual void onOpenCurveEditorInternal(int /*modIndex*/) {}
 
     // Virtual callbacks for page management (subclasses implement to persist)
     virtual void onModPageAddRequested(int /*itemsToAdd*/) {}
