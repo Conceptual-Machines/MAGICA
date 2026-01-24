@@ -176,6 +176,16 @@ ModulatorEditorPanel::ModulatorEditorPanel() {
     };
     addChildComponent(curvePresetCombo_);
 
+    // Save preset button (shown in curve mode next to preset combo)
+    savePresetButton_ = std::make_unique<magda::SvgButton>("Save Preset", BinaryData::save_svg,
+                                                           BinaryData::save_svgSize);
+    savePresetButton_->setNormalColor(DarkTheme::getSecondaryTextColour());
+    savePresetButton_->setHoverColor(DarkTheme::getTextColour());
+    savePresetButton_->onClick = [this]() {
+        // TODO: Show save preset dialog
+    };
+    addChildComponent(savePresetButton_.get());
+
     // Sync toggle button (small square button style)
     syncToggle_.setButtonText("Free");
     syncToggle_.setColour(juce::TextButton::buttonColourId,
@@ -322,10 +332,11 @@ void ModulatorEditorPanel::updateFromMod() {
     // Show/hide appropriate controls based on curve mode
     waveformCombo_.setVisible(!isCurveMode_);
 
-    // In curve mode, show the curve editor, edit button, and preset selector
+    // In curve mode, show the curve editor, edit button, preset selector, and save button
     curveEditor_.setVisible(isCurveMode_);
     curveEditorButton_->setVisible(isCurveMode_);
     curvePresetCombo_.setVisible(isCurveMode_);
+    savePresetButton_->setVisible(isCurveMode_);
     waveformDisplay_.setVisible(!isCurveMode_);
 
     if (isCurveMode_) {
@@ -428,8 +439,12 @@ void ModulatorEditorPanel::resized() {
     bounds.removeFromTop(6);
 
     if (isCurveMode_) {
-        // Curve mode: show preset selector below name
-        curvePresetCombo_.setBounds(bounds.removeFromTop(18));
+        // Curve mode: show preset selector + save button below name
+        auto presetRow = bounds.removeFromTop(18);
+        int saveButtonWidth = 18;
+        savePresetButton_->setBounds(presetRow.removeFromRight(saveButtonWidth));
+        presetRow.removeFromRight(4);  // Gap
+        curvePresetCombo_.setBounds(presetRow);
         bounds.removeFromTop(4);
     } else {
         // LFO mode: show waveform label + selector

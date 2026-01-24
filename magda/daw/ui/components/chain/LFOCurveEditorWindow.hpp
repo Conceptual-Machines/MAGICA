@@ -6,6 +6,7 @@
 
 #include "LFOCurveEditor.hpp"
 #include "core/ModInfo.hpp"
+#include "ui/components/common/SvgButton.hpp"
 #include "ui/components/common/TextSlider.hpp"
 
 namespace magda::daw::ui {
@@ -43,8 +44,9 @@ class LFOCurveEditorContent : public juce::Component {
     juce::TextButton loopOneShotToggle_;
     juce::TextButton msegToggle_;
 
-    // Preset selector
+    // Preset selector and save button
     juce::ComboBox presetCombo_;
+    std::unique_ptr<magda::SvgButton> savePresetButton_;
 
     // Grid controls
     juce::Label gridLabel_;

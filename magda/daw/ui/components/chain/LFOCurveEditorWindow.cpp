@@ -166,6 +166,16 @@ void LFOCurveEditorContent::setupControls() {
     };
     addAndMakeVisible(presetCombo_);
 
+    // Save preset button
+    savePresetButton_ = std::make_unique<magda::SvgButton>("Save Preset", BinaryData::save_svg,
+                                                           BinaryData::save_svgSize);
+    savePresetButton_->setNormalColor(DarkTheme::getSecondaryTextColour());
+    savePresetButton_->setHoverColor(DarkTheme::getTextColour());
+    savePresetButton_->onClick = [this]() {
+        // TODO: Show save preset dialog
+    };
+    addAndMakeVisible(savePresetButton_.get());
+
     // Grid label
     gridLabel_.setText("Grid:", juce::dontSendNotification);
     gridLabel_.setFont(FontManager::getInstance().getUIFont(9.0f));
@@ -278,11 +288,12 @@ void LFOCurveEditorContent::paint(juce::Graphics& g) {
 void LFOCurveEditorContent::resized() {
     auto bounds = getLocalBounds();
 
-    // Header at top with preset selector
+    // Header at top with preset selector and save button
     auto header = bounds.removeFromTop(HEADER_HEIGHT);
     header.reduce(6, 3);
-    auto presetBounds = header.removeFromLeft(90);
-    presetCombo_.setBounds(presetBounds);
+    presetCombo_.setBounds(header.removeFromLeft(90));
+    header.removeFromLeft(4);  // Gap
+    savePresetButton_->setBounds(header.removeFromLeft(18));
 
     // Footer at bottom
     auto footer = bounds.removeFromBottom(FOOTER_HEIGHT);

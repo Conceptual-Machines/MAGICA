@@ -60,6 +60,7 @@ juce_add_binary_data(MagdaAssets
     ../../assets/icons/tree.svg
     ../../assets/icons/bezier.svg
     ../../assets/icons/curve.svg
+    ../../assets/icons/save.svg
     # Mouse cursors
     ../../assets/icons/mouse_zoom/search.svg
     ../../assets/icons/mouse_zoom/zoom_in.svg
