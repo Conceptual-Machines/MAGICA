@@ -348,7 +348,7 @@ class AudioBridge : public TrackManagerListener, public juce::Timer {
 
     // Plugin creation helpers
     te::Plugin::Ptr createToneGenerator(te::AudioTrack* track);
-    te::Plugin::Ptr createVolumeAndPan(te::AudioTrack* track);
+    // Note: createVolumeAndPan removed - track volume is separate infrastructure
     te::Plugin::Ptr createLevelMeter(te::AudioTrack* track);
     te::Plugin::Ptr createFourOscSynth(te::AudioTrack* track);
 

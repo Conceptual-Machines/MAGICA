@@ -144,8 +144,8 @@ te::Plugin::Ptr AudioBridge::loadBuiltInPlugin(TrackId trackId, const juce::Stri
 
     if (type.equalsIgnoreCase("tone") || type.equalsIgnoreCase("tonegenerator")) {
         plugin = createToneGenerator(track);
-    } else if (type.equalsIgnoreCase("volume") || type.equalsIgnoreCase("volumeandpan")) {
-        plugin = createVolumeAndPan(track);
+        // Note: "volume" is NOT a device type - track volume is separate infrastructure
+        // managed by ensureVolumePluginPosition() and controlled via TrackManager
     } else if (type.equalsIgnoreCase("meter") || type.equalsIgnoreCase("levelmeter")) {
         plugin = createLevelMeter(track);
     } else if (type.equalsIgnoreCase("delay")) {
@@ -638,17 +638,8 @@ te::Plugin::Ptr AudioBridge::createToneGenerator(te::AudioTrack* track) {
     return plugin;
 }
 
-te::Plugin::Ptr AudioBridge::createVolumeAndPan(te::AudioTrack* track) {
-    if (!track)
-        return nullptr;
-
-    // VolumeAndPanPlugin has create() that returns ValueTree
-    auto plugin = edit_.getPluginCache().createNewPlugin(te::VolumeAndPanPlugin::create());
-    if (plugin) {
-        track->pluginList.insertPlugin(plugin, -1, nullptr);
-    }
-    return plugin;
-}
+// Note: createVolumeAndPan removed - track volume is now separate infrastructure
+// managed by ensureVolumePluginPosition(), not a user device
 
 te::Plugin::Ptr AudioBridge::createLevelMeter(te::AudioTrack* track) {
     if (!track)
@@ -701,11 +692,9 @@ te::Plugin::Ptr AudioBridge::loadDeviceAsPlugin(TrackId trackId, const DeviceInf
                 // TODO: Create FourOscProcessor to manage all 4 oscillators + ADSR + filter
                 processor = std::make_unique<DeviceProcessor>(device.id, plugin);
             }
-        } else if (device.pluginId.containsIgnoreCase("volume")) {
-            plugin = createVolumeAndPan(track);
-            if (plugin) {
-                processor = std::make_unique<VolumeProcessor>(device.id, plugin);
-            }
+            // Note: "volume" devices are NOT created here - track volume is separate infrastructure
+            // managed by ensureVolumePluginPosition() and controlled via
+            // TrackManager::setTrackVolume()
         } else if (device.pluginId.containsIgnoreCase("meter")) {
             plugin = createLevelMeter(track);
             // No processor for meter - it's just for measurement
