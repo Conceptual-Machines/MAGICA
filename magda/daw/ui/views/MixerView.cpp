@@ -32,6 +32,9 @@ float dbToGain(float db) {
     return std::pow(10.0f, db / 20.0f);
 }
 
+// Exponent for power curve scaling - lower values spread out the bottom labels more
+constexpr float METER_CURVE_EXPONENT = 2.0f;
+
 // Convert dB to normalized meter position (0-1) with power curve
 // Used consistently for meters, labels, and faders across the app
 float dbToMeterPos(float db) {
@@ -41,7 +44,7 @@ float dbToMeterPos(float db) {
         return 1.0f;
 
     float normalized = (db - MIN_DB) / (MAX_DB - MIN_DB);
-    return std::pow(normalized, 3.0f);
+    return std::pow(normalized, METER_CURVE_EXPONENT);
 }
 
 // Convert meter position back to dB (inverse of dbToMeterPos)
@@ -51,8 +54,7 @@ float meterPosToDb(float pos) {
     if (pos >= 1.0f)
         return MAX_DB;
 
-    // Inverse of x^3 is x^(1/3)
-    float normalized = std::pow(pos, 1.0f / 3.0f);
+    float normalized = std::pow(pos, 1.0f / METER_CURVE_EXPONENT);
     return MIN_DB + normalized * (MAX_DB - MIN_DB);
 }
 
