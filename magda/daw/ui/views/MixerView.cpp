@@ -66,6 +66,19 @@ float faderPosToDb(float pos) {
         return UNITY_DB + ((pos - 0.75f) / 0.25f) * (MAX_DB - UNITY_DB);
     }
 }
+
+// Convert dB to normalized meter position (0-1) with power curve
+// Matches track meter scaling for visual consistency across all views
+float dbToMeterPos(float db) {
+    if (db <= MIN_DB)
+        return 0.0f;
+    if (db >= MAX_DB)
+        return 1.0f;
+
+    // Normalize to 0-1 range, then apply power curve
+    float normalized = (db - MIN_DB) / (MAX_DB - MIN_DB);
+    return std::pow(normalized, 3.0f);
+}
 }  // namespace
 
 // Stereo level meter component (L/R bars)
@@ -120,8 +133,8 @@ class MixerView::ChannelStrip::LevelMeter : public juce::Component {
         g.setColour(DarkTheme::getColour(DarkTheme::SURFACE));
         g.fillRoundedRectangle(bounds, 1.0f);
 
-        // Meter fill (using dB-scaled level for display)
-        float displayLevel = dbToFaderPos(gainToDb(level));
+        // Meter fill (using same scaling as arrangement view meters)
+        float displayLevel = dbToMeterPos(gainToDb(level));
         float meterHeight = bounds.getHeight() * displayLevel;
         auto fillBounds = bounds;
         fillBounds = fillBounds.removeFromBottom(meterHeight);
