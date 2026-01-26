@@ -9,7 +9,7 @@
 
 namespace magda {
 
-constexpr int MODS_PER_PAGE = 4;
+constexpr int MODS_PER_PAGE = 8;
 constexpr int DEFAULT_MOD_PAGES = 2;
 constexpr int NUM_MODS = MODS_PER_PAGE * DEFAULT_MOD_PAGES;
 
@@ -239,10 +239,10 @@ using ModArray = std::vector<ModInfo>;
 /**
  * @brief Initialize a ModArray with default values
  *
- * By default, creates an empty array. Users add mods via + button.
- * Pass numMods > 0 to pre-populate (for testing or legacy support).
+ * By default, creates NUM_MODS (8) mods.
+ * Pass numMods = 0 to start with empty array.
  */
-inline ModArray createDefaultMods(int numMods = 0) {
+inline ModArray createDefaultMods(int numMods = NUM_MODS) {
     ModArray mods;
     mods.reserve(numMods);
     for (int i = 0; i < numMods; ++i) {

@@ -103,8 +103,10 @@ set(DAW_CORE_SOURCES
     core/MidiNoteCommands.cpp
     core/ParameterUtils.cpp
     engine/TracktionEngineWrapper.cpp
+    engine/MagdaUIBehaviour.cpp
     engine/PluginScanner.cpp
     engine/PluginScanCoordinator.cpp
+    engine/PluginWindowManager.cpp
     # Audio integration
     audio/AudioBridge.cpp
     audio/DeviceProcessor.cpp
@@ -248,6 +250,7 @@ set(DAW_HEADERS
     core/MidiNoteCommands.hpp
     engine/AudioEngine.hpp
     engine/TracktionEngineWrapper.hpp
+    engine/MagdaUIBehaviour.hpp
     engine/PlaybackPositionTimer.hpp
     # Interfaces
     interfaces/clip_interface.hpp
@@ -397,6 +400,9 @@ target_link_libraries(magda_daw
     juce::juce_gui_basics
     tracktion::tracktion_engine
     MagdaAssets
+    # Link GTK/WebKit and curl dependencies on Linux
+    $<$<PLATFORM_ID:Linux>:juce::pkgconfig_JUCE_BROWSER_LINUX_DEPS>
+    $<$<PLATFORM_ID:Linux>:juce::pkgconfig_JUCE_CURL_LINUX_DEPS>
 )
 
 # Enable plugin hosting for external VST3/AU plugins
@@ -417,6 +423,9 @@ target_link_libraries(magda_daw_app
     juce::juce_audio_processors
     juce::juce_audio_utils
     tracktion::tracktion_engine
+    # Link GTK/WebKit and curl dependencies on Linux
+    $<$<PLATFORM_ID:Linux>:juce::pkgconfig_JUCE_BROWSER_LINUX_DEPS>
+    $<$<PLATFORM_ID:Linux>:juce::pkgconfig_JUCE_CURL_LINUX_DEPS>
 )
 
 # Enable plugin hosting for the app target as well
@@ -493,12 +502,15 @@ target_link_libraries(magda_plugin_scanner
     juce::juce_events
     juce::juce_audio_basics
     juce::juce_audio_processors
+    # Link curl dependencies on Linux for networking
+    $<$<PLATFORM_ID:Linux>:juce::pkgconfig_JUCE_CURL_LINUX_DEPS>
 )
 
 target_compile_definitions(magda_plugin_scanner
     PRIVATE
     JUCE_PLUGINHOST_VST3=1
     JUCE_PLUGINHOST_AU=1
+    JUCE_WEB_BROWSER=0
 )
 
 # Link AudioUnit framework for AU plugin hosting on macOS

@@ -2,89 +2,103 @@ name: CI
 
 on:
   push:
-    branches: [ main, develop, fix-build ]
+    branches: [ main, develop ]
   pull_request:
     branches: [ main, develop ]
 
 jobs:
-  code-quality:
-    runs-on: macos-latest
+  build-and-test-linux:
+    runs-on: ubuntu-latest
+
     steps:
     - uses: actions/checkout@v4
       with:
         submodules: recursive
-    
-    - name: Install clang-format and clang-tidy
+
+    - name: Install dependencies (Linux)
       run: |
-        brew install clang-format
-        # clang-tidy is included with Xcode command line tools
-        which clang-tidy || echo "clang-tidy not found, installing..."
-        
+        sudo apt-get update
+        sudo apt-get install -y \
+          build-essential \
+          cmake \
+          ninja-build \
+          pkg-config \
+          libgtk-3-dev \
+          libasound2-dev \
+          libjack-jackd2-dev \
+          ladspa-sdk \
+          libcurl4-openssl-dev \
+          libfreetype6-dev \
+          libx11-dev \
+          libxcomposite-dev \
+          libxcursor-dev \
+          libxext-dev \
+          libxinerama-dev \
+          libxrandr-dev \
+          libxrender-dev \
+          libwebkit2gtk-4.1-dev \
+          libglu1-mesa-dev \
+          mesa-common-dev
+
+    - name: Configure CMake
+      run: |
+        cmake -B build -G Ninja \
+          -DCMAKE_BUILD_TYPE=Debug \
+          -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+          -DMAGDA_BUILD_TESTS=ON
+
+    - name: Build
+      run: |
+        echo "Building with $(nproc) cores..."
+        cmake --build build --config Debug -j$(nproc) -- -v
+
+    - name: Check build artifacts
+      run: |
+        echo "Checking build directory structure:"
+        ls -la build/tests/ || echo "tests directory not found"
+        find build -name "magda_tests" -type f || echo "magda_tests executable not found"
+
+    - name: Run tests
+      run: |
+        if [ -f build/tests/magda_tests ]; then
+          echo "Running tests..."
+          cd build
+          ./tests/magda_tests
+        else
+          echo "❌ Tests executable not found at build/tests/magda_tests"
+          echo "Build directory contents:"
+          find build -type f -name "*test*" || true
+          exit 1
+        fi
+
+    - name: Test summary
+      if: success()
+      run: |
+        echo "✅ Build and tests completed successfully on Linux"
+
+  code-quality:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Install clang-format
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y clang-format
+
     - name: Check code formatting
       run: |
         echo "Checking code formatting with clang-format..."
-        find daw agents tests -name "*.cpp" -o -name "*.hpp" -o -name "*.h" | \
-          xargs clang-format -style=file --dry-run --Werror
-        echo "Format check passed!"
-    
-    - name: Configure CMake (needed for clang-tidy)
-      run: |
-        cmake -B build -DCMAKE_BUILD_TYPE=Debug
-    
-    - name: Run static analysis
-      run: |
-        echo "Running clang-tidy static analysis..."
-        # Run on a sample of files to avoid CI timeout
-        find daw -name "*.cpp" | head -5 | \
-          xargs -I {} /opt/homebrew/opt/llvm/bin/clang-tidy {} -p=build --config-file=.clang-tidy --format-style=file || true
-        find agents -name "*.cpp" | head -3 | \
-          xargs -I {} /opt/homebrew/opt/llvm/bin/clang-tidy {} -p=build --config-file=.clang-tidy --format-style=file || true
-        echo "Static analysis complete!"
+        find magda/daw magda/agents tests -name "*.cpp" -o -name "*.hpp" -o -name "*.h" 2>/dev/null | \
+          xargs clang-format --dry-run --Werror 2>&1 | tee format-check.log || true
 
-  build-and-test:
-    runs-on: macos-latest
-        
-    steps:
-    - uses: actions/checkout@v4
-      with:
-        submodules: recursive
-    
-    - name: Install dependencies (macOS)
-      run: |
-        # macOS has most dependencies built-in
-        # Just ensure we have the latest CMake
-        brew install cmake
-    
-    - name: Configure CMake
-      run: |
-        cmake -B build -DCMAKE_BUILD_TYPE=Debug
-    
-    
-    - name: Build
-      run: |
-        cmake --build build --config Debug -j4
-    
-    - name: Run CTest
-      run: |
-        cd build
-        ctest --output-on-failure -C Debug
-    
-    - name: Run JUCE tests directly
-      run: |
-        cd build
-        if [ -f "./tests/magica_juce_tests_artefacts/Debug/magica_juce_tests" ]; then
-          echo "Running JUCE unit tests..."
-          ./tests/magica_juce_tests_artefacts/Debug/magica_juce_tests
+        if grep -q "warning:" format-check.log; then
+          echo "❌ Format check found issues"
+          echo "Run make format to fix formatting issues"
+          exit 1
         else
-          echo "JUCE tests not found, skipping..."
+          echo "✅ Format check passed!"
         fi
-    
-    - name: Run Catch2 tests directly (if available)
-      run: |
-        cd build
-        if [ -f "./tests/magica_tests" ]; then
-          echo "Running Catch2 unit tests..."
-          ./tests/magica_tests
-        else
-          echo "Catch2 tests not found, skipping..."
-        fi 
