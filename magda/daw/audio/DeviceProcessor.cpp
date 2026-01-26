@@ -1,6 +1,7 @@
 #include "DeviceProcessor.hpp"
 
 #include <cmath>
+#include <utility>
 
 #include "../core/TrackManager.hpp"
 
@@ -11,7 +12,7 @@ namespace magda {
 // =============================================================================
 
 DeviceProcessor::DeviceProcessor(DeviceId deviceId, te::Plugin::Ptr plugin)
-    : deviceId_(deviceId), plugin_(plugin) {}
+    : deviceId_(deviceId), plugin_(std::move(plugin)) {}
 
 void DeviceProcessor::setParameter(const juce::String& /*paramName*/, float /*value*/) {
     // Base implementation does nothing - override in subclasses
@@ -98,7 +99,7 @@ void DeviceProcessor::applyGain() {
 // =============================================================================
 
 ToneGeneratorProcessor::ToneGeneratorProcessor(DeviceId deviceId, te::Plugin::Ptr plugin)
-    : DeviceProcessor(deviceId, plugin) {
+    : DeviceProcessor(deviceId, std::move(plugin)) {
     // Note: Don't set defaults here - the plugin may not be fully ready
     // Call initializeDefaults() after the processor is stored and plugin is initialized
 }
@@ -107,14 +108,12 @@ void ToneGeneratorProcessor::initializeDefaults() {
     if (initialized_)
         return;
 
-    if (auto* tone = getTonePlugin()) {
-        // Set default values using the proper setters
-        setFrequency(440.0f);
-        setLevel(0.25f);
-        setOscType(0);  // Sine wave
+    // Set default values using the proper setters (they handle null checks internally)
+    setFrequency(440.0f);
+    setLevel(0.25f);
+    setOscType(0);  // Sine wave
 
-        initialized_ = true;
-    }
+    initialized_ = true;
 }
 
 te::ToneGeneratorPlugin* ToneGeneratorProcessor::getTonePlugin() const {
@@ -283,7 +282,7 @@ void ToneGeneratorProcessor::applyGain() {
 // =============================================================================
 
 VolumeProcessor::VolumeProcessor(DeviceId deviceId, te::Plugin::Ptr plugin)
-    : DeviceProcessor(deviceId, plugin) {}
+    : DeviceProcessor(deviceId, std::move(plugin)) {}
 
 te::VolumeAndPanPlugin* VolumeProcessor::getVolPanPlugin() const {
     return dynamic_cast<te::VolumeAndPanPlugin*>(plugin_.get());
@@ -360,7 +359,7 @@ void VolumeProcessor::applyGain() {
 // =============================================================================
 
 ExternalPluginProcessor::ExternalPluginProcessor(DeviceId deviceId, te::Plugin::Ptr plugin)
-    : DeviceProcessor(deviceId, plugin) {}
+    : DeviceProcessor(deviceId, std::move(plugin)) {}
 
 ExternalPluginProcessor::~ExternalPluginProcessor() {
     stopParameterListening();
@@ -388,10 +387,9 @@ void ExternalPluginProcessor::cacheParameterNames() const {
 
 void ExternalPluginProcessor::setParameter(const juce::String& paramName, float value) {
     if (auto* ext = getExternalPlugin()) {
-        auto params = ext->getAutomatableParameters();
-        for (size_t i = 0; i < params.size(); ++i) {
-            if (params[i] && params[i]->getParameterName().equalsIgnoreCase(paramName)) {
-                params[i]->setParameter(value, juce::sendNotificationSync);
+        for (auto params = ext->getAutomatableParameters(); auto* param : params) {
+            if (param && param->getParameterName().equalsIgnoreCase(paramName)) {
+                param->setParameter(value, juce::sendNotificationSync);
                 return;
             }
         }
@@ -445,13 +443,8 @@ ParameterInfo ExternalPluginProcessor::getParameterInfo(int index) const {
                 info.currentValue = param->getCurrentValue();
 
                 // Determine scale type
-                // Most plugin parameters are normalized 0-1, but we can check
-                float rangeLen = range.getEnd() - range.getStart();
-                if (rangeLen <= 1.0f) {
-                    info.scale = ParameterScale::Linear;
-                } else {
-                    info.scale = ParameterScale::Linear;
-                }
+                // Default to linear scale (could be enhanced to detect logarithmic ranges)
+                info.scale = ParameterScale::Linear;
 
                 // Check if parameter has discrete states
                 int numStates = param->getNumberOfStates();
