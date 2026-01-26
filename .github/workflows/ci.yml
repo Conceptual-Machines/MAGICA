@@ -48,23 +48,32 @@ jobs:
 
     - name: Build
       run: |
-        cmake --build build --config Debug -j$(nproc)
+        echo "Building with $(nproc) cores..."
+        cmake --build build --config Debug -j$(nproc) -- -v
+
+    - name: Check build artifacts
+      run: |
+        echo "Checking build directory structure:"
+        ls -la build/tests/ || echo "tests directory not found"
+        find build -name "magda_tests" -type f || echo "magda_tests executable not found"
 
     - name: Run tests
       run: |
-        cd build
-        ./tests/magda_tests
-
-    - name: Test summary
-      if: always()
-      run: |
-        echo "Build completed on Linux"
         if [ -f build/tests/magda_tests ]; then
-          echo "✅ Tests executable built successfully"
+          echo "Running tests..."
+          cd build
+          ./tests/magda_tests
         else
-          echo "❌ Tests executable not found"
+          echo "❌ Tests executable not found at build/tests/magda_tests"
+          echo "Build directory contents:"
+          find build -type f -name "*test*" || true
           exit 1
         fi
+
+    - name: Test summary
+      if: success()
+      run: |
+        echo "✅ Build and tests completed successfully on Linux"
 
   code-quality:
     runs-on: ubuntu-latest
