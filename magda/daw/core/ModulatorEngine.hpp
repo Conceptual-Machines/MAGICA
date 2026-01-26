@@ -2,6 +2,8 @@
 
 #include <juce_events/juce_events.h>
 
+#include <memory>
+
 #include "ModInfo.hpp"
 
 namespace magda {
@@ -12,15 +14,29 @@ namespace magda {
  * Singleton that runs at 60 FPS to update all LFO phase and output values.
  * Updates phase based on rate, then generates waveform output.
  */
-class ModulatorEngine : public juce::Timer {
+class ModulatorEngine {
+  private:
+    // Internal timer class that calls back to ModulatorEngine
+    class UpdateTimer : public juce::Timer {
+      public:
+        explicit UpdateTimer(ModulatorEngine& engine) : engine_(engine) {}
+
+        void timerCallback() override {
+            engine_.onTimerCallback();
+        }
+
+      private:
+        ModulatorEngine& engine_;
+    };
+
   public:
     static ModulatorEngine& getInstance() {
         static ModulatorEngine instance;
         return instance;
     }
 
-    ~ModulatorEngine() override {
-        stopTimer();
+    ~ModulatorEngine() {
+        shutdown();
     }
 
     // Delete copy/move
@@ -28,6 +44,33 @@ class ModulatorEngine : public juce::Timer {
     ModulatorEngine& operator=(const ModulatorEngine&) = delete;
     ModulatorEngine(ModulatorEngine&&) = delete;
     ModulatorEngine& operator=(ModulatorEngine&&) = delete;
+
+    /**
+     * @brief Start the modulation update timer at specified interval
+     */
+    void startTimer(int intervalMs) {
+        if (!timer_) {
+            timer_ = std::make_unique<UpdateTimer>(*this);
+        }
+        timer_->startTimer(intervalMs);
+    }
+
+    /**
+     * @brief Stop the modulation update timer
+     */
+    void stopTimer() {
+        if (timer_) {
+            timer_->stopTimer();
+        }
+    }
+
+    /**
+     * @brief Shutdown and destroy timer resources
+     * Call this during app shutdown, before JUCE cleanup begins
+     */
+    void shutdown() {
+        timer_.reset();  // Destroy timer early, not during static cleanup
+    }
 
     /**
      * @brief Calculate LFO rate in Hz from tempo sync division
@@ -242,15 +285,19 @@ class ModulatorEngine : public juce::Timer {
   private:
     ModulatorEngine() = default;
 
-    void timerCallback() override {
+    // Timer callback handler
+    void onTimerCallback() {
         // Calculate delta time (approximately 1/60 second at 60 FPS)
-        double deltaTime = getTimerInterval() / 1000.0;
+        double deltaTime = timer_ ? timer_->getTimerInterval() / 1000.0 : 0.0;
 
         // Update all mods through TrackManager
         updateAllMods(deltaTime);
     }
 
     void updateAllMods(double deltaTime);
+
+    // Timer instance - using composition instead of inheritance to allow early destruction
+    std::unique_ptr<UpdateTimer> timer_;
 };
 
 }  // namespace magda

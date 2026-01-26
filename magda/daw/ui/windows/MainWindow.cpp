@@ -1,5 +1,6 @@
 #include "MainWindow.hpp"
 
+#include "../../profiling/PerformanceProfiler.hpp"
 #include "../debug/DebugDialog.hpp"
 #include "../debug/DebugSettings.hpp"
 #include "../dialogs/AudioSettingsDialog.hpp"
@@ -27,6 +28,102 @@
 #include "engine/TracktionEngineWrapper.hpp"
 
 namespace magda {
+
+// Non-blocking notification shown during device initialization
+class MainWindow::MainComponent::LoadingOverlay : public juce::Component, private juce::Timer {
+  public:
+    LoadingOverlay() {
+        setInterceptsMouseClicks(false, false);  // Non-blocking - clicks pass through
+    }
+
+    ~LoadingOverlay() {
+        stopTimer();
+    }
+
+    void setMessage(const juce::String& msg) {
+        message_ = msg;
+        repaint();
+    }
+
+    void showWithFade() {
+        alpha_ = 1.0f;
+        setVisible(true);
+        stopTimer();
+    }
+
+    void hideWithFade() {
+        // Start fade-out after a brief delay
+        startTimer(50);
+    }
+
+    void paint(juce::Graphics& g) override {
+        auto bounds = getLocalBounds();
+
+        // Position in bottom-right corner with padding
+        const int padding = 16;
+        const int width = 280;
+        const int height = 50;
+        auto notificationBounds =
+            juce::Rectangle<int>(bounds.getWidth() - width - padding,
+                                 bounds.getHeight() - height - padding, width, height);
+
+        // Apply alpha for fade effect
+        float bgAlpha = 0.9f * alpha_;
+
+        // Box background with rounded corners
+        g.setColour(DarkTheme::getColour(DarkTheme::PANEL_BACKGROUND).withAlpha(bgAlpha));
+        g.fillRoundedRectangle(notificationBounds.toFloat(), 6.0f);
+
+        // Box border
+        g.setColour(juce::Colour(0xff4a90d9).withAlpha(bgAlpha));  // Blue accent
+        g.drawRoundedRectangle(notificationBounds.toFloat(), 6.0f, 1.5f);
+
+        // Spinner dots animation
+        auto spinnerArea = notificationBounds.removeFromLeft(40);
+        drawSpinner(g, spinnerArea.reduced(10).toFloat(), alpha_);
+
+        // Message text
+        g.setColour(juce::Colours::white.withAlpha(alpha_));
+        g.setFont(12.0f);
+        g.drawFittedText(message_, notificationBounds.reduced(8, 4),
+                         juce::Justification::centredLeft, 2);
+    }
+
+  private:
+    juce::String message_ = "Initializing...";
+    float alpha_ = 1.0f;
+    int spinnerFrame_ = 0;
+
+    void timerCallback() override {
+        alpha_ -= 0.1f;
+        if (alpha_ <= 0.0f) {
+            alpha_ = 0.0f;
+            setVisible(false);
+            stopTimer();
+        }
+        repaint();
+    }
+
+    void drawSpinner(juce::Graphics& g, juce::Rectangle<float> area, float alpha) {
+        // Simple animated dots
+        spinnerFrame_ = (spinnerFrame_ + 1) % 12;
+        const int numDots = 3;
+        float dotSize = 4.0f;
+        float spacing = 6.0f;
+
+        float startX = area.getCentreX() - (numDots * spacing) / 2.0f;
+        float y = area.getCentreY();
+
+        for (int i = 0; i < numDots; ++i) {
+            float phase = std::fmod((spinnerFrame_ / 4.0f) + i * 0.3f, 1.0f);
+            float dotAlpha = 0.3f + 0.7f * std::sin(phase * juce::MathConstants<float>::pi);
+            g.setColour(juce::Colour(0xff4a90d9).withAlpha(dotAlpha * alpha));
+            g.fillEllipse(startX + i * spacing, y - dotSize / 2, dotSize, dotSize);
+        }
+    }
+
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(LoadingOverlay)
+};
 
 // ResizeHandle for panel resizing
 class MainWindow::MainComponent::ResizeHandle : public juce::Component {
@@ -189,6 +286,17 @@ MainWindow::MainComponent::MainComponent(AudioEngine* externalEngine) {
     setupResizeHandles();
     setupViewModeListener();
     setupAudioEngineCallbacks(externalEngine);
+    setupDeviceLoadingCallback();
+
+// Enable profiling if environment variable is set
+#if JUCE_DEBUG
+    if (auto* enableProfiling = std::getenv("MAGDA_ENABLE_PROFILING")) {
+        if (std::string(enableProfiling) == "1") {
+            magda::PerformanceMonitor::getInstance().setEnabled(true);
+            DBG("Performance profiling enabled via MAGDA_ENABLE_PROFILING");
+        }
+    }
+#endif
 }
 
 void MainWindow::MainComponent::setupResizeHandles() {
@@ -310,6 +418,59 @@ void MainWindow::MainComponent::setupAudioEngineCallbacks(AudioEngine* engine) {
     };
 }
 
+void MainWindow::MainComponent::setupDeviceLoadingCallback() {
+    // Create loading notification (non-blocking, bottom-right corner)
+    loadingOverlay_ = std::make_unique<LoadingOverlay>();
+    addAndMakeVisible(*loadingOverlay_);
+
+    // Get audio engine (either external or internal)
+    auto* engine = getAudioEngine();
+    auto* teWrapper = dynamic_cast<TracktionEngineWrapper*>(engine);
+
+    if (teWrapper) {
+        // Show notification and disable transport if devices are still loading
+        if (teWrapper->isDevicesLoading()) {
+            loadingOverlay_->setMessage("Scanning audio & MIDI devices...");
+            loadingOverlay_->showWithFade();
+            loadingOverlay_->toFront(false);
+            transportPanel->setTransportEnabled(false);
+        } else {
+            loadingOverlay_->setVisible(false);
+            transportPanel->setTransportEnabled(true);
+        }
+
+        // Wire up callback to update/hide notification when devices finish loading
+        teWrapper->onDevicesLoadingChanged = [this](bool loading, const juce::String& message) {
+            juce::MessageManager::callAsync([this, loading, message]() {
+                // Enable/disable transport based on loading state
+                if (transportPanel) {
+                    transportPanel->setTransportEnabled(!loading);
+                }
+
+                if (loadingOverlay_) {
+                    if (loading) {
+                        loadingOverlay_->setMessage(message);
+                        loadingOverlay_->showWithFade();
+                        loadingOverlay_->toFront(false);
+                    } else {
+                        // Show the final device list briefly, then fade out
+                        loadingOverlay_->setMessage(message);
+                        loadingOverlay_->repaint();
+                        // Fade out after brief delay
+                        // Note: Don't capture 'this' - the overlay handles its own fade timer
+                        if (loadingOverlay_) {
+                            loadingOverlay_->hideWithFade();
+                        }
+                    }
+                }
+            });
+        };
+    } else {
+        // No Tracktion Engine wrapper, don't show notification
+        loadingOverlay_->setVisible(false);
+    }
+}
+
 MainWindow::MainComponent::~MainComponent() {
     // Stop position timer before destroying
     if (positionTimer_) {
@@ -339,7 +500,7 @@ bool MainWindow::MainComponent::keyPressed(const juce::KeyPress& key) {
         return true;
     }
 
-    // Cmd/Ctrl+Shift+A: Audio Test - Load tone generator and play
+    // Cmd/Ctrl+Shift+A: Audio Test - Two tracks with -12dB each (expect -6dB on master)
     if (key ==
         juce::KeyPress('a', juce::ModifierKeys::commandModifier | juce::ModifierKeys::shiftModifier,
                        0)) {
@@ -347,33 +508,42 @@ bool MainWindow::MainComponent::keyPressed(const juce::KeyPress& key) {
         if (teWrapper) {
             auto* bridge = teWrapper->getAudioBridge();
             if (bridge) {
-                // Get first track or create one
                 auto& tm = TrackManager::getInstance();
-                TrackId trackId;
-                if (tm.getTracks().empty()) {
-                    trackId = tm.createTrack("Audio Test", TrackType::Audio);
-                } else {
-                    trackId = tm.getTracks().front().id;
-                }
 
-                // Load a tone generator plugin
-                auto plugin = bridge->loadBuiltInPlugin(trackId, "tone");
-                if (plugin) {
-                    // Set tone generator frequency and level
-                    auto params = plugin->getAutomatableParameters();
-                    for (auto* param : params) {
-                        if (param->getParameterName().containsIgnoreCase("freq")) {
-                            param->setParameter(0.5f, juce::dontSendNotification);  // ~440Hz
-                        } else if (param->getParameterName().containsIgnoreCase("level")) {
-                            param->setParameter(0.3f, juce::dontSendNotification);  // -10dB ish
+                // -12dB as linear gain = 10^(-12/20) = 0.251
+                const float minus12dB = 0.251189f;
+
+                // Create two tracks with tone generators, faders at -12dB each
+                // When summed, two -12dB signals = -6dB on master
+                for (int i = 0; i < 2; ++i) {
+                    TrackId trackId =
+                        tm.createTrack("Tone " + std::to_string(i + 1), TrackType::Audio);
+
+                    // Load tone generator at full level (0dB)
+                    auto plugin = bridge->loadBuiltInPlugin(trackId, "tone");
+                    if (plugin) {
+                        auto params = plugin->getAutomatableParameters();
+                        for (auto* param : params) {
+                            if (param->getParameterName().containsIgnoreCase("freq")) {
+                                // Use slightly different frequencies to hear both
+                                float freq = (i == 0) ? 0.4f : 0.45f;  // ~350Hz and ~400Hz
+                                param->setParameter(freq, juce::dontSendNotification);
+                            } else if (param->getParameterName().containsIgnoreCase("level")) {
+                                // Full level (0dB) from plugin
+                                param->setParameter(1.0f, juce::dontSendNotification);
+                            }
                         }
                     }
-                    std::cout << "Loaded ToneGeneratorPlugin on track " << trackId << std::endl;
+
+                    // Set track fader to -12dB
+                    tm.setTrackVolume(trackId, minus12dB);
+                    std::cout << "Track " << trackId << ": tone @ 0dB, fader @ -12dB" << std::endl;
                 }
 
                 // Start playback
                 teWrapper->play();
-                std::cout << "Audio test started - press Space to stop" << std::endl;
+                std::cout << "Audio test: 2 tracks @ -12dB each, expect -6dB on master"
+                          << std::endl;
             }
         }
         return true;
@@ -455,6 +625,11 @@ void MainWindow::MainComponent::paint(juce::Graphics& g) {
 
 void MainWindow::MainComponent::resized() {
     auto bounds = getLocalBounds();
+
+    // Loading overlay covers entire component
+    if (loadingOverlay_) {
+        loadingOverlay_->setBounds(getLocalBounds());
+    }
 
     layoutTransportArea(bounds);
     layoutFooterArea(bounds);
@@ -889,6 +1064,69 @@ void MainWindow::setupMenuCallbacks() {
         juce::AlertWindow::showMessageBoxAsync(
             juce::AlertWindow::InfoIcon, "About MAGDA",
             "MAGDA\nVersion 1.0\n\nA professional digital audio workstation.");
+    };
+
+    // Settings menu callbacks
+    callbacks.onMidiSettings = [this]() {
+        // For now, show the same dialog - it has both audio and MIDI settings
+        if (!mainComponent)
+            return;
+        auto* engine = mainComponent->getAudioEngine();
+        if (!engine)
+            return;
+        auto* deviceManager = engine->getDeviceManager();
+        if (!deviceManager)
+            return;
+        AudioSettingsDialog::showDialog(this, deviceManager);
+    };
+
+    callbacks.onPluginScan = [this]() {
+        if (!mainComponent)
+            return;
+        auto* engine = dynamic_cast<TracktionEngineWrapper*>(mainComponent->getAudioEngine());
+        if (!engine)
+            return;
+        // Trigger plugin scan
+        engine->startPluginScan([](float progress, const juce::String& plugin) {
+            DBG("Scanning: " << plugin << " (" << (int)(progress * 100) << "%)");
+        });
+    };
+
+    callbacks.onPluginClear = [this]() {
+        // Confirm before clearing
+        auto options = juce::MessageBoxOptions()
+                           .withTitle("Clear Plugin List")
+                           .withMessage("This will remove all scanned plugins from the list.\n\n"
+                                        "You'll need to scan again to rediscover your plugins.")
+                           .withButton("Clear")
+                           .withButton("Cancel")
+                           .withIconType(juce::MessageBoxIconType::QuestionIcon);
+
+        juce::AlertWindow::showAsync(options, [this](int result) {
+            if (result == 1) {  // "Clear" button
+                if (!mainComponent)
+                    return;
+                auto* engine =
+                    dynamic_cast<TracktionEngineWrapper*>(mainComponent->getAudioEngine());
+                if (!engine)
+                    return;
+                engine->clearPluginList();
+                juce::AlertWindow::showMessageBoxAsync(
+                    juce::AlertWindow::InfoIcon, "Plugin List Cleared",
+                    "The plugin list has been cleared.\n\n"
+                    "Use Settings > Plugins > Scan for Plugins to rediscover your plugins.");
+            }
+        });
+    };
+
+    callbacks.onPluginOpenFolder = [this]() {
+        if (!mainComponent)
+            return;
+        auto* engine = dynamic_cast<TracktionEngineWrapper*>(mainComponent->getAudioEngine());
+        if (!engine)
+            return;
+        auto pluginListFile = engine->getPluginListFile();
+        pluginListFile.getParentDirectory().revealToUser();
     };
 
     // Initialize the menu manager with callbacks

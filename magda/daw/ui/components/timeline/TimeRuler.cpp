@@ -8,6 +8,10 @@ TimeRuler::TimeRuler() {
     setOpaque(true);
 }
 
+TimeRuler::~TimeRuler() {
+    stopTimer();
+}
+
 void TimeRuler::paint(juce::Graphics& g) {
     // Background
     g.fillAll(DarkTheme::getColour(DarkTheme::BACKGROUND_ALT));

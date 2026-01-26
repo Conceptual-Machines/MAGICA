@@ -3,8 +3,8 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/Conceptual-Machines/MAGDA/actions"><img src="https://github.com/Conceptual-Machines/MAGDA/workflows/CI/badge.svg" alt="CI"></a>
-  <a href="https://github.com/Conceptual-Machines/MAGDA/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0-blue.svg" alt="License"></a>
+  <a href="https://github.com/Conceptual-Machines/magda-core/actions"><img src="https://github.com/Conceptual-Machines/magda-core/workflows/CI/badge.svg" alt="CI"></a>
+  <a href="https://github.com/Conceptual-Machines/magda-core/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0-blue.svg" alt="License"></a>
   <img src="https://img.shields.io/badge/platform-macOS-lightgrey.svg" alt="Platform">
   <img src="https://img.shields.io/badge/C%2B%2B-20-blue.svg" alt="C++20">
 </p>
@@ -30,8 +30,8 @@ Early research and prototyping. Not yet ready for production use.
 
 ```bash
 # Clone with submodules
-git clone --recursive https://github.com/Conceptual-Machines/MAGDA.git
-cd magda
+git clone --recursive https://github.com/Conceptual-Machines/magda-core.git
+cd magda-core
 
 # Setup and build
 make setup

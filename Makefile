@@ -49,6 +49,15 @@ run-console: debug
 	@echo "🎵 Running MAGDA DAW (console mode)..."
 	"$(BUILD_DIR)/magda/daw/magda_daw_app_artefacts/Debug/MAGDA.app/Contents/MacOS/MAGDA"
 
+# Run with profiling enabled
+.PHONY: run-profile
+run-profile: debug
+	@echo "📊 Running MAGDA DAW with profiling enabled..."
+	@echo "Performance data will be saved to:"
+	@echo "  ~/Library/Application Support/MAGDA/Benchmarks/"
+	@echo ""
+	MAGDA_ENABLE_PROFILING=1 "$(BUILD_DIR)/magda/daw/magda_daw_app_artefacts/Debug/MAGDA.app/Contents/MacOS/MAGDA"
+
 # Run tests
 .PHONY: test
 test: debug
@@ -97,6 +106,8 @@ help:
 	@echo "  all, debug     - Build debug version (default)"
 	@echo "  release        - Build release version"
 	@echo "  run            - Build and run the application"
+	@echo "  run-console    - Run with console output visible"
+	@echo "  run-profile    - Run with performance profiling enabled"
 	@echo "  test           - Build and run tests"
 	@echo "  setup          - Initialize git submodules"
 	@echo "  clean          - Remove build artifacts"

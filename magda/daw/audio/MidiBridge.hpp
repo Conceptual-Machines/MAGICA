@@ -33,10 +33,19 @@ class MidiBridge : public juce::MidiInputCallback {
     ~MidiBridge() override;
 
     /**
-     * @brief Set AudioBridge reference for triggering MIDI activity
+     * @brief Set AudioBridge reference for triggering MIDI activity and track lookup
      * Must be called after AudioBridge is created
      */
     void setAudioBridge(AudioBridge* audioBridge);
+
+    /**
+     * @brief Enable/disable forwarding MIDI to instrument plugins
+     * When enabled, incoming MIDI is injected into Tracktion tracks
+     * @param enabled True to forward MIDI to plugins
+     */
+    void setMidiToPluginsEnabled(bool enabled) {
+        forwardMidiToPlugins_ = enabled;
+    }
 
     // =========================================================================
     // MIDI Device Enumeration
@@ -151,7 +160,10 @@ class MidiBridge : public juce::MidiInputCallback {
     std::unordered_map<juce::String, std::unique_ptr<juce::MidiInput>> activeMidiInputs_;
 
     // Synchronization for UI thread access
-    juce::CriticalSection routingLock_;
+    mutable juce::CriticalSection routingLock_;
+
+    // Whether to forward MIDI to instrument plugins
+    bool forwardMidiToPlugins_ = true;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(MidiBridge)
 };

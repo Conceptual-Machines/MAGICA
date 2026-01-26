@@ -108,10 +108,15 @@ class MainWindow::MainComponent : public juce::Component,
     std::unique_ptr<ResizeHandle> rightResizer;
     std::unique_ptr<ResizeHandle> bottomResizer;
 
+    // Loading overlay (shown during device initialization)
+    class LoadingOverlay;
+    std::unique_ptr<LoadingOverlay> loadingOverlay_;
+
     // Setup helpers
     void setupResizeHandles();
     void setupViewModeListener();
     void setupAudioEngineCallbacks(AudioEngine* engine);
+    void setupDeviceLoadingCallback();
 
     // Layout helpers
     void layoutTransportArea(juce::Rectangle<int>& bounds);

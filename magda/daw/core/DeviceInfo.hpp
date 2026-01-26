@@ -25,6 +25,10 @@ struct DeviceInfo {
     PluginFormat format = PluginFormat::VST3;
     bool isInstrument = false;  // true for instruments (synths, samplers), false for effects
 
+    // External plugin identification (for VST3/AU plugins)
+    juce::String uniqueId;          // PluginDescription::createIdentifierString()
+    juce::String fileOrIdentifier;  // Path to plugin file or AU identifier
+
     bool bypassed = false;  // Device bypass state
     bool expanded = true;   // UI expanded state
 

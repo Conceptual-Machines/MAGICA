@@ -2,6 +2,8 @@
 
 #include <juce_gui_basics/juce_gui_basics.h>
 
+#include "../utils/ComponentManager.hpp"
+
 namespace magda {
 
 /**
@@ -11,7 +13,7 @@ namespace magda {
 class MixerLookAndFeel : public juce::LookAndFeel_V4 {
   public:
     MixerLookAndFeel();
-    ~MixerLookAndFeel() override = default;
+    ~MixerLookAndFeel() override;
 
     // Override linear slider drawing for custom fader appearance
     void drawLinearSlider(juce::Graphics& g, int x, int y, int width, int height, float sliderPos,
@@ -36,10 +38,10 @@ class MixerLookAndFeel : public juce::LookAndFeel_V4 {
     void drawComboBoxArrow(juce::Graphics& g, juce::Rectangle<int> arrowZone);
 
   private:
-    std::unique_ptr<juce::Drawable> faderThumb_;
-    std::unique_ptr<juce::Drawable> faderTrack_;
-    std::unique_ptr<juce::Drawable> knobBody_;
-    std::unique_ptr<juce::Drawable> knobPointer_;
+    magda::ManagedDrawable faderThumb_;
+    magda::ManagedDrawable faderTrack_;
+    magda::ManagedDrawable knobBody_;
+    magda::ManagedDrawable knobPointer_;
 
     void loadIcons();
 

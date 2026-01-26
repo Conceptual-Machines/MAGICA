@@ -1,11 +1,14 @@
 #include <juce_audio_basics/juce_audio_basics.h>
 #include <juce_audio_devices/juce_audio_devices.h>
 #include <juce_gui_basics/juce_gui_basics.h>
+#include <tracktion_engine/tracktion_engine.h>
 
 #include <iostream>
 #include <memory>
 
 #include "core/ClipManager.hpp"
+#include "core/ModulatorEngine.hpp"
+#include "core/TrackManager.hpp"
 #include "engine/TracktionEngineWrapper.hpp"
 #include "ui/themes/DarkTheme.hpp"
 #include "ui/themes/FontManager.hpp"
@@ -30,6 +33,12 @@ class MagdaDAWApplication : public JUCEApplication {
     }
 
     void initialise(const String& commandLine) override {
+        // Check if we're being launched as a plugin scanner subprocess
+        if (tracktion::PluginManager::startChildProcessPluginScan(commandLine)) {
+            // This process is a plugin scanner - it will exit when done
+            return;
+        }
+
         // 1. Initialize fonts
         magda::FontManager::getInstance().initialize();
 
@@ -58,12 +67,23 @@ class MagdaDAWApplication : public JUCEApplication {
     }
 
     void shutdown() override {
-        // Graceful shutdown
+        // Shutdown all singletons BEFORE JUCE cleanup to prevent static cleanup issues
+        // This clears all JUCE objects (Strings, Colours, etc.) while JUCE is still alive
+        magda::ModulatorEngine::getInstance().shutdown();  // Destroy timer
+        magda::TrackManager::getInstance().shutdown();     // Clear tracks with JUCE objects
+        magda::ClipManager::getInstance().shutdown();      // Clear clips with JUCE objects
+
+        // Clear default LookAndFeel BEFORE destroying windows
+        // This ensures components switch away from our custom L&F before we delete them
+        juce::LookAndFeel::setDefaultLookAndFeel(nullptr);
+
+        // Graceful shutdown - destroy UI
         mainWindow_.reset();
+
+        // Now destroy engine
         daw_engine_.reset();
 
-        // Reset look and feel
-        juce::LookAndFeel::setDefaultLookAndFeel(nullptr);
+        // Destroy our custom LookAndFeel (no components reference it now)
         lookAndFeel_.reset();
 
         // Release fonts before JUCE's leak detector runs

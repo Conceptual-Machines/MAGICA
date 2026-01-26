@@ -168,6 +168,9 @@ class ChainPanel::ElementSlotsContainer : public juce::Component, public juce::D
             device.pluginId = obj->getProperty("name").toString().toStdString() + "_" +
                               obj->getProperty("format").toString().toStdString();
             device.isInstrument = static_cast<bool>(obj->getProperty("isInstrument"));
+            // External plugin identification - critical for loading
+            device.uniqueId = obj->getProperty("uniqueId").toString();
+            device.fileOrIdentifier = obj->getProperty("fileOrIdentifier").toString();
 
             juce::String format = obj->getProperty("format").toString();
             if (format == "VST3") {

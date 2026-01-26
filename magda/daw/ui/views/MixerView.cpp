@@ -6,6 +6,7 @@
 #include "../../audio/MeteringBuffer.hpp"
 #include "../../engine/AudioEngine.hpp"
 #include "../../engine/TracktionEngineWrapper.hpp"
+#include "../../profiling/PerformanceProfiler.hpp"
 #include "../themes/DarkTheme.hpp"
 #include "../themes/FontManager.hpp"
 #include "core/SelectionManager.hpp"
@@ -705,6 +706,16 @@ MixerView::~MixerView() {
     stopTimer();
     TrackManager::getInstance().removeListener(this);
     ViewModeController::getInstance().removeListener(this);
+
+    // Explicitly clear all UI components before automatic member destruction
+    // This ensures components release their LookAndFeel references before
+    // mixerLookAndFeel_ is destroyed (member destruction happens in reverse order)
+    channelStrips.clear();
+    masterStrip.reset();
+    debugPanel_.reset();
+    channelContainer.reset();
+    channelViewport.reset();
+    channelResizeHandle_.reset();
 }
 
 void MixerView::rebuildChannelStrips() {
@@ -777,6 +788,7 @@ void MixerView::masterChannelChanged() {
 }
 
 void MixerView::paint(juce::Graphics& g) {
+    MAGDA_MONITOR_SCOPE("UIFrame");
     g.fillAll(DarkTheme::getColour(DarkTheme::BACKGROUND));
 }
 
@@ -939,8 +951,6 @@ void MixerView::selectChannel(int index, bool isMaster) {
     if (onChannelSelected) {
         onChannelSelected(selectedChannelIndex, selectedIsMaster);
     }
-
-    DBG("Selected channel: " << (isMaster ? "Master" : juce::String(index + 1)));
 }
 
 void MixerView::trackSelectionChanged(TrackId trackId) {

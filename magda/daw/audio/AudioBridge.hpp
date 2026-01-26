@@ -2,6 +2,7 @@
 
 #include <tracktion_engine/tracktion_engine.h>
 
+#include <functional>
 #include <map>
 #include <memory>
 
@@ -16,6 +17,22 @@ namespace magda {
 
 // Forward declarations
 namespace te = tracktion;
+
+/**
+ * @brief Result of attempting to load a plugin
+ */
+struct PluginLoadResult {
+    bool success = false;
+    juce::String errorMessage;
+    te::Plugin::Ptr plugin;
+
+    static PluginLoadResult Success(te::Plugin::Ptr p) {
+        return {true, {}, p};
+    }
+    static PluginLoadResult Failure(const juce::String& msg) {
+        return {false, msg, nullptr};
+    }
+};
 
 /**
  * @brief Bridges TrackManager (UI model) to Tracktion Engine (audio processing)
@@ -67,9 +84,16 @@ class AudioBridge : public TrackManagerListener, public juce::Timer {
      * @brief Load an external plugin (VST3, AU)
      * @param trackId The MAGDA track ID
      * @param description Plugin description from plugin scan
-     * @return The loaded plugin, or nullptr on failure
+     * @return PluginLoadResult with success status, error message, and plugin pointer
      */
-    te::Plugin::Ptr loadExternalPlugin(TrackId trackId, const juce::PluginDescription& description);
+    PluginLoadResult loadExternalPlugin(TrackId trackId,
+                                        const juce::PluginDescription& description);
+
+    /**
+     * @brief Callback invoked when a plugin fails to load
+     * Parameters: deviceId, error message
+     */
+    std::function<void(DeviceId, const juce::String&)> onPluginLoadFailed;
 
     /**
      * @brief Add a level meter plugin to a track for metering
@@ -339,6 +363,74 @@ class AudioBridge : public TrackManagerListener, public juce::Timer {
      */
     juce::String getTrackAudioInput(TrackId trackId) const;
 
+    // =========================================================================
+    // MIDI Routing (for live instrument playback)
+    // =========================================================================
+
+    /**
+     * @brief Set MIDI input source for a track (routes through Tracktion Engine)
+     * @param trackId The MAGDA track ID
+     * @param midiDeviceId MIDI device identifier, "all" for all inputs, empty to disable
+     *
+     * This routes MIDI through Tracktion Engine's input device system,
+     * allowing instrument plugins to receive live MIDI input.
+     */
+    void setTrackMidiInput(TrackId trackId, const juce::String& midiDeviceId);
+
+    /**
+     * @brief Get current MIDI input source for a track
+     * @param trackId The MAGDA track ID
+     * @return MIDI device ID, or empty if none
+     */
+    juce::String getTrackMidiInput(TrackId trackId) const;
+
+    /**
+     * @brief Enable all MIDI input devices in Tracktion Engine's DeviceManager
+     *
+     * Must be called before MIDI routing will work. This enables the devices
+     * at the engine level - track routing is done via setTrackMidiInput().
+     */
+    void enableAllMidiInputDevices();
+
+    /**
+     * @brief Called when MIDI input devices become available
+     *
+     * This is called by TracktionEngineWrapper when the DeviceManager
+     * creates MIDI input device wrappers (which happens asynchronously).
+     * Any pending MIDI routes will be applied.
+     */
+    void onMidiDevicesAvailable();
+
+    // =========================================================================
+    // Plugin Editor Windows
+    // =========================================================================
+
+    /**
+     * @brief Show the plugin's native editor window
+     * @param deviceId MAGDA device ID of the plugin
+     */
+    void showPluginWindow(DeviceId deviceId);
+
+    /**
+     * @brief Hide/close the plugin's native editor window
+     * @param deviceId MAGDA device ID of the plugin
+     */
+    void hidePluginWindow(DeviceId deviceId);
+
+    /**
+     * @brief Check if a plugin window is currently open
+     * @param deviceId MAGDA device ID of the plugin
+     * @return true if the plugin window is visible
+     */
+    bool isPluginWindowOpen(DeviceId deviceId) const;
+
+    /**
+     * @brief Toggle the plugin's native editor window (open if closed, close if open)
+     * @param deviceId MAGDA device ID of the plugin
+     * @return true if the window is now open, false if now closed
+     */
+    bool togglePluginWindow(DeviceId deviceId);
+
   private:
     // Timer callback for metering updates (runs on message thread)
     void timerCallback() override;
@@ -391,6 +483,10 @@ class AudioBridge : public TrackManagerListener, public juce::Timer {
 
     // Synchronization
     juce::CriticalSection mappingLock_;  // Protects mapping updates
+
+    // Pending MIDI routes (applied when playback context becomes available)
+    std::vector<std::pair<TrackId, juce::String>> pendingMidiRoutes_;
+    void applyPendingMidiRoutes();
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(AudioBridge)
 };

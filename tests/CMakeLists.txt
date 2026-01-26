@@ -5,6 +5,7 @@ set(TEST_SOURCES
     test_nested_racks.cpp
     test_modulation.cpp
     test_parameter_utils.cpp
+    test_plugin_loading.cpp
 )
 
 # Create test executable

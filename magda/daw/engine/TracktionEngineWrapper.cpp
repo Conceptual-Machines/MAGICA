@@ -6,6 +6,7 @@
 #include "../audio/MidiBridge.hpp"
 #include "../core/DeviceInfo.hpp"
 #include "../core/TrackManager.hpp"
+#include "PluginScanCoordinator.hpp"
 
 namespace magda {
 
@@ -23,9 +24,66 @@ bool TracktionEngineWrapper::initialize() {
         // Register ToneGeneratorPlugin (not registered by default)
         engine_->getPluginManager().createBuiltInType<tracktion::ToneGeneratorPlugin>();
 
+        // Register external plugin formats (VST3, AU)
+        auto& pluginManager = engine_->getPluginManager();
+        auto& formatManager = pluginManager.pluginFormatManager;
+
+        // Enable out-of-process scanning to prevent plugin crashes from crashing the app
+        // This launches the same executable with a special command line to scan each plugin
+        pluginManager.setUsesSeparateProcessForScanning(true);
+        std::cout << "Enabled out-of-process plugin scanning" << std::endl;
+
+        // Load saved plugin list from persistent storage
+        loadPluginList();
+
+        // Note: Tracktion Engine automatically registers plugin formats (VST3, AU, etc.)
+        // via PluginManager::initialise() -> addDefaultFormatsToManager()
+        // No need to add them manually here
+        std::cout << "Plugin formats registered by Tracktion Engine: "
+                  << formatManager.getNumFormats() << std::endl;
+        for (int i = 0; i < formatManager.getNumFormats(); ++i) {
+            auto* format = formatManager.getFormat(i);
+            if (format) {
+                std::cout << "  Format " << i << ": " << format->getName() << std::endl;
+            }
+        }
+
+        // Initialize the DeviceManager FIRST - this creates MIDI device wrappers
+        // Parameters: default number of input channels, default number of output channels
+        auto& dm = engine_->getDeviceManager();
+        dm.initialise(0, 2);
+        DBG("DeviceManager initialized");
+
+        // Enable MIDI devices at JUCE level - this must be done so TE picks them up
+        auto& juceDeviceManager = dm.deviceManager;
+        auto midiInputs = juce::MidiInput::getAvailableDevices();
+        DBG("JUCE MIDI inputs available: " << midiInputs.size());
+        for (const auto& midiInput : midiInputs) {
+            if (!juceDeviceManager.isMidiInputDeviceEnabled(midiInput.identifier)) {
+                juceDeviceManager.setMidiInputDeviceEnabled(midiInput.identifier, true);
+                DBG("Enabled JUCE MIDI input: " << midiInput.name);
+            }
+        }
+
+        // Listen for device manager changes BEFORE triggering rescan
+        // This ensures we catch the notification when MIDI devices are created
+        dm.addChangeListener(this);
+
+        // Trigger a rescan so TE picks up the newly enabled MIDI devices
+        // Note: The rescan is asynchronous (uses a timer). MIDI devices will be
+        // created later and we'll be notified via changeListenerCallback.
+        dm.rescanMidiDeviceList();
+        DBG("MIDI device rescan triggered (async, listener registered)");
+        for (auto& midiInput : dm.getMidiInDevices()) {
+            if (midiInput && !midiInput->isEnabled()) {
+                midiInput->setEnabled(true);
+                DBG("Enabled TE MIDI input device: " << midiInput->getName());
+            }
+        }
+
         // Disable all wave input devices to avoid channel mismatch assertions
         // We don't need audio inputs for playback - they can be enabled explicitly when needed
-        for (auto* waveInput : engine_->getDeviceManager().getWaveInputDevices()) {
+        for (auto* waveInput : dm.getWaveInputDevices()) {
             waveInput->setEnabled(false);
         }
 
@@ -53,15 +111,30 @@ bool TracktionEngineWrapper::initialize() {
             // Note: Master track automatically routes to default audio device (first enabled stereo
             // pair) This is configured by Tracktion Engine's default behavior
 
+            // Ensure the playback context is created and graph is allocated
+            // This is needed for MIDI routing to work even before pressing play
+            currentEdit_->getTransport().ensureContextAllocated();
+            if (auto* ctx = currentEdit_->getCurrentPlaybackContext()) {
+                DBG("Playback context allocated for live MIDI monitoring");
+                DBG("  Total inputs in context: " << ctx->getAllInputs().size());
+            } else {
+                DBG("WARNING: ensureContextAllocated() called but context is still null!");
+            }
+
             // Create AudioBridge for TrackManager-to-Tracktion synchronization
             audioBridge_ = std::make_unique<AudioBridge>(*engine_, *currentEdit_);
             audioBridge_->syncAll();
+
+            // Enable all MIDI input devices (redundant now but keeps the API consistent)
+            audioBridge_->enableAllMidiInputDevices();
 
             // Create MidiBridge for MIDI device management
             midiBridge_ = std::make_unique<MidiBridge>(*engine_);
 
             // Connect MidiBridge to AudioBridge for MIDI activity monitoring
             midiBridge_->setAudioBridge(audioBridge_.get());
+
+            // Note: Change listener was already registered earlier (before MIDI rescan)
 
             std::cout << "Tracktion Engine initialized with Edit, AudioBridge, and MidiBridge"
                       << std::endl;
@@ -81,6 +154,11 @@ void TracktionEngineWrapper::shutdown() {
     // Release test tone plugin first (before Edit is destroyed)
     testTonePlugin_.reset();
 
+    // Remove device manager listener
+    if (engine_) {
+        engine_->getDeviceManager().removeChangeListener(this);
+    }
+
     // Destroy bridges first (they reference Edit and/or Engine)
     if (audioBridge_) {
         audioBridge_.reset();
@@ -95,6 +173,93 @@ void TracktionEngineWrapper::shutdown() {
         engine_.reset();
     }
     std::cout << "Tracktion Engine shutdown complete" << std::endl;
+}
+
+void TracktionEngineWrapper::changeListenerCallback(juce::ChangeBroadcaster* source) {
+    // DeviceManager changed - this happens during MIDI device scanning
+    if (engine_ && source == &engine_->getDeviceManager()) {
+        auto& dm = engine_->getDeviceManager();
+
+        // Check if MIDI devices have appeared
+        auto midiDevices = dm.getMidiInDevices();
+        bool hasMidiDevices = !midiDevices.empty();
+        bool enabledNewMidi = false;
+
+        DBG("Device change callback: " << midiDevices.size() << " MIDI input devices");
+
+        // Enable any new MIDI input devices that have appeared
+        for (auto& midiIn : midiDevices) {
+            if (midiIn && !midiIn->isEnabled()) {
+                midiIn->setEnabled(true);
+                DBG("Device change: Enabled MIDI input: " << midiIn->getName());
+                enabledNewMidi = true;
+            }
+        }
+
+        // If we have MIDI devices and a playback context, reallocate to include them
+        if (hasMidiDevices && currentEdit_) {
+            if (auto* ctx = currentEdit_->getCurrentPlaybackContext()) {
+                int inputsBefore = static_cast<int>(ctx->getAllInputs().size());
+                ctx->reallocate();
+                int inputsAfter = static_cast<int>(ctx->getAllInputs().size());
+
+                if (inputsAfter > inputsBefore) {
+                    DBG("Device change: Reallocated playback context");
+                    DBG("  Inputs: " << inputsBefore << " -> " << inputsAfter);
+
+                    // Notify AudioBridge that MIDI devices are now available
+                    // so it can apply any pending MIDI routes
+                    if (audioBridge_) {
+                        audioBridge_->onMidiDevicesAvailable();
+                    }
+                }
+            }
+        }
+
+        // Build a description of currently enabled devices
+        juce::StringArray deviceNames;
+
+        // Get MIDI input devices (returns shared_ptr)
+        for (const auto& midiIn : dm.getMidiInDevices()) {
+            if (midiIn && midiIn->isEnabled()) {
+                deviceNames.add("MIDI: " + midiIn->getName());
+            }
+        }
+
+        // Get audio output device (returns raw pointers)
+        for (auto* waveOut : dm.getWaveOutputDevices()) {
+            if (waveOut && waveOut->isEnabled()) {
+                deviceNames.add("Audio: " + waveOut->getName());
+            }
+        }
+
+        juce::String message;
+        if (devicesLoading_) {
+            message = "Scanning devices...";
+            if (deviceNames.size() > 0) {
+                message = "Found: " + deviceNames.joinIntoString(", ");
+            }
+        } else {
+            message = "Devices ready";
+        }
+
+        // If we were playing, stop and remember we need to resume
+        if (isPlaying() && devicesLoading_) {
+            wasPlayingBeforeDeviceChange_ = true;
+            stop();
+            std::cout << "Stopped playback during device initialization" << std::endl;
+        }
+
+        // Mark devices as no longer loading after first change notification
+        if (devicesLoading_) {
+            devicesLoading_ = false;
+            std::cout << "Device initialization complete: " << message << std::endl;
+
+            if (onDevicesLoadingChanged) {
+                onDevicesLoadingChanged(false, message);
+            }
+        }
+    }
 }
 
 CommandResponse TracktionEngineWrapper::processCommand(const Command& command) {
@@ -129,6 +294,12 @@ CommandResponse TracktionEngineWrapper::processCommand(const Command& command) {
 
 // TransportInterface implementation
 void TracktionEngineWrapper::play() {
+    // Block playback while devices are loading to prevent audio glitches
+    if (devicesLoading_) {
+        std::cout << "Playback blocked - devices still loading" << std::endl;
+        return;
+    }
+
     if (currentEdit_) {
         currentEdit_->getTransport().play(false);
         std::cout << "Playback started" << std::endl;
@@ -147,6 +318,12 @@ void TracktionEngineWrapper::pause() {
 }
 
 void TracktionEngineWrapper::record() {
+    // Block recording while devices are loading
+    if (devicesLoading_) {
+        std::cout << "Recording blocked - devices still loading" << std::endl;
+        return;
+    }
+
     if (currentEdit_) {
         currentEdit_->getTransport().record(false);
         std::cout << "Recording started" << std::endl;
@@ -690,6 +867,190 @@ std::string TracktionEngineWrapper::generateClipId() {
 
 std::string TracktionEngineWrapper::generateEffectId() {
     return "effect_" + std::to_string(nextEffectId_++);
+}
+
+// =============================================================================
+// Plugin Scanning - Uses out-of-process scanner to prevent crashes
+// =============================================================================
+
+void TracktionEngineWrapper::startPluginScan(
+    std::function<void(float, const juce::String&)> progressCallback) {
+    if (!engine_ || isScanning_) {
+        return;
+    }
+
+    isScanning_ = true;
+    scanProgressCallback_ = progressCallback;
+
+    auto& pluginManager = engine_->getPluginManager();
+    auto& knownPlugins = pluginManager.knownPluginList;
+    auto& formatManager = pluginManager.pluginFormatManager;
+
+    // List available formats
+    juce::StringArray formatNames;
+    for (int i = 0; i < formatManager.getNumFormats(); ++i) {
+        auto* format = formatManager.getFormat(i);
+        if (format) {
+            formatNames.add(format->getName());
+        }
+    }
+    std::cout << "Starting plugin scan with OUT-OF-PROCESS scanner" << std::endl;
+    std::cout << "Available formats: " << formatNames.joinIntoString(", ") << std::endl;
+
+    // Create coordinator if needed
+    if (!pluginScanCoordinator_) {
+        pluginScanCoordinator_ = std::make_unique<PluginScanCoordinator>();
+    }
+
+    // Start scanning using the out-of-process coordinator
+    pluginScanCoordinator_->startScan(
+        formatManager,
+        // Progress callback
+        [this, progressCallback](float progress, const juce::String& currentPlugin) {
+            if (progressCallback) {
+                progressCallback(progress, currentPlugin);
+            }
+        },
+        // Completion callback
+        [this, &knownPlugins](bool success, const juce::Array<juce::PluginDescription>& plugins,
+                              const juce::StringArray& failedPlugins) {
+            // Add found plugins to KnownPluginList
+            for (const auto& desc : plugins) {
+                knownPlugins.addType(desc);
+            }
+
+            int numPlugins = knownPlugins.getNumTypes();
+            std::cout << "Plugin scan complete. Found " << numPlugins << " plugins." << std::endl;
+
+            if (failedPlugins.size() > 0) {
+                std::cout << "Failed/crashed plugins (" << failedPlugins.size()
+                          << "):" << std::endl;
+                for (const auto& failed : failedPlugins) {
+                    std::cout << "  - " << failed << std::endl;
+                }
+            }
+
+            // Save the updated plugin list to persistent storage
+            savePluginList();
+
+            isScanning_ = false;
+
+            if (onPluginScanComplete) {
+                onPluginScanComplete(success, numPlugins, failedPlugins);
+            }
+        });
+}
+
+void TracktionEngineWrapper::abortPluginScan() {
+    if (pluginScanCoordinator_) {
+        pluginScanCoordinator_->abortScan();
+    }
+    isScanning_ = false;
+}
+
+void TracktionEngineWrapper::clearPluginScanCrashFiles() {
+    // Clear the blacklist in the coordinator
+    if (pluginScanCoordinator_) {
+        pluginScanCoordinator_->clearBlacklist();
+    } else {
+        // Create a temporary coordinator just to clear the blacklist
+        PluginScanCoordinator tempCoordinator;
+        tempCoordinator.clearBlacklist();
+    }
+    std::cout << "Plugin blacklist cleared. Previously problematic plugins will be scanned again."
+              << std::endl;
+}
+
+juce::KnownPluginList& TracktionEngineWrapper::getKnownPluginList() {
+    return engine_->getPluginManager().knownPluginList;
+}
+
+const juce::KnownPluginList& TracktionEngineWrapper::getKnownPluginList() const {
+    return engine_->getPluginManager().knownPluginList;
+}
+
+juce::File TracktionEngineWrapper::getPluginListFile() const {
+    // Store plugin list in app data directory
+    // macOS: ~/Library/Application Support/MAGDA/
+    // Windows: %APPDATA%/MAGDA/
+    // Linux: ~/.config/MAGDA/
+    auto appDataDir = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
+                          .getChildFile("MAGDA");
+
+    // Create directory if it doesn't exist
+    if (!appDataDir.exists()) {
+        appDataDir.createDirectory();
+    }
+
+    return appDataDir.getChildFile("PluginList.xml");
+}
+
+void TracktionEngineWrapper::savePluginList() {
+    if (!engine_) {
+        std::cerr << "Cannot save plugin list: engine not initialized" << std::endl;
+        return;
+    }
+
+    auto& knownPlugins = engine_->getPluginManager().knownPluginList;
+    auto pluginListFile = getPluginListFile();
+
+    // Create XML representation of the plugin list
+    if (auto xml = knownPlugins.createXml()) {
+        if (xml->writeTo(pluginListFile)) {
+            std::cout << "Saved plugin list (" << knownPlugins.getNumTypes()
+                      << " plugins) to: " << pluginListFile.getFullPathName() << std::endl;
+        } else {
+            std::cerr << "Failed to write plugin list to: " << pluginListFile.getFullPathName()
+                      << std::endl;
+        }
+    }
+}
+
+void TracktionEngineWrapper::loadPluginList() {
+    if (!engine_) {
+        std::cerr << "Cannot load plugin list: engine not initialized" << std::endl;
+        return;
+    }
+
+    auto& knownPlugins = engine_->getPluginManager().knownPluginList;
+    auto pluginListFile = getPluginListFile();
+
+    if (pluginListFile.existsAsFile()) {
+        if (auto xml = juce::XmlDocument::parse(pluginListFile)) {
+            knownPlugins.recreateFromXml(*xml);
+            std::cout << "Loaded plugin list (" << knownPlugins.getNumTypes()
+                      << " plugins) from: " << pluginListFile.getFullPathName() << std::endl;
+        } else {
+            std::cerr << "Failed to parse plugin list from: " << pluginListFile.getFullPathName()
+                      << std::endl;
+            knownPlugins.clear();
+        }
+    } else {
+        std::cout << "No saved plugin list found at: " << pluginListFile.getFullPathName()
+                  << std::endl;
+        std::cout << "Plugins will need to be scanned manually via the Plugin Browser" << std::endl;
+        knownPlugins.clear();
+    }
+}
+
+void TracktionEngineWrapper::clearPluginList() {
+    if (!engine_) {
+        std::cerr << "Cannot clear plugin list: engine not initialized" << std::endl;
+        return;
+    }
+
+    // Clear in-memory list
+    auto& knownPlugins = engine_->getPluginManager().knownPluginList;
+    knownPlugins.clear();
+
+    // Delete the saved file
+    auto pluginListFile = getPluginListFile();
+    if (pluginListFile.existsAsFile()) {
+        pluginListFile.deleteFile();
+        std::cout << "Deleted plugin list file: " << pluginListFile.getFullPathName() << std::endl;
+    }
+
+    std::cout << "Plugin list cleared. Use 'Scan' to rediscover plugins." << std::endl;
 }
 
 }  // namespace magda

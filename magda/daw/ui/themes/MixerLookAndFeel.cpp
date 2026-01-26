@@ -16,22 +16,21 @@ MixerLookAndFeel::MixerLookAndFeel() {
     setColour(juce::Slider::thumbColourId, DarkTheme::getColour(DarkTheme::TEXT_PRIMARY));
 }
 
+MixerLookAndFeel::~MixerLookAndFeel() {
+    // RAII cleanup handled automatically by ManagedDrawable
+}
+
 void MixerLookAndFeel::loadIcons() {
-    // Load fader thumb SVG
-    faderThumb_ = juce::Drawable::createFromImageData(BinaryData::fader_thumb_svg,
-                                                      BinaryData::fader_thumb_svgSize);
+    // Load SVGs using RAII wrapper (createFromImageData wraps createFromSVG)
+    auto wrapDrawable = [](const char* data, int size) -> magda::ManagedDrawable {
+        auto drawable = juce::Drawable::createFromImageData(data, size);
+        return magda::ManagedDrawable::wrap(std::move(drawable));
+    };
 
-    // Load fader track SVG
-    faderTrack_ = juce::Drawable::createFromImageData(BinaryData::fader_track_svg,
-                                                      BinaryData::fader_track_svgSize);
-
-    // Load knob body SVG
-    knobBody_ = juce::Drawable::createFromImageData(BinaryData::knob_body_svg,
-                                                    BinaryData::knob_body_svgSize);
-
-    // Load knob pointer SVG
-    knobPointer_ = juce::Drawable::createFromImageData(BinaryData::knob_pointer_svg,
-                                                       BinaryData::knob_pointer_svgSize);
+    faderThumb_ = wrapDrawable(BinaryData::fader_thumb_svg, BinaryData::fader_thumb_svgSize);
+    faderTrack_ = wrapDrawable(BinaryData::fader_track_svg, BinaryData::fader_track_svgSize);
+    knobBody_ = wrapDrawable(BinaryData::knob_body_svg, BinaryData::knob_body_svgSize);
+    knobPointer_ = wrapDrawable(BinaryData::knob_pointer_svg, BinaryData::knob_pointer_svgSize);
 }
 
 void MixerLookAndFeel::drawLinearSlider(juce::Graphics& g, int x, int y, int width, int height,

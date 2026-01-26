@@ -315,9 +315,8 @@ TrackHeadersPanel::TrackHeadersPanel(AudioEngine* audioEngine) : audioEngine_(au
     // Start timer for metering updates (30 FPS)
     startTimerHz(30);
 
-    // Schedule a one-time refresh of MIDI selectors after 1 second
-    // This allows Tracktion Engine time to complete MIDI device scan
-    juce::Timer::callAfterDelay(1000, [this]() { refreshMidiSelectors(); });
+    // Refresh MIDI selectors immediately (Tracktion Engine loads devices async)
+    refreshMidiSelectors();
 }
 
 TrackHeadersPanel::~TrackHeadersPanel() {

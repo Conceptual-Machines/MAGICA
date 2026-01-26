@@ -5,10 +5,12 @@
 #include "MacroPanelComponent.hpp"
 #include "ModsPanelComponent.hpp"
 #include "ParamSlotComponent.hpp"
+#include "audio/AudioBridge.hpp"
 #include "core/MacroInfo.hpp"
 #include "core/ModInfo.hpp"
 #include "core/SelectionManager.hpp"
 #include "core/TrackManager.hpp"
+#include "engine/AudioEngine.hpp"
 #include "ui/debug/DebugSettings.hpp"
 #include "ui/themes/DarkTheme.hpp"
 #include "ui/themes/FontManager.hpp"
@@ -29,11 +31,17 @@ DeviceSlotComponent::DeviceSlotComponent(const magda::DeviceInfo& device) : devi
 
     // Set up NodeComponent callbacks
     onDeleteClicked = [this]() {
-        // Use path-based removal for proper nesting support
-        magda::TrackManager::getInstance().removeDeviceFromChainByPath(nodePath_);
-        if (onDeviceDeleted) {
-            onDeviceDeleted();
-        }
+        // IMPORTANT: Defer deletion to avoid crash - removeDeviceFromChainByPath will
+        // trigger a UI rebuild that destroys this component. We must not access 'this'
+        // after the removal, so we capture the path by value and defer the operation.
+        auto pathToDelete = nodePath_;
+        auto callback = onDeviceDeleted;  // Copy callback before 'this' is destroyed
+        juce::MessageManager::callAsync([pathToDelete, callback]() {
+            magda::TrackManager::getInstance().removeDeviceFromChainByPath(pathToDelete);
+            if (callback) {
+                callback();
+            }
+        });
     };
 
     onModPanelToggled = [this](bool visible) {
@@ -102,11 +110,24 @@ DeviceSlotComponent::DeviceSlotComponent(const magda::DeviceInfo& device) : devi
     };
     addAndMakeVisible(gainSlider_);
 
-    // UI button (open plugin window) - open in new icon
+    // UI button (toggle plugin window) - open in new icon
     uiButton_ = std::make_unique<magda::SvgButton>("UI", BinaryData::open_in_new_svg,
                                                    BinaryData::open_in_new_svgSize);
+    uiButton_->setClickingTogglesState(true);
     uiButton_->setNormalColor(DarkTheme::getSecondaryTextColour());
-    uiButton_->onClick = [this]() { DBG("Open plugin UI for: " << device_.name); };
+    uiButton_->setActiveColor(juce::Colours::white);
+    uiButton_->setActiveBackgroundColor(DarkTheme::getColour(DarkTheme::ACCENT_BLUE));
+    uiButton_->onClick = [this]() {
+        // Get the audio bridge and toggle plugin window
+        auto* audioEngine = magda::TrackManager::getInstance().getAudioEngine();
+        if (audioEngine) {
+            if (auto* bridge = audioEngine->getAudioBridge()) {
+                bool isOpen = bridge->togglePluginWindow(device_.id);
+                uiButton_->setToggleState(isOpen, juce::dontSendNotification);
+                uiButton_->setActive(isOpen);
+            }
+        }
+    };
     addAndMakeVisible(*uiButton_);
 
     // Bypass/On button (power icon)

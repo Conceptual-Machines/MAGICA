@@ -14,6 +14,7 @@ FooterBar::FooterBar() {
 
 FooterBar::~FooterBar() {
     ViewModeController::getInstance().removeListener(this);
+    // RAII cleanup handled automatically by ManagedChild
 }
 
 void FooterBar::paint(juce::Graphics& g) {
@@ -61,8 +62,9 @@ void FooterBar::setupButtons() {
     }};
 
     for (size_t i = 0; i < NUM_MODES; ++i) {
-        modeButtons[i] = std::make_unique<SvgButton>(icons[i].name, icons[i].data,
-                                                     static_cast<size_t>(icons[i].size));
+        // Create button using RAII wrapper
+        modeButtons[i] = magda::ManagedChild<SvgButton>::create(icons[i].name, icons[i].data,
+                                                                static_cast<size_t>(icons[i].size));
 
         modeButtons[i]->setClickingTogglesState(false);
         modeButtons[i]->onClick = [mode = icons[i].mode]() {
@@ -74,7 +76,7 @@ void FooterBar::setupButtons() {
         modeButtons[i]->setHoverColor(DarkTheme::getColour(DarkTheme::TEXT_PRIMARY));
         modeButtons[i]->setActiveColor(DarkTheme::getColour(DarkTheme::ACCENT_BLUE));
 
-        addAndMakeVisible(*modeButtons[i]);
+        addAndMakeVisible(*modeButtons[i]);  // Safe with ManagedChild
     }
 }
 

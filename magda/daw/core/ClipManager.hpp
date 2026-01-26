@@ -53,6 +53,14 @@ class ClipManager {
     ClipManager(const ClipManager&) = delete;
     ClipManager& operator=(const ClipManager&) = delete;
 
+    /**
+     * @brief Shutdown and clear all resources
+     * Call during app shutdown to prevent static cleanup issues
+     */
+    void shutdown() {
+        clips_.clear();  // Clear JUCE objects before JUCE cleanup
+    }
+
     // ========================================================================
     // Clip Creation
     // ========================================================================

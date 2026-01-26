@@ -22,6 +22,10 @@ class MiniWaveformDisplay : public juce::Component, private juce::Timer {
         startTimer(33);  // 30 FPS animation
     }
 
+    ~MiniWaveformDisplay() {
+        stopTimer();
+    }
+
     void setModInfo(const magda::ModInfo* mod) {
         mod_ = mod;
         DBG("MiniWaveformDisplay::setModInfo - mod_ ptr: " +

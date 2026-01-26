@@ -323,6 +323,20 @@ void TransportPanel::setupTempoAndQuantize() {
     addAndMakeVisible(*snapButton);
 }
 
+void TransportPanel::setTransportEnabled(bool enabled) {
+    playButton->setEnabled(enabled);
+    stopButton->setEnabled(enabled);
+    recordButton->setEnabled(enabled);
+    pauseButton->setEnabled(enabled);
+
+    // Visual feedback - dim buttons when disabled
+    float alpha = enabled ? 1.0f : 0.4f;
+    playButton->setAlpha(alpha);
+    stopButton->setAlpha(alpha);
+    recordButton->setAlpha(alpha);
+    pauseButton->setAlpha(alpha);
+}
+
 void TransportPanel::updateTempoDisplay() {
     tempoDisplay->setText(juce::String(currentTempo, 1), juce::dontSendNotification);
 }

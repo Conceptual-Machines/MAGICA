@@ -18,7 +18,7 @@ class TimeRuler : public juce::Component, private juce::Timer {
     enum class DisplayMode { Seconds, BarsBeats };
 
     TimeRuler();
-    ~TimeRuler() override = default;
+    ~TimeRuler() override;
 
     void paint(juce::Graphics& g) override;
     void resized() override;

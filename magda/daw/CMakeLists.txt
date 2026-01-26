@@ -103,6 +103,8 @@ set(DAW_CORE_SOURCES
     core/MidiNoteCommands.cpp
     core/ParameterUtils.cpp
     engine/TracktionEngineWrapper.cpp
+    engine/PluginScanner.cpp
+    engine/PluginScanCoordinator.cpp
     # Audio integration
     audio/AudioBridge.cpp
     audio/DeviceProcessor.cpp
@@ -222,6 +224,9 @@ set(DAW_UI_SOURCES
 set(DAW_HEADERS
     command.hpp
     magda.hpp
+    # Profiling (header-only)
+    profiling/PerformanceProfiler.hpp
+    profiling/BenchmarkSuite.hpp
     core/Config.hpp
     core/DeviceInfo.hpp
     core/ViewModeState.hpp
@@ -394,6 +399,13 @@ target_link_libraries(magda_daw
     MagdaAssets
 )
 
+# Enable plugin hosting for external VST3/AU plugins
+target_compile_definitions(magda_daw
+    PUBLIC
+    JUCE_PLUGINHOST_VST3=1
+    JUCE_PLUGINHOST_AU=1
+)
+
 # Link required libraries for DAW application
 target_link_libraries(magda_daw_app
     PRIVATE
@@ -407,6 +419,14 @@ target_link_libraries(magda_daw_app
     tracktion::tracktion_engine
 )
 
+# Enable plugin hosting for the app target as well
+# (needed because JUCE modules are compiled per-target)
+target_compile_definitions(magda_daw_app
+    PRIVATE
+    JUCE_PLUGINHOST_VST3=1
+    JUCE_PLUGINHOST_AU=1
+)
+
 # Include directories for DAW library
 target_include_directories(magda_daw
     PUBLIC
@@ -415,6 +435,7 @@ target_include_directories(magda_daw
     ${CMAKE_CURRENT_SOURCE_DIR}/interfaces
     ${CMAKE_CURRENT_SOURCE_DIR}/audio
     ${CMAKE_CURRENT_SOURCE_DIR}/engine
+    ${CMAKE_CURRENT_SOURCE_DIR}/profiling
     PRIVATE
     ${CMAKE_SOURCE_DIR}
 )
@@ -450,3 +471,57 @@ target_include_directories(magda_daw_app
 # Install targets
 install(TARGETS magda_daw_app DESTINATION bin)
 install(FILES ${DAW_HEADERS} DESTINATION include/magda/daw)
+
+# =============================================================================
+# Plugin Scanner Executable (for out-of-process plugin scanning)
+# =============================================================================
+
+# Create the plugin scanner as a console app
+juce_add_console_app(magda_plugin_scanner
+    VERSION "1.0.0"
+    COMPANY_NAME "MAGDA"
+    PRODUCT_NAME "MAGDA Plugin Scanner"
+)
+
+target_sources(magda_plugin_scanner PRIVATE
+    engine/plugin_scanner_main.cpp
+)
+
+target_link_libraries(magda_plugin_scanner
+    PRIVATE
+    juce::juce_core
+    juce::juce_events
+    juce::juce_audio_basics
+    juce::juce_audio_processors
+)
+
+target_compile_definitions(magda_plugin_scanner
+    PRIVATE
+    JUCE_PLUGINHOST_VST3=1
+    JUCE_PLUGINHOST_AU=1
+)
+
+# Link AudioUnit framework for AU plugin hosting on macOS
+if(APPLE)
+    target_link_libraries(magda_plugin_scanner
+        PRIVATE
+        "-framework AudioUnit"
+        "-framework CoreAudioKit"
+    )
+endif()
+
+target_include_directories(magda_plugin_scanner
+    PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/engine
+)
+
+# Copy scanner to app bundle on Mac
+if(APPLE)
+    add_custom_command(TARGET magda_daw_app POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy
+            "$<TARGET_FILE:magda_plugin_scanner>"
+            "$<TARGET_BUNDLE_CONTENT_DIR:magda_daw_app>/MacOS/magda_plugin_scanner"
+        COMMENT "Copying plugin scanner to app bundle"
+    )
+endif()

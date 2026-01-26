@@ -356,6 +356,21 @@ void TrackManager::setTrackType(TrackId trackId, TrackType type) {
 
 void TrackManager::setAudioEngine(AudioEngine* audioEngine) {
     audioEngine_ = audioEngine;
+
+    // Sync existing tracks' MIDI routing (in case tracks were created before engine was set)
+    if (audioEngine_) {
+        if (auto* midiBridge = audioEngine_->getMidiBridge()) {
+            for (const auto& track : tracks_) {
+                // Set up MIDI routing for tracks that have a MIDI input configured
+                if (!track.midiInputDevice.isEmpty()) {
+                    midiBridge->setTrackMidiInput(track.id, track.midiInputDevice);
+                    midiBridge->startMonitoring(track.id);
+                    DBG("Synced MIDI routing for track " << track.id << ": "
+                                                         << track.midiInputDevice);
+                }
+            }
+        }
+    }
 }
 
 // ============================================================================
@@ -374,7 +389,7 @@ void TrackManager::setTrackMidiInput(TrackId trackId, const juce::String& device
     // Update track state
     track->midiInputDevice = deviceId;
 
-    // Forward to MidiBridge for actual device setup
+    // Forward to MidiBridge for MIDI activity monitoring (UI indicators)
     if (audioEngine_) {
         if (auto* midiBridge = audioEngine_->getMidiBridge()) {
             if (deviceId.isEmpty()) {
@@ -384,6 +399,13 @@ void TrackManager::setTrackMidiInput(TrackId trackId, const juce::String& device
                 midiBridge->setTrackMidiInput(trackId, deviceId);
                 midiBridge->startMonitoring(trackId);
             }
+        }
+
+        // Forward to AudioBridge for Tracktion Engine MIDI routing (actual plugin input)
+        if (auto* audioBridge = audioEngine_->getAudioBridge()) {
+            // Convert our deviceId to AudioBridge format
+            // "all" stays as "all", empty clears routing, otherwise use the device ID
+            audioBridge->setTrackMidiInput(trackId, deviceId);
         }
     }
 
@@ -1275,6 +1297,23 @@ void TrackManager::setDeviceParameterValue(const ChainNodePath& devicePath, int 
                 DBG("  param[" << i << "] = " << device->parameters[i].currentValue);
             }
             notifyDevicePropertyChanged(device->id);
+        }
+    }
+}
+
+void TrackManager::setDeviceParameterValueFromPlugin(const ChainNodePath& devicePath,
+                                                     int paramIndex, float value) {
+    // This method is called when the plugin's native UI changes a parameter.
+    // It updates the DeviceInfo but does NOT call notifyDevicePropertyChanged()
+    // to avoid triggering AudioBridge sync (which would cause a feedback loop).
+    //
+    // Instead, we notify the modulation system which will update the UI.
+
+    if (auto* device = getDeviceInChainByPath(devicePath)) {
+        if (paramIndex >= 0 && paramIndex < static_cast<int>(device->parameters.size())) {
+            device->parameters[static_cast<size_t>(paramIndex)].currentValue = value;
+            // Notify modulation/UI that values changed (for display updates only)
+            notifyModulationChanged();
         }
     }
 }

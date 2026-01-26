@@ -81,6 +81,24 @@ class TrackManager {
      */
     void setAudioEngine(AudioEngine* audioEngine);
 
+    /**
+     * @brief Shutdown and clear all resources
+     * Call during app shutdown to prevent static cleanup issues
+     */
+    void shutdown() {
+        tracks_.clear();  // Clear JUCE::String objects before JUCE cleanup
+        listeners_.clear();
+        audioEngine_ = nullptr;
+    }
+
+    /**
+     * @brief Get the audio engine reference
+     * @return Pointer to audio engine, or nullptr if not set
+     */
+    AudioEngine* getAudioEngine() const {
+        return audioEngine_;
+    }
+
     // Track operations
     TrackId createTrack(const juce::String& name = "", TrackType type = TrackType::Audio);
     TrackId createGroupTrack(const juce::String& name = "");
@@ -194,6 +212,17 @@ class TrackManager {
 
     // Set a specific device parameter value
     void setDeviceParameterValue(const ChainNodePath& devicePath, int paramIndex, float value);
+
+    /**
+     * @brief Set a device parameter value from the plugin's native UI
+     *
+     * This method is called when the plugin's native UI changes a parameter.
+     * Unlike setDeviceParameterValue(), this does NOT notify AudioBridge
+     * to avoid feedback loops. It only updates the DeviceInfo and notifies
+     * UI listeners for display updates.
+     */
+    void setDeviceParameterValueFromPlugin(const ChainNodePath& devicePath, int paramIndex,
+                                           float value);
 
     // Nested rack management within chains
     RackId addRackToChain(TrackId trackId, RackId parentRackId, ChainId chainId,

@@ -2,6 +2,8 @@
 
 #include <iostream>
 
+#include "../profiling/PerformanceProfiler.hpp"
+
 namespace magda {
 
 AudioBridge::AudioBridge(te::Engine& engine, te::Edit& edit) : engine_(engine), edit_(edit) {
@@ -183,8 +185,10 @@ te::Plugin::Ptr AudioBridge::loadBuiltInPlugin(TrackId trackId, const juce::Stri
     return plugin;
 }
 
-te::Plugin::Ptr AudioBridge::loadExternalPlugin(TrackId trackId,
-                                                const juce::PluginDescription& description) {
+PluginLoadResult AudioBridge::loadExternalPlugin(TrackId trackId,
+                                                 const juce::PluginDescription& description) {
+    MAGDA_MONITOR_SCOPE("PluginLoad");
+
     auto* track = getAudioTrack(trackId);
     if (!track) {
         auto* trackInfo = TrackManager::getInstance().getTrack(trackId);
@@ -192,22 +196,73 @@ te::Plugin::Ptr AudioBridge::loadExternalPlugin(TrackId trackId,
         track = createAudioTrack(trackId, name);
     }
 
-    if (!track)
-        return nullptr;
-
-    // Create external plugin using the description
-    auto plugin =
-        edit_.getPluginCache().createNewPlugin(te::ExternalPlugin::xmlTypeName, description);
-
-    if (plugin) {
-        track->pluginList.insertPlugin(plugin, -1, nullptr);
-        std::cout << "Loaded external plugin: " << description.name << " on track " << trackId
-                  << std::endl;
-    } else {
-        std::cerr << "Failed to load external plugin: " << description.name << std::endl;
+    if (!track) {
+        return PluginLoadResult::Failure("Failed to create or find track for plugin");
     }
 
-    return plugin;
+    try {
+        // Debug: log the full description being used
+        DBG("loadExternalPlugin: Creating plugin with description:");
+        DBG("  name: " << description.name);
+        DBG("  fileOrIdentifier: " << description.fileOrIdentifier);
+        DBG("  uniqueId: " << description.uniqueId);
+        DBG("  deprecatedUid: " << description.deprecatedUid);
+        DBG("  isInstrument: " << (description.isInstrument ? "true" : "false"));
+        DBG("  createIdentifierString: " << description.createIdentifierString());
+
+        // WORKAROUND for Tracktion Engine bug: When multiple plugins share the same
+        // uniqueId (common in VST3 bundles with multiple components like Serum 2 + Serum 2 FX),
+        // TE's findMatchingPlugin() matches by uniqueId first and returns the wrong plugin.
+        // By clearing uniqueId, we force it to fall through to deprecatedUid matching,
+        // which correctly distinguishes between plugins in the same bundle.
+        juce::PluginDescription descCopy = description;
+        if (descCopy.deprecatedUid != 0) {
+            DBG("  Clearing uniqueId to force deprecatedUid matching (workaround for TE bug)");
+            descCopy.uniqueId = 0;
+        }
+
+        // Create external plugin using the description
+        auto plugin =
+            edit_.getPluginCache().createNewPlugin(te::ExternalPlugin::xmlTypeName, descCopy);
+
+        if (plugin) {
+            // Check if plugin actually initialized successfully
+            if (auto* extPlugin = dynamic_cast<te::ExternalPlugin*>(plugin.get())) {
+                // Debug: Check what plugin was actually created
+                DBG("ExternalPlugin created - checking actual plugin:");
+                DBG("  Requested: " << description.name << " (uniqueId=" << description.uniqueId
+                                    << ")");
+                DBG("  Got: " << extPlugin->getName()
+                              << " (identifier=" << extPlugin->getIdentifierString() << ")");
+
+                // Check if the plugin file exists and is loadable
+                if (!extPlugin->isEnabled()) {
+                    juce::String error = "Plugin failed to initialize: " + description.name;
+                    if (description.fileOrIdentifier.isNotEmpty()) {
+                        error += " (" + description.fileOrIdentifier + ")";
+                    }
+                    return PluginLoadResult::Failure(error);
+                }
+            }
+
+            track->pluginList.insertPlugin(plugin, -1, nullptr);
+            std::cout << "Loaded external plugin: " << description.name << " on track " << trackId
+                      << std::endl;
+            return PluginLoadResult::Success(plugin);
+        } else {
+            juce::String error = "Failed to create plugin: " + description.name;
+            std::cerr << error << std::endl;
+            return PluginLoadResult::Failure(error);
+        }
+    } catch (const std::exception& e) {
+        juce::String error = "Exception loading plugin " + description.name + ": " + e.what();
+        std::cerr << error << std::endl;
+        return PluginLoadResult::Failure(error);
+    } catch (...) {
+        juce::String error = "Unknown exception loading plugin: " + description.name;
+        std::cerr << error << std::endl;
+        return PluginLoadResult::Failure(error);
+    }
 }
 
 te::Plugin::Ptr AudioBridge::addLevelMeterToTrack(TrackId trackId) {
@@ -505,6 +560,8 @@ void AudioBridge::ensureTrackMapping(TrackId trackId) {
 // =============================================================================
 
 void AudioBridge::processParameterChanges() {
+    MAGDA_MONITOR_SCOPE("ParamChanges");
+
     ParameterChange change;
     while (parameterQueue_.pop(change)) {
         auto plugin = getPlugin(change.deviceId);
@@ -563,7 +620,50 @@ void AudioBridge::updateMetering() {
     // For now, we use the timer callback for metering
 }
 
+void AudioBridge::onMidiDevicesAvailable() {
+    // Called by TracktionEngineWrapper when MIDI devices become available
+    DBG("AudioBridge::onMidiDevicesAvailable() - MIDI devices are now ready");
+
+    // Log available MIDI devices
+    auto& dm = engine_.getDeviceManager();
+    auto midiDevices = dm.getMidiInDevices();
+    DBG("  Available MIDI input devices: " << midiDevices.size());
+    for (const auto& dev : midiDevices) {
+        if (dev) {
+            DBG("    - " << dev->getName() << " (enabled=" << (dev->isEnabled() ? "yes" : "no")
+                         << ")");
+        }
+    }
+
+    // Apply any pending MIDI routes
+    applyPendingMidiRoutes();
+}
+
+void AudioBridge::applyPendingMidiRoutes() {
+    if (pendingMidiRoutes_.empty()) {
+        return;
+    }
+
+    auto* playbackContext = edit_.getCurrentPlaybackContext();
+    if (!playbackContext) {
+        return;  // Still not ready
+    }
+
+    DBG("Applying " << pendingMidiRoutes_.size() << " pending MIDI routes");
+
+    // Copy and clear to avoid re-entrancy issues
+    auto routes = std::move(pendingMidiRoutes_);
+    pendingMidiRoutes_.clear();
+
+    for (const auto& [trackId, midiDeviceId] : routes) {
+        setTrackMidiInput(trackId, midiDeviceId);
+    }
+}
+
 void AudioBridge::timerCallback() {
+    // Apply any pending MIDI routes now that playback context may be available
+    applyPendingMidiRoutes();
+
     // Update metering from level measurers (runs at 30 FPS on message thread)
     juce::ScopedLock lock(mappingLock_);
 
@@ -676,6 +776,10 @@ te::Plugin::Ptr AudioBridge::loadDeviceAsPlugin(TrackId trackId, const DeviceInf
     if (!track)
         return nullptr;
 
+    DBG("loadDeviceAsPlugin: trackId=" << trackId << " device='" << device.name << "' isInstrument="
+                                       << (device.isInstrument ? "true" : "false")
+                                       << " format=" << device.getFormatString());
+
     te::Plugin::Ptr plugin;
     std::unique_ptr<DeviceProcessor> processor;
 
@@ -716,9 +820,115 @@ te::Plugin::Ptr AudioBridge::loadDeviceAsPlugin(TrackId trackId, const DeviceInf
                 track->pluginList.insertPlugin(plugin, -1, nullptr);
         }
     } else {
-        // External plugin - need to find matching description
-        // This will be fully implemented in Phase 2
-        std::cout << "External plugin loading deferred to Phase 2: " << device.name << std::endl;
+        // External plugin - find matching description from KnownPluginList
+        if (device.uniqueId.isNotEmpty() || device.fileOrIdentifier.isNotEmpty()) {
+            // Build PluginDescription from DeviceInfo
+            juce::PluginDescription desc;
+            desc.name = device.name;
+            desc.manufacturerName = device.manufacturer;
+            desc.fileOrIdentifier = device.fileOrIdentifier;
+            desc.isInstrument = device.isInstrument;
+
+            // Set format
+            switch (device.format) {
+                case PluginFormat::VST3:
+                    desc.pluginFormatName = "VST3";
+                    break;
+                case PluginFormat::AU:
+                    desc.pluginFormatName = "AudioUnit";
+                    break;
+                case PluginFormat::VST:
+                    desc.pluginFormatName = "VST";
+                    break;
+                default:
+                    break;
+            }
+
+            // Try to find a matching plugin in KnownPluginList
+            DBG("Plugin lookup: searching for name='"
+                << device.name << "' manufacturer='" << device.manufacturer
+                << "' isInstrument=" << (device.isInstrument ? "true" : "false") << " fileOrId='"
+                << device.fileOrIdentifier << "'");
+
+            auto& knownPlugins = engine_.getPluginManager().knownPluginList;
+
+            // Debug: dump all plugins that match the name (case insensitive)
+            DBG("  All matching plugins in KnownPluginList:");
+            for (const auto& kd : knownPlugins.getTypes()) {
+                if (kd.name.containsIgnoreCase(device.name) ||
+                    device.name.containsIgnoreCase(kd.name.toStdString())) {
+                    DBG("    - name='"
+                        << kd.name << "' isInstrument=" << (kd.isInstrument ? "true" : "false")
+                        << " fileOrId='" << kd.fileOrIdentifier << "'"
+                        << " uniqueId='" << kd.uniqueId << "'"
+                        << " identifierString='" << kd.createIdentifierString() << "'");
+                }
+            }
+            bool found = false;
+            for (const auto& knownDesc : knownPlugins.getTypes()) {
+                // Match by fileOrIdentifier (most specific) BUT also check isInstrument
+                // to avoid loading FX when instrument is requested
+                if (knownDesc.fileOrIdentifier == device.fileOrIdentifier &&
+                    knownDesc.isInstrument == device.isInstrument) {
+                    DBG("  -> MATCHED by fileOrIdentifier + isInstrument: " << knownDesc.name);
+                    desc = knownDesc;
+                    found = true;
+                    break;
+                }
+            }
+
+            // Second pass: match by name, manufacturer, AND isInstrument flag
+            if (!found) {
+                for (const auto& knownDesc : knownPlugins.getTypes()) {
+                    if (knownDesc.name == device.name &&
+                        knownDesc.manufacturerName == device.manufacturer &&
+                        knownDesc.isInstrument == device.isInstrument) {
+                        DBG("  -> MATCHED by name+manufacturer+isInstrument: " << knownDesc.name);
+                        desc = knownDesc;
+                        found = true;
+                        break;
+                    }
+                }
+            }
+
+            // Third pass: match by fileOrIdentifier only (fallback)
+            if (!found) {
+                for (const auto& knownDesc : knownPlugins.getTypes()) {
+                    if (knownDesc.fileOrIdentifier == device.fileOrIdentifier) {
+                        DBG("  -> MATCHED by fileOrIdentifier only (fallback): "
+                            << knownDesc.name
+                            << " isInstrument=" << (knownDesc.isInstrument ? "true" : "false"));
+                        desc = knownDesc;
+                        found = true;
+                        break;
+                    }
+                }
+            }
+
+            if (!found) {
+                DBG("  -> NO MATCH FOUND in KnownPluginList!");
+            }
+
+            auto result = loadExternalPlugin(trackId, desc);
+            if (result.success && result.plugin) {
+                plugin = result.plugin;
+                auto extProcessor = std::make_unique<ExternalPluginProcessor>(device.id, plugin);
+                // Start listening for parameter changes from the plugin's native UI
+                extProcessor->startParameterListening();
+                processor = std::move(extProcessor);
+            } else {
+                // Plugin failed to load - notify via callback
+                if (onPluginLoadFailed) {
+                    onPluginLoadFailed(device.id, result.errorMessage);
+                }
+                std::cerr << "Plugin load failed for device " << device.id << ": "
+                          << result.errorMessage << std::endl;
+                return nullptr;  // Don't proceed with a failed plugin
+            }
+        } else {
+            std::cout << "Cannot load external plugin without uniqueId or fileOrIdentifier: "
+                      << device.name << std::endl;
+        }
     }
 
     if (plugin) {
@@ -752,6 +962,13 @@ te::Plugin::Ptr AudioBridge::loadDeviceAsPlugin(TrackId trackId, const DeviceInf
             bool isPlaying = transportPlaying_.load(std::memory_order_acquire);
             // Bypass if transport is not playing
             toneProc->setBypassed(!isPlaying);
+        }
+
+        // If this is an instrument, automatically route all MIDI inputs to this track
+        if (device.isInstrument) {
+            setTrackMidiInput(trackId, "all");
+            std::cout << "Auto-routed MIDI input to track " << trackId
+                      << " for instrument: " << device.name << std::endl;
         }
 
         std::cout << "Loaded device " << device.id << " (" << device.name << ") as plugin"
@@ -958,6 +1175,290 @@ juce::String AudioBridge::getTrackAudioInput(TrackId trackId) const {
     }
 
     return {};  // No input assigned
+}
+
+// =============================================================================
+// MIDI Routing (for live instrument playback)
+// =============================================================================
+
+void AudioBridge::enableAllMidiInputDevices() {
+    auto& dm = engine_.getDeviceManager();
+
+    // Enable all MIDI input devices at the engine level
+    for (auto& midiInput : dm.getMidiInDevices()) {
+        if (midiInput && !midiInput->isEnabled()) {
+            midiInput->setEnabled(true);
+            DBG("Enabled MIDI input device: " << midiInput->getName());
+        }
+    }
+
+    DBG("All MIDI input devices enabled in Tracktion Engine");
+}
+
+void AudioBridge::setTrackMidiInput(TrackId trackId, const juce::String& midiDeviceId) {
+    auto* track = getAudioTrack(trackId);
+    if (!track) {
+        DBG("AudioBridge::setTrackMidiInput - track not found: " << trackId);
+        return;
+    }
+
+    DBG("AudioBridge::setTrackMidiInput - trackId="
+        << trackId << " midiDeviceId='" << midiDeviceId << "' (thread: "
+        << (juce::MessageManager::getInstance()->isThisTheMessageThread() ? "message" : "other")
+        << ")");
+
+    auto* playbackContext = edit_.getCurrentPlaybackContext();
+    if (!playbackContext) {
+        DBG("  -> No playback context available, deferring MIDI routing");
+        // Store for later when playback context becomes available
+        pendingMidiRoutes_.push_back({trackId, midiDeviceId});
+        return;
+    }
+
+    DBG("  -> Playback context available, graph allocated: "
+        << (playbackContext->isPlaybackGraphAllocated() ? "yes" : "no")
+        << ", transport playing: " << (edit_.getTransport().isPlaying() ? "yes" : "no"));
+
+    if (midiDeviceId.isEmpty()) {
+        // Disable MIDI input - remove this track as target from all MIDI inputs
+        for (auto* inputDeviceInstance : playbackContext->getAllInputs()) {
+            // Check if this is a MIDI input device
+            if (dynamic_cast<te::MidiInputDevice*>(&inputDeviceInstance->owner)) {
+                inputDeviceInstance->removeTarget(track->itemID, nullptr);
+            }
+        }
+        DBG("  -> Cleared MIDI input");
+    } else if (midiDeviceId == "all") {
+        // Route ALL MIDI input devices to this track
+        bool addedAnyRouting = false;
+        DBG("  -> Routing ALL MIDI inputs to track. Total inputs in context: "
+            << playbackContext->getAllInputs().size());
+
+        for (auto* inputDeviceInstance : playbackContext->getAllInputs()) {
+            // Check if this is a MIDI input device
+            if (auto* midiDevice =
+                    dynamic_cast<te::MidiInputDevice*>(&inputDeviceInstance->owner)) {
+                // Make sure the device is enabled
+                if (!midiDevice->isEnabled()) {
+                    midiDevice->setEnabled(true);
+                }
+
+                // Set monitor mode to "on" so we hear MIDI without needing to arm for recording
+                midiDevice->setMonitorMode(te::InputDevice::MonitorMode::on);
+
+                // Set this track as target for live MIDI
+                auto result =
+                    inputDeviceInstance->setTarget(track->itemID, true, nullptr);  // true = MIDI
+                if (result.has_value()) {
+                    // Enable monitoring but not recording
+                    (*result)->recordEnabled = false;
+                    addedAnyRouting = true;
+                    DBG("  -> Routed MIDI input '" << midiDevice->getName()
+                                                   << "' to track (monitor=on)");
+                    DBG("     Device enabled: " << (midiDevice->isEnabled() ? "yes" : "no"));
+                    DBG("     Monitor mode: " << (int)midiDevice->getMonitorMode());
+                    DBG("     Track name: " << track->getName());
+                    DBG("     Track plugins: " << track->pluginList.size());
+
+                    // List plugins on the track for debugging
+                    for (int i = 0; i < track->pluginList.size(); ++i) {
+                        auto* p = track->pluginList[i];
+                        if (p) {
+                            DBG("       Plugin " << i << ": " << p->getName() << " (enabled="
+                                                 << (p->isEnabled() ? "yes" : "no") << ")");
+                        }
+                    }
+                } else {
+                    DBG("  -> FAILED to route MIDI input '" << midiDevice->getName()
+                                                            << "' to track");
+                }
+            }
+        }
+
+        // Reallocate the playback graph to include the new MIDI input nodes
+        if (addedAnyRouting) {
+            if (playbackContext->isPlaybackGraphAllocated()) {
+                DBG("  -> Reallocating playback graph to include MIDI input nodes");
+                playbackContext->reallocate();
+            } else {
+                DBG("  -> Playback graph not allocated yet, MIDI routing will take effect on play");
+            }
+        }
+    } else {
+        // Route specific MIDI device to this track
+        auto& dm = engine_.getDeviceManager();
+        bool addedRouting = false;
+
+        // Try to find the device by ID first, then by name
+        // Note: JUCE device IDs differ from Tracktion Engine device IDs,
+        // so we may need to match by name
+        te::MidiInputDevice* midiDevice = nullptr;
+
+        // First try by Tracktion's ID
+        if (auto dev = dm.findMidiInputDeviceForID(midiDeviceId)) {
+            midiDevice = dev.get();
+        } else {
+            // Try to find by matching the JUCE device name
+            // Get JUCE device name from the identifier
+            auto juceDevices = juce::MidiInput::getAvailableDevices();
+            juce::String deviceName;
+            for (const auto& d : juceDevices) {
+                if (d.identifier == midiDeviceId) {
+                    deviceName = d.name;
+                    break;
+                }
+            }
+
+            if (deviceName.isNotEmpty()) {
+                // Find Tracktion device by name
+                for (const auto& dev : dm.getMidiInDevices()) {
+                    if (dev && dev->getName() == deviceName) {
+                        midiDevice = dev.get();
+                        DBG("  -> Found device by name: " << deviceName);
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (midiDevice) {
+            if (!midiDevice->isEnabled()) {
+                midiDevice->setEnabled(true);
+            }
+
+            // Set monitor mode to "on" so we hear MIDI without needing to arm for recording
+            midiDevice->setMonitorMode(te::InputDevice::MonitorMode::on);
+
+            // Find the InputDeviceInstance for this MIDI device
+            for (auto* inputDeviceInstance : playbackContext->getAllInputs()) {
+                if (&inputDeviceInstance->owner == midiDevice) {
+                    auto result = inputDeviceInstance->setTarget(track->itemID, true, nullptr);
+                    if (result.has_value()) {
+                        (*result)->recordEnabled = false;
+                        addedRouting = true;
+                        DBG("  -> Routed MIDI input '" << midiDevice->getName()
+                                                       << "' to track (monitor=on)");
+                        DBG("     Device enabled: " << (midiDevice->isEnabled() ? "yes" : "no"));
+                        DBG("     Monitor mode: " << (int)midiDevice->getMonitorMode());
+                    } else {
+                        DBG("  -> FAILED to route MIDI input '" << midiDevice->getName()
+                                                                << "' to track");
+                    }
+                    break;
+                }
+            }
+        } else {
+            DBG("  -> MIDI device not found: " << midiDeviceId);
+        }
+
+        // Reallocate the playback graph to include the new MIDI input node
+        if (addedRouting) {
+            if (playbackContext->isPlaybackGraphAllocated()) {
+                DBG("  -> Reallocating playback graph to include MIDI input node");
+                playbackContext->reallocate();
+            } else {
+                DBG("  -> Playback graph not allocated yet, MIDI routing will take effect on play");
+            }
+        }
+    }
+}
+
+juce::String AudioBridge::getTrackMidiInput(TrackId trackId) const {
+    auto* track = const_cast<AudioBridge*>(this)->getAudioTrack(trackId);
+    if (!track) {
+        return {};
+    }
+
+    auto* playbackContext = edit_.getCurrentPlaybackContext();
+    if (!playbackContext) {
+        return {};
+    }
+
+    // Check if any MIDI input device is routed to this track
+    juce::StringArray midiInputs;
+    for (auto* inputDeviceInstance : playbackContext->getAllInputs()) {
+        if (dynamic_cast<te::MidiInputDevice*>(&inputDeviceInstance->owner)) {
+            auto targets = inputDeviceInstance->getTargets();
+            for (auto targetID : targets) {
+                if (targetID == track->itemID) {
+                    midiInputs.add(inputDeviceInstance->owner.getName());
+                }
+            }
+        }
+    }
+
+    if (midiInputs.isEmpty()) {
+        return {};
+    } else if (midiInputs.size() == 1) {
+        return midiInputs[0];
+    } else {
+        return "all";  // Multiple inputs = "all"
+    }
+}
+
+// =============================================================================
+// Plugin Editor Windows
+// =============================================================================
+
+void AudioBridge::showPluginWindow(DeviceId deviceId) {
+    auto plugin = getPlugin(deviceId);
+    if (!plugin) {
+        DBG("AudioBridge::showPluginWindow - plugin not found for deviceId=" << deviceId);
+        return;
+    }
+
+    // Check if this is an external plugin with a UI
+    if (auto* extPlugin = dynamic_cast<te::ExternalPlugin*>(plugin.get())) {
+        // Use Tracktion's built-in window state management
+        if (extPlugin->windowState) {
+            extPlugin->windowState->showWindowExplicitly();
+            DBG("Showing plugin window for: " << extPlugin->getName());
+        } else {
+            DBG("Plugin has no windowState: " << extPlugin->getName());
+        }
+    } else {
+        // For internal plugins, we could show a generic parameter editor
+        // For now, just log
+        DBG("Plugin is not external, no window to show: " << plugin->getName());
+    }
+}
+
+void AudioBridge::hidePluginWindow(DeviceId deviceId) {
+    auto plugin = getPlugin(deviceId);
+    if (!plugin) {
+        return;
+    }
+
+    if (auto* extPlugin = dynamic_cast<te::ExternalPlugin*>(plugin.get())) {
+        if (extPlugin->windowState) {
+            extPlugin->windowState->closeWindowExplicitly();
+            DBG("Hiding plugin window for: " << extPlugin->getName());
+        }
+    }
+}
+
+bool AudioBridge::isPluginWindowOpen(DeviceId deviceId) const {
+    auto plugin = const_cast<AudioBridge*>(this)->getPlugin(deviceId);
+    if (!plugin) {
+        return false;
+    }
+
+    if (auto* extPlugin = dynamic_cast<te::ExternalPlugin*>(plugin.get())) {
+        if (extPlugin->windowState) {
+            return extPlugin->windowState->isWindowShowing();
+        }
+    }
+    return false;
+}
+
+bool AudioBridge::togglePluginWindow(DeviceId deviceId) {
+    if (isPluginWindowOpen(deviceId)) {
+        hidePluginWindow(deviceId);
+        return false;
+    } else {
+        showPluginWindow(deviceId);
+        return true;
+    }
 }
 
 }  // namespace magda

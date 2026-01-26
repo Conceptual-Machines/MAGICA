@@ -30,7 +30,13 @@ class MenuManager : public juce::MenuBarModel, public UndoManagerListener {
         std::function<void()> onDelete;
         std::function<void()> onSelectAll;
         std::function<void()> onPreferences;
+
+        // Settings menu
         std::function<void()> onAudioSettings;
+        std::function<void()> onMidiSettings;
+        std::function<void()> onPluginScan;
+        std::function<void()> onPluginClear;
+        std::function<void()> onPluginOpenFolder;
 
         // View menu
         std::function<void(bool)> onToggleLeftPanel;
@@ -124,8 +130,14 @@ class MenuManager : public juce::MenuBarModel, public UndoManagerListener {
         Paste,
         Delete,
         SelectAll = 220,
-        Preferences = 298,
-        AudioSettings = 299,
+        Preferences = 299,
+
+        // Settings menu (800-899)
+        AudioSettings = 800,
+        MidiSettings,
+        PluginScan = 810,
+        PluginClear,
+        PluginOpenFolder,
 
         // View menu (300-399)
         ToggleLeftPanel = 300,

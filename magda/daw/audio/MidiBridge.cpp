@@ -116,23 +116,36 @@ bool MidiBridge::isMidiInputEnabled(const juce::String& deviceId) const {
 void MidiBridge::setTrackMidiInput(TrackId trackId, const juce::String& midiDeviceId) {
     juce::ScopedLock lock(routingLock_);
 
+    DBG("MidiBridge::setTrackMidiInput - trackId=" << trackId << " midiDeviceId='" << midiDeviceId
+                                                   << "'");
+
     if (midiDeviceId.isEmpty()) {
         // Clear routing
         trackMidiInputs_.erase(trackId);
+        DBG("  -> Cleared routing for track " << trackId);
     } else {
         trackMidiInputs_[trackId] = midiDeviceId;
+        DBG("  -> Stored routing: track " << trackId << " -> '" << midiDeviceId << "'");
 
         // Auto-enable the device if not already enabled
         if (midiDeviceId == "all") {
             // Special case: enable ALL MIDI input devices
             auto availableDevices = juce::MidiInput::getAvailableDevices();
+            DBG("  -> 'all' mode: enabling " << availableDevices.size() << " MIDI input devices");
             for (const auto& deviceInfo : availableDevices) {
                 enableMidiInput(deviceInfo.identifier);
             }
         } else {
             // Single device
+            DBG("  -> Single device mode: enabling '" << midiDeviceId << "'");
             enableMidiInput(midiDeviceId);
         }
+    }
+
+    // Debug: print current routing state
+    DBG("  -> Current track routings:");
+    for (const auto& [tid, did] : trackMidiInputs_) {
+        DBG("     track " << tid << " -> '" << did << "'");
     }
 }
 
@@ -152,30 +165,52 @@ void MidiBridge::clearTrackMidiInput(TrackId trackId) {
 
 void MidiBridge::handleIncomingMidiMessage(juce::MidiInput* source,
                                            const juce::MidiMessage& message) {
-    if (!source || !audioBridge_) {
+    if (!source) {
         return;
     }
 
-    // ONLY trigger activity indicator for note on messages
-    // Ignore MIDI clock, CC, etc. to avoid constant "on" state
-    if (!message.isNoteOn()) {
+    // Skip MIDI clock and other system messages for activity/routing
+    if (message.isMidiClock() || message.isActiveSense() || message.isMidiStart() ||
+        message.isMidiStop() || message.isMidiContinue()) {
         return;
     }
 
     // Get the device ID for this input
     juce::String sourceDeviceId = source->getIdentifier();
 
+    // Debug: Log MIDI message receipt
+    if (message.isNoteOn()) {
+        DBG("MidiBridge: Note ON received - note="
+            << message.getNoteNumber() << " vel=" << message.getVelocity() << " from '"
+            << source->getName() << "' (id='" << sourceDeviceId << "')"
+            << " trackRoutings=" << trackMidiInputs_.size());
+    }
+
     // Find all tracks routing this MIDI input
     juce::ScopedLock lock(routingLock_);
 
     for (const auto& [trackId, deviceId] : trackMidiInputs_) {
         // Check if this track is routing this device (or "all" inputs)
-        if (deviceId == sourceDeviceId || deviceId == "all") {
-            // Check if monitoring is enabled for this track
-            if (monitoredTracks_.find(trackId) != monitoredTracks_.end()) {
-                // Trigger MIDI activity indicator
-                audioBridge_->triggerMidiActivity(trackId);
+        bool matches = (deviceId == sourceDeviceId || deviceId == "all");
 
+        if (message.isNoteOn()) {
+            DBG("  -> Checking track " << trackId << ": routing='" << deviceId << "' vs source='"
+                                       << sourceDeviceId << "' -> "
+                                       << (matches ? "MATCH" : "no match"));
+        }
+
+        if (matches) {
+            // NOTE: MIDI routing to plugins is now handled by Tracktion Engine's
+            // native InputDeviceInstance -> MidiInputDeviceNode system.
+            // MidiBridge only monitors MIDI activity for UI visualization.
+
+            // Trigger MIDI activity indicator (only for notes)
+            if (audioBridge_ && message.isNoteOn()) {
+                audioBridge_->triggerMidiActivity(trackId);
+            }
+
+            // Check if monitoring is enabled for this track for callbacks
+            if (monitoredTracks_.find(trackId) != monitoredTracks_.end()) {
                 // Call callbacks if set (for note/CC monitoring)
                 if (message.isNoteOn() || message.isNoteOff()) {
                     if (onNoteEvent) {

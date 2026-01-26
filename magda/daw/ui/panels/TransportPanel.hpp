@@ -34,6 +34,9 @@ class TransportPanel : public juce::Component {
     void setTimeSignature(int numerator, int denominator);
     void setSnapEnabled(bool enabled);
 
+    // Enable/disable transport controls (e.g., during device loading)
+    void setTransportEnabled(bool enabled);
+
   private:
     // Transport controls (left section)
     std::unique_ptr<SvgButton> playButton;

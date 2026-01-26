@@ -295,6 +295,10 @@ ModulatorEditorPanel::ModulatorEditorPanel() {
     addAndMakeVisible(advancedButton_.get());
 }
 
+ModulatorEditorPanel::~ModulatorEditorPanel() {
+    stopTimer();
+}
+
 void ModulatorEditorPanel::setModInfo(const magda::ModInfo& mod, const magda::ModInfo* liveMod) {
     currentMod_ = mod;
     liveModPtr_ = liveMod;

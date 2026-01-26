@@ -2,6 +2,8 @@
 
 #include <tracktion_engine/tracktion_engine.h>
 
+#include <functional>
+
 #include "../command.hpp"
 #include "../interfaces/clip_interface.hpp"
 #include "../interfaces/mixer_interface.hpp"
@@ -14,6 +16,7 @@ namespace magda {
 // Forward declarations
 class AudioBridge;
 class MidiBridge;
+class PluginScanCoordinator;
 
 /**
  * @brief Tracktion Engine implementation of AudioEngine
@@ -29,7 +32,8 @@ class TracktionEngineWrapper : public AudioEngine,
                                public TransportInterface,
                                public TrackInterface,
                                public ClipInterface,
-                               public MixerInterface {
+                               public MixerInterface,
+                               private juce::ChangeListener {
   public:
     TracktionEngineWrapper();
     ~TracktionEngineWrapper();
@@ -180,7 +184,102 @@ class TracktionEngineWrapper : public AudioEngine,
         return currentEdit_.get();
     }
 
+    // =========================================================================
+    // Device Loading State
+    // =========================================================================
+
+    /**
+     * @brief Check if devices are currently being initialized
+     * @return true if MIDI/audio devices are being scanned/opened
+     */
+    bool isDevicesLoading() const {
+        return devicesLoading_;
+    }
+
+    /**
+     * @brief Callback when device loading state changes
+     * Called with (isLoading, message) - message describes what's happening
+     */
+    std::function<void(bool, const juce::String&)> onDevicesLoadingChanged;
+
+    // =========================================================================
+    // Plugin Scanning
+    // =========================================================================
+
+    /**
+     * @brief Start scanning for VST3/AU plugins on the system
+     * @param progressCallback Called with (progress 0-1, current plugin name) during scan
+     *
+     * NOTE: Plugin scanning happens in-process. If a plugin crashes during scanning,
+     * it will crash the application. The "dead man's pedal" file tracks which plugin
+     * was being scanned, so it will be skipped on the next scan attempt.
+     *
+     * Crash files are stored in: ~/Library/Application Support/MAGDA/
+     * Call clearPluginScanCrashFiles() to retry scanning problematic plugins.
+     */
+    void startPluginScan(
+        std::function<void(float, const juce::String&)> progressCallback = nullptr);
+
+    /**
+     * @brief Abort an in-progress plugin scan
+     */
+    void abortPluginScan();
+
+    /**
+     * @brief Clear the dead man's pedal crash files to retry scanning problematic plugins
+     *
+     * Call this if you want to give previously-crashed plugins another chance.
+     * After clearing, the next scan will attempt all plugins again.
+     */
+    void clearPluginScanCrashFiles();
+
+    /**
+     * @brief Check if a plugin scan is currently in progress
+     */
+    bool isScanning() const {
+        return isScanning_;
+    }
+
+    /**
+     * @brief Get the list of known/discovered plugins
+     * @return Reference to the KnownPluginList
+     */
+    juce::KnownPluginList& getKnownPluginList();
+    const juce::KnownPluginList& getKnownPluginList() const;
+
+    /**
+     * @brief Save the plugin list to persistent storage
+     * Called after plugin scanning completes
+     */
+    void savePluginList();
+
+    /**
+     * @brief Load the plugin list from persistent storage
+     * Called on startup to restore previously scanned plugins
+     */
+    void loadPluginList();
+
+    /**
+     * @brief Clear the plugin list and delete the saved file
+     * Use this before a fresh rescan
+     */
+    void clearPluginList();
+
+    /**
+     * @brief Get the file path where plugin list is stored
+     * @return Path to the plugin list XML file
+     */
+    juce::File getPluginListFile() const;
+
+    /**
+     * @brief Callback when plugin scan completes
+     * Called with (success, number of plugins found, failed plugins)
+     */
+    std::function<void(bool, int, const juce::StringArray&)> onPluginScanComplete;
+
   private:
+    // juce::ChangeListener implementation
+    void changeListenerCallback(juce::ChangeBroadcaster* source) override;
     // Tracktion Engine components
     std::unique_ptr<tracktion::Engine> engine_;
     std::unique_ptr<tracktion::Edit> currentEdit_;
@@ -214,6 +313,15 @@ class TracktionEngineWrapper : public AudioEngine,
     int nextTrackId_ = 1;
     int nextClipId_ = 1;
     int nextEffectId_ = 1;
+
+    // Device loading state
+    bool devicesLoading_ = true;  // Start as loading until first scan completes
+    bool wasPlayingBeforeDeviceChange_ = false;
+
+    // Plugin scanning state
+    bool isScanning_ = false;
+    std::function<void(float, const juce::String&)> scanProgressCallback_;
+    std::unique_ptr<PluginScanCoordinator> pluginScanCoordinator_;
 };
 
 }  // namespace magda

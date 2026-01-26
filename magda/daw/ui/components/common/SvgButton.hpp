@@ -3,6 +3,7 @@
 #include <juce_gui_basics/juce_gui_basics.h>
 
 #include "../../themes/DarkTheme.hpp"
+#include "../../utils/ComponentManager.hpp"
 
 namespace magda {
 
@@ -15,7 +16,7 @@ class SvgButton : public juce::Button {
     SvgButton(const juce::String& buttonName, const char* offSvgData, size_t offSvgDataSize,
               const char* onSvgData, size_t onSvgDataSize);
 
-    ~SvgButton() override = default;
+    ~SvgButton() override;
 
     // Button overrides
     void paintButton(juce::Graphics& g, bool shouldDrawButtonAsHighlighted,
@@ -65,9 +66,9 @@ class SvgButton : public juce::Button {
     }
 
   private:
-    std::unique_ptr<juce::Drawable> svgIcon;
-    std::unique_ptr<juce::Drawable> svgIconOff;
-    std::unique_ptr<juce::Drawable> svgIconOn;
+    magda::ManagedDrawable svgIcon;
+    magda::ManagedDrawable svgIconOff;
+    magda::ManagedDrawable svgIconOn;
 
     bool dualIconMode = false;
 

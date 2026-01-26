@@ -49,6 +49,9 @@ TrackContentPanel::TrackContentPanel() {
 }
 
 TrackContentPanel::~TrackContentPanel() {
+    // Stop timer for edit cursor blinking
+    stopTimer();
+
     // Unregister from TrackManager
     TrackManager::getInstance().removeListener(this);
 

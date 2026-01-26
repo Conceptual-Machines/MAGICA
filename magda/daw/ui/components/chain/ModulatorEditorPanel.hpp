@@ -23,6 +23,10 @@ class WaveformDisplay : public juce::Component, private juce::Timer {
         startTimer(33);  // 30 FPS animation
     }
 
+    ~WaveformDisplay() {
+        stopTimer();
+    }
+
     void setModInfo(const magda::ModInfo* mod) {
         mod_ = mod;
         repaint();
@@ -129,7 +133,7 @@ class WaveformDisplay : public juce::Component, private juce::Timer {
 class ModulatorEditorPanel : public juce::Component, private juce::Timer {
   public:
     ModulatorEditorPanel();
-    ~ModulatorEditorPanel() override = default;
+    ~ModulatorEditorPanel() override;
 
     // Set the mod to edit
     void setModInfo(const magda::ModInfo& mod, const magda::ModInfo* liveMod = nullptr);

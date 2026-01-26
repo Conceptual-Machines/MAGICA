@@ -5,15 +5,48 @@
 #include "../../themes/FontManager.hpp"
 #include "core/DeviceInfo.hpp"
 #include "core/TrackManager.hpp"
+#include "engine/TracktionEngineWrapper.hpp"
 
 namespace magda::daw::ui {
+
+// =============================================================================
+// PluginBrowserInfo
+// =============================================================================
+
+PluginBrowserInfo PluginBrowserInfo::fromPluginDescription(const juce::PluginDescription& desc) {
+    PluginBrowserInfo info;
+    info.name = desc.name;
+    info.manufacturer = desc.manufacturerName;
+    info.category = desc.isInstrument ? "Instrument" : "Effect";
+    info.format = desc.pluginFormatName;
+    info.subcategory = desc.category.isNotEmpty() ? desc.category : "Other";
+    info.isExternal = true;
+    info.uniqueId = desc.createIdentifierString();
+    info.fileOrIdentifier = desc.fileOrIdentifier;
+    return info;
+}
+
+PluginBrowserInfo PluginBrowserInfo::createInternal(const juce::String& name,
+                                                    const juce::String& pluginId,
+                                                    bool isInstrument) {
+    PluginBrowserInfo info;
+    info.name = name;
+    info.manufacturer = "MAGDA";
+    info.category = isInstrument ? "Instrument" : "Effect";
+    info.format = "Internal";
+    info.subcategory = isInstrument ? "Synth" : "Utility";
+    info.isExternal = false;
+    info.uniqueId = pluginId;
+    info.fileOrIdentifier = pluginId;
+    return info;
+}
 
 //==============================================================================
 // PluginTreeItem - Leaf item representing a single plugin
 //==============================================================================
 class PluginBrowserContent::PluginTreeItem : public juce::TreeViewItem {
   public:
-    PluginTreeItem(const MockPluginInfo& plugin, PluginBrowserContent& owner)
+    PluginTreeItem(const PluginBrowserInfo& plugin, PluginBrowserContent& owner)
         : plugin_(plugin), owner_(owner) {}
 
     bool mightContainSubItems() override {
@@ -92,6 +125,10 @@ class PluginBrowserContent::PluginTreeItem : public juce::TreeViewItem {
         obj->setProperty("format", plugin_.format);
         obj->setProperty("subcategory", plugin_.subcategory);
         obj->setProperty("isInstrument", plugin_.category == "Instrument");
+        obj->setProperty("isExternal", plugin_.isExternal);
+        // External plugin identification
+        obj->setProperty("uniqueId", plugin_.uniqueId);
+        obj->setProperty("fileOrIdentifier", plugin_.fileOrIdentifier);
         return juce::var(obj);
     }
 
@@ -100,7 +137,7 @@ class PluginBrowserContent::PluginTreeItem : public juce::TreeViewItem {
     }
 
   private:
-    MockPluginInfo plugin_;
+    PluginBrowserInfo plugin_;
     PluginBrowserContent& owner_;
 };
 
@@ -204,11 +241,41 @@ PluginBrowserContent::PluginBrowserContent() {
     scanButton_.setColour(juce::TextButton::buttonColourId,
                           DarkTheme::getColour(DarkTheme::BUTTON_NORMAL));
     scanButton_.setColour(juce::TextButton::textColourOffId, DarkTheme::getTextColour());
-    scanButton_.onClick = [this]() {
-        // Would trigger plugin scan
-        DBG("Scan plugins clicked");
-    };
+    scanButton_.onClick = [this]() { startPluginScan(); };
     addAndMakeVisible(scanButton_);
+
+    // Setup clear button
+    clearButton_.setButtonText("Clear");
+    clearButton_.setColour(juce::TextButton::buttonColourId,
+                           DarkTheme::getColour(DarkTheme::BUTTON_NORMAL));
+    clearButton_.setColour(juce::TextButton::textColourOffId, DarkTheme::getSecondaryTextColour());
+    clearButton_.onClick = [this]() {
+        // Confirm before clearing
+        auto options = juce::MessageBoxOptions()
+                           .withTitle("Clear Plugin List")
+                           .withMessage("This will remove all scanned plugins from the list.\n\n"
+                                        "You'll need to scan again to rediscover your plugins.")
+                           .withButton("Clear")
+                           .withButton("Cancel")
+                           .withIconType(juce::MessageBoxIconType::QuestionIcon);
+
+        juce::AlertWindow::showAsync(options, [this](int result) {
+            if (result == 1) {  // "Clear" button
+                if (engine_) {
+                    engine_->clearPluginList();
+                    refreshPluginList();
+                }
+            }
+        });
+    };
+    addAndMakeVisible(clearButton_);
+
+    // Progress label for scan
+    scanProgressLabel_ = std::make_unique<juce::Label>();
+    scanProgressLabel_->setFont(FontManager::getInstance().getUIFont(9.0f));
+    scanProgressLabel_->setColour(juce::Label::textColourId, DarkTheme::getSecondaryTextColour());
+    scanProgressLabel_->setJustificationType(juce::Justification::centredLeft);
+    addAndMakeVisible(*scanProgressLabel_);
 
     // Setup tree view
     pluginTree_.setColour(juce::TreeView::backgroundColourId,
@@ -219,8 +286,8 @@ PluginBrowserContent::PluginBrowserContent() {
     pluginTree_.setOpenCloseButtonsVisible(false);  // We draw our own
     addAndMakeVisible(pluginTree_);
 
-    // Build mock data and tree
-    buildMockPluginList();
+    // Build internal plugins and tree (external plugins are loaded when engine is set)
+    buildInternalPluginList();
     rebuildTree();
 }
 
@@ -231,13 +298,21 @@ void PluginBrowserContent::paint(juce::Graphics& g) {
 void PluginBrowserContent::resized() {
     auto bounds = getLocalBounds().reduced(8);
 
-    // Top row: view selector and scan button
+    // Top row: view selector, clear button, and scan button
     auto topRow = bounds.removeFromTop(28);
-    scanButton_.setBounds(topRow.removeFromRight(50));
+    scanButton_.setBounds(topRow.removeFromRight(60));
+    topRow.removeFromRight(4);
+    clearButton_.setBounds(topRow.removeFromRight(50));
     topRow.removeFromRight(6);
     viewModeSelector_.setBounds(topRow);
 
     bounds.removeFromTop(6);
+
+    // Progress label (shows during scan)
+    if (scanProgressLabel_) {
+        scanProgressLabel_->setBounds(bounds.removeFromTop(16));
+        bounds.removeFromTop(4);
+    }
 
     // Search box
     searchBox_.setBounds(bounds.removeFromTop(28));
@@ -249,56 +324,130 @@ void PluginBrowserContent::resized() {
 }
 
 void PluginBrowserContent::onActivated() {
-    // Could refresh plugin list here
+    // Get engine from TrackManager if not already set
+    if (!engine_) {
+        if (auto* engine = dynamic_cast<magda::TracktionEngineWrapper*>(
+                TrackManager::getInstance().getAudioEngine())) {
+            setEngine(engine);
+        }
+    }
 }
 
 void PluginBrowserContent::onDeactivated() {
     // Could save state here
 }
 
-void PluginBrowserContent::buildMockPluginList() {
-    mockPlugins_ = {
-        // Instruments
-        {"Serum", "Xfer Records", "Instrument", "VST3", "Synth", true},
-        {"Vital", "Matt Tytel", "Instrument", "VST3", "Synth", true},
-        {"Diva", "u-he", "Instrument", "VST3", "Synth", false},
-        {"Pigments", "Arturia", "Instrument", "VST3", "Synth", false},
-        {"Kontakt", "Native Instruments", "Instrument", "VST3", "Sampler", true},
-        {"Omnisphere", "Spectrasonics", "Instrument", "VST3", "Synth", false},
-        {"Phase Plant", "Kilohearts", "Instrument", "VST3", "Synth", false},
-        {"Massive X", "Native Instruments", "Instrument", "VST3", "Synth", false},
+void PluginBrowserContent::buildInternalPluginList() {
+    // Add built-in MAGDA/Tracktion plugins
+    plugins_.push_back(PluginBrowserInfo::createInternal("Test Tone", "tone", false));
+    plugins_.push_back(PluginBrowserInfo::createInternal("4OSC Synth", "4osc", true));
+    // TODO: Add more internal plugins as they become available
+}
 
-        // Effects - EQ
-        {"Pro-Q 3", "FabFilter", "Effect", "VST3", "EQ", true},
-        {"Kirchhoff-EQ", "Three-Body Tech", "Effect", "VST3", "EQ", false},
-        {"Soothe2", "oeksound", "Effect", "VST3", "EQ", true},
+void PluginBrowserContent::loadExternalPlugins() {
+    if (!engine_) {
+        return;
+    }
 
-        // Effects - Dynamics
-        {"Pro-C 2", "FabFilter", "Effect", "VST3", "Compressor", true},
-        {"Pro-L 2", "FabFilter", "Effect", "VST3", "Limiter", true},
-        {"Kotelnikov", "TDR", "Effect", "VST3", "Compressor", false},
-        {"Limitless", "DMG Audio", "Effect", "VST3", "Limiter", false},
+    auto& knownPlugins = engine_->getKnownPluginList();
+    auto pluginTypes = knownPlugins.getTypes();
 
-        // Effects - Reverb/Delay
-        {"Valhalla Room", "Valhalla DSP", "Effect", "VST3", "Reverb", true},
-        {"Pro-R", "FabFilter", "Effect", "VST3", "Reverb", false},
-        {"Echoboy", "Soundtoys", "Effect", "VST3", "Delay", false},
-        {"Timeless 3", "FabFilter", "Effect", "VST3", "Delay", false},
+    for (const auto& desc : pluginTypes) {
+        plugins_.push_back(PluginBrowserInfo::fromPluginDescription(desc));
+    }
 
-        // Effects - Saturation
-        {"Saturn 2", "FabFilter", "Effect", "VST3", "Saturation", false},
-        {"Decapitator", "Soundtoys", "Effect", "VST3", "Saturation", false},
-        {"Trash 2", "iZotope", "Effect", "VST3", "Distortion", false},
+    std::cout << "Loaded " << pluginTypes.size() << " external plugins from KnownPluginList"
+              << std::endl;
+}
 
-        // Effects - Modulation
-        {"PhaseMistress", "Soundtoys", "Effect", "VST3", "Phaser", false},
-        {"MicroShift", "Soundtoys", "Effect", "VST3", "Stereo", false},
+void PluginBrowserContent::setEngine(magda::TracktionEngineWrapper* engine) {
+    engine_ = engine;
+    refreshPluginList();
+}
 
-        // AU versions of some plugins
-        {"Pro-Q 3", "FabFilter", "Effect", "AU", "EQ", true},
-        {"Serum", "Xfer Records", "Instrument", "AU", "Synth", true},
-        {"Valhalla Room", "Valhalla DSP", "Effect", "AU", "Reverb", true},
+void PluginBrowserContent::refreshPluginList() {
+    plugins_.clear();
+    buildInternalPluginList();
+    loadExternalPlugins();
+    rebuildTree();
+}
+
+void PluginBrowserContent::startPluginScan() {
+    if (!engine_ || engine_->isScanning()) {
+        return;
+    }
+
+    isScanningPlugins_ = true;
+    scanButton_.setEnabled(false);
+    scanButton_.setButtonText("Scanning...");
+
+    // Set up callbacks
+    engine_->onPluginScanComplete = [this](bool success, int numPlugins,
+                                           const juce::StringArray& failedPlugins) {
+        // Copy the failed plugins for the async call
+        auto failed = failedPlugins;
+        juce::MessageManager::callAsync(
+            [this, success, numPlugins, failed]() { onScanComplete(success, numPlugins, failed); });
     };
+
+    engine_->startPluginScan([this](float progress, const juce::String& currentPlugin) {
+        juce::MessageManager::callAsync(
+            [this, progress, currentPlugin]() { onScanProgress(progress, currentPlugin); });
+    });
+}
+
+void PluginBrowserContent::onScanProgress(float progress, const juce::String& currentPlugin) {
+    scanProgress_ = progress;
+    if (scanProgressLabel_) {
+        juce::String progressText =
+            juce::String(static_cast<int>(progress * 100)) + "% - " + currentPlugin;
+        scanProgressLabel_->setText(progressText, juce::dontSendNotification);
+    }
+}
+
+void PluginBrowserContent::onScanComplete(bool /*success*/, int numPlugins,
+                                          const juce::StringArray& failedPlugins) {
+    isScanningPlugins_ = false;
+    scanButton_.setEnabled(true);
+    scanButton_.setButtonText("Scan");
+
+    juce::String statusText = "Found " + juce::String(numPlugins) + " plugins";
+    if (failedPlugins.size() > 0) {
+        statusText += " (" + juce::String(failedPlugins.size()) + " failed)";
+    }
+
+    if (scanProgressLabel_) {
+        scanProgressLabel_->setText(statusText, juce::dontSendNotification);
+    }
+
+    // Refresh the plugin list
+    refreshPluginList();
+
+    // Show dialog for failed plugins
+    if (failedPlugins.size() > 0) {
+        showFailedPluginsDialog(failedPlugins);
+    }
+}
+
+void PluginBrowserContent::showFailedPluginsDialog(const juce::StringArray& failedPlugins) {
+    juce::String message =
+        "The following plugins failed or crashed during scanning and have been blacklisted:\n\n";
+
+    for (const auto& plugin : failedPlugins) {
+        // Extract just the plugin name from the path for readability
+        juce::File pluginFile(plugin);
+        juce::String displayName = pluginFile.getFileNameWithoutExtension();
+        if (displayName.isEmpty()) {
+            displayName = plugin;
+        }
+        message += "  - " + displayName + "\n";
+    }
+
+    message += "\nThese plugins will be skipped in future scans. To retry them, use:\n";
+    message += "Help > Clear Plugin Blacklist";
+
+    juce::AlertWindow::showMessageBoxAsync(juce::AlertWindow::WarningIcon, "Plugin Scan Issues",
+                                           message, "OK");
 }
 
 void PluginBrowserContent::rebuildTree() {
@@ -310,7 +459,7 @@ void PluginBrowserContent::rebuildTree() {
 
     std::map<juce::String, CategoryTreeItem*> categories;
 
-    for (const auto& plugin : mockPlugins_) {
+    for (const auto& plugin : plugins_) {
         juce::String groupKey;
 
         switch (currentViewMode_) {
@@ -388,7 +537,7 @@ void PluginBrowserContent::filterBySearch(const juce::String& searchText) {
 
     auto root = std::make_unique<CategoryTreeItem>("Search Results");
 
-    for (const auto& plugin : mockPlugins_) {
+    for (const auto& plugin : plugins_) {
         if (plugin.name.containsIgnoreCase(searchText) ||
             plugin.manufacturer.containsIgnoreCase(searchText) ||
             plugin.subcategory.containsIgnoreCase(searchText)) {
@@ -402,7 +551,7 @@ void PluginBrowserContent::filterBySearch(const juce::String& searchText) {
     rootItem_->setOpen(true);
 }
 
-void PluginBrowserContent::showPluginContextMenu(const MockPluginInfo& plugin,
+void PluginBrowserContent::showPluginContextMenu(const PluginBrowserInfo& plugin,
                                                  juce::Point<int> position) {
     juce::PopupMenu menu;
 
@@ -438,14 +587,21 @@ void PluginBrowserContent::showPluginContextMenu(const MockPluginInfo& plugin,
                 magda::DeviceInfo device;
                 device.name = plugin.name;
                 device.manufacturer = plugin.manufacturer;
-                device.pluginId = plugin.name + "_" + plugin.format;
+                device.pluginId = plugin.uniqueId.isEmpty() ? (plugin.name + "_" + plugin.format)
+                                                            : plugin.uniqueId;
                 device.isInstrument = (plugin.category == "Instrument");
+                // External plugin identification
+                device.uniqueId = plugin.uniqueId;
+                device.fileOrIdentifier = plugin.fileOrIdentifier;
+
                 if (plugin.format == "VST3") {
                     device.format = magda::PluginFormat::VST3;
-                } else if (plugin.format == "AU") {
+                } else if (plugin.format == "AU" || plugin.format == "AudioUnit") {
                     device.format = magda::PluginFormat::AU;
                 } else if (plugin.format == "VST") {
                     device.format = magda::PluginFormat::VST;
+                } else if (plugin.format == "Internal") {
+                    device.format = magda::PluginFormat::Internal;
                 }
                 return device;
             };
@@ -491,7 +647,7 @@ void PluginBrowserContent::showPluginContextMenu(const MockPluginInfo& plugin,
         });
 }
 
-void PluginBrowserContent::showParameterConfigDialog(const MockPluginInfo& plugin) {
+void PluginBrowserContent::showParameterConfigDialog(const PluginBrowserInfo& plugin) {
     ParameterConfigDialog::show(plugin.name, this);
 }
 

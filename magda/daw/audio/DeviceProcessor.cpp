@@ -2,6 +2,8 @@
 
 #include <cmath>
 
+#include "../core/TrackManager.hpp"
+
 namespace magda {
 
 // =============================================================================
@@ -351,6 +353,267 @@ float VolumeProcessor::getPan() const {
 void VolumeProcessor::applyGain() {
     // For volume plugin, the gain stage is the volume parameter itself
     setVolume(gainDb_);
+}
+
+// =============================================================================
+// ExternalPluginProcessor
+// =============================================================================
+
+ExternalPluginProcessor::ExternalPluginProcessor(DeviceId deviceId, te::Plugin::Ptr plugin)
+    : DeviceProcessor(deviceId, plugin) {}
+
+ExternalPluginProcessor::~ExternalPluginProcessor() {
+    stopParameterListening();
+}
+
+te::ExternalPlugin* ExternalPluginProcessor::getExternalPlugin() const {
+    return dynamic_cast<te::ExternalPlugin*>(plugin_.get());
+}
+
+void ExternalPluginProcessor::cacheParameterNames() const {
+    if (parametersCached_)
+        return;
+
+    parameterNames_.clear();
+    if (auto* ext = getExternalPlugin()) {
+        auto params = ext->getAutomatableParameters();
+        for (auto* param : params) {
+            if (param) {
+                parameterNames_.push_back(param->getParameterName());
+            }
+        }
+    }
+    parametersCached_ = true;
+}
+
+void ExternalPluginProcessor::setParameter(const juce::String& paramName, float value) {
+    if (auto* ext = getExternalPlugin()) {
+        auto params = ext->getAutomatableParameters();
+        for (size_t i = 0; i < params.size(); ++i) {
+            if (params[i] && params[i]->getParameterName().equalsIgnoreCase(paramName)) {
+                params[i]->setParameter(value, juce::sendNotificationSync);
+                return;
+            }
+        }
+    }
+}
+
+float ExternalPluginProcessor::getParameter(const juce::String& paramName) const {
+    if (auto* ext = getExternalPlugin()) {
+        auto params = ext->getAutomatableParameters();
+        for (auto* param : params) {
+            if (param && param->getParameterName().equalsIgnoreCase(paramName)) {
+                return param->getCurrentValue();
+            }
+        }
+    }
+    return 0.0f;
+}
+
+std::vector<juce::String> ExternalPluginProcessor::getParameterNames() const {
+    cacheParameterNames();
+    return parameterNames_;
+}
+
+int ExternalPluginProcessor::getParameterCount() const {
+    if (auto* ext = getExternalPlugin()) {
+        return static_cast<int>(ext->getAutomatableParameters().size());
+    }
+    return 0;
+}
+
+ParameterInfo ExternalPluginProcessor::getParameterInfo(int index) const {
+    ParameterInfo info;
+    info.paramIndex = index;
+
+    if (auto* ext = getExternalPlugin()) {
+        auto params = ext->getAutomatableParameters();
+        if (index >= 0 && index < static_cast<int>(params.size())) {
+            auto* param = params[static_cast<size_t>(index)];
+            if (param) {
+                info.name = param->getParameterName();
+                info.unit = param->getLabel();
+
+                // Get range from parameter
+                auto range = param->getValueRange();
+                info.minValue = range.getStart();
+                info.maxValue = range.getEnd();
+
+                // getDefaultValue returns optional<float>
+                auto defaultVal = param->getDefaultValue();
+                info.defaultValue = defaultVal.has_value() ? *defaultVal : info.minValue;
+                info.currentValue = param->getCurrentValue();
+
+                // Determine scale type
+                // Most plugin parameters are normalized 0-1, but we can check
+                float rangeLen = range.getEnd() - range.getStart();
+                if (rangeLen <= 1.0f) {
+                    info.scale = ParameterScale::Linear;
+                } else {
+                    info.scale = ParameterScale::Linear;
+                }
+
+                // Check if parameter has discrete states
+                int numStates = param->getNumberOfStates();
+                if (numStates > 0 && numStates <= 10) {
+                    info.scale = ParameterScale::Discrete;
+                    // Could populate choices from parameter if available
+                }
+            }
+        }
+    }
+
+    return info;
+}
+
+void ExternalPluginProcessor::populateParameters(DeviceInfo& info) const {
+    info.parameters.clear();
+
+    if (auto* ext = getExternalPlugin()) {
+        auto params = ext->getAutomatableParameters();
+        // Limit to first 128 parameters to avoid overwhelming the UI
+        int maxParams = juce::jmin(static_cast<int>(params.size()), 128);
+
+        for (int i = 0; i < maxParams; ++i) {
+            info.parameters.push_back(getParameterInfo(i));
+        }
+    }
+}
+
+void ExternalPluginProcessor::syncFromDeviceInfo(const DeviceInfo& info) {
+    // Call base class for gain and bypass
+    DeviceProcessor::syncFromDeviceInfo(info);
+
+    // Set flag to prevent our listener from triggering a feedback loop
+    settingParameterFromUI_ = true;
+
+    // Sync parameter values
+    if (auto* ext = getExternalPlugin()) {
+        auto params = ext->getAutomatableParameters();
+        for (size_t i = 0; i < info.parameters.size() && i < params.size(); ++i) {
+            if (params[i]) {
+                params[i]->setParameter(info.parameters[i].currentValue,
+                                        juce::dontSendNotification);
+            }
+        }
+    }
+
+    settingParameterFromUI_ = false;
+}
+
+void ExternalPluginProcessor::setParameterByIndex(int paramIndex, float value) {
+    // Set flag to prevent our listener from triggering a feedback loop
+    settingParameterFromUI_ = true;
+
+    if (auto* ext = getExternalPlugin()) {
+        auto params = ext->getAutomatableParameters();
+        if (paramIndex >= 0 && paramIndex < static_cast<int>(params.size())) {
+            params[static_cast<size_t>(paramIndex)]->setParameter(value,
+                                                                  juce::sendNotificationSync);
+        }
+    }
+
+    settingParameterFromUI_ = false;
+}
+
+float ExternalPluginProcessor::getParameterByIndex(int paramIndex) const {
+    if (auto* ext = getExternalPlugin()) {
+        auto params = ext->getAutomatableParameters();
+        if (paramIndex >= 0 && paramIndex < static_cast<int>(params.size())) {
+            return params[static_cast<size_t>(paramIndex)]->getCurrentValue();
+        }
+    }
+    return 0.0f;
+}
+
+void ExternalPluginProcessor::startParameterListening() {
+    if (listeningForChanges_)
+        return;
+
+    if (auto* ext = getExternalPlugin()) {
+        auto params = ext->getAutomatableParameters();
+        for (auto* param : params) {
+            if (param) {
+                param->addListener(this);
+            }
+        }
+        listeningForChanges_ = true;
+        DBG("Started parameter listening for device " << deviceId_ << " with " << params.size()
+                                                      << " parameters");
+    }
+}
+
+void ExternalPluginProcessor::stopParameterListening() {
+    if (!listeningForChanges_)
+        return;
+
+    if (auto* ext = getExternalPlugin()) {
+        auto params = ext->getAutomatableParameters();
+        for (auto* param : params) {
+            if (param) {
+                param->removeListener(this);
+            }
+        }
+    }
+    listeningForChanges_ = false;
+}
+
+void ExternalPluginProcessor::currentValueChanged(te::AutomatableParameter& param) {
+    // This is called asynchronously when the parameter value changes from any source.
+    // We use parameterChanged instead for synchronous notification.
+    juce::ignoreUnused(param);
+}
+
+void ExternalPluginProcessor::parameterChanged(te::AutomatableParameter& param, float newValue) {
+    // Prevent feedback loop: don't propagate if we're setting the parameter ourselves
+    if (settingParameterFromUI_)
+        return;
+
+    // Find the parameter index
+    int parameterIndex = -1;
+    if (auto* ext = getExternalPlugin()) {
+        auto params = ext->getAutomatableParameters();
+        for (size_t i = 0; i < params.size(); ++i) {
+            if (params[i] == &param) {
+                parameterIndex = static_cast<int>(i);
+                break;
+            }
+        }
+    }
+
+    if (parameterIndex < 0)
+        return;
+
+    // Update TrackManager on the message thread to avoid threading issues
+    // Use callAsync to ensure we're on the message thread
+    juce::MessageManager::callAsync([this, parameterIndex, newValue]() {
+        // Find this device in TrackManager and update its parameter
+        // Use a special method that doesn't trigger AudioBridge notification
+        auto& tm = TrackManager::getInstance();
+
+        // Search through all tracks to find this device
+        for (const auto& track : tm.getTracks()) {
+            for (const auto& element : track.chainElements) {
+                if (std::holds_alternative<DeviceInfo>(element)) {
+                    const auto& device = std::get<DeviceInfo>(element);
+                    if (device.id == deviceId_) {
+                        // Build a path to this device
+                        ChainNodePath path;
+                        path.trackId = track.id;
+                        path.topLevelDeviceId = deviceId_;
+                        // Note: For top-level devices, no steps needed
+
+                        // Update parameter without triggering audio bridge notification
+                        tm.setDeviceParameterValueFromPlugin(path, parameterIndex, newValue);
+                        return;
+                    }
+                }
+            }
+
+            // Also search in racks/chains (nested devices)
+            // TODO: Implement nested device search if needed
+        }
+    });
 }
 
 }  // namespace magda

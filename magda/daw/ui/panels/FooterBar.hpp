@@ -6,6 +6,7 @@
 #include <memory>
 
 #include "../components/common/SvgButton.hpp"
+#include "../utils/ComponentManager.hpp"
 #include "core/ViewModeController.hpp"
 #include "core/ViewModeState.hpp"
 
@@ -33,7 +34,7 @@ class FooterBar : public juce::Component, public ViewModeListener {
     static constexpr int BUTTON_SIZE = 28;
     static constexpr int BUTTON_SPACING = 16;
 
-    std::array<std::unique_ptr<SvgButton>, NUM_MODES> modeButtons;
+    std::array<magda::ManagedChild<SvgButton>, NUM_MODES> modeButtons;
 
     void setupButtons();
     void updateButtonStates();

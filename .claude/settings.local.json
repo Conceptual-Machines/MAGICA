@@ -37,7 +37,13 @@
       "Bash(pkill:*)",
       "Bash(grep:*)",
       "Bash(git reset HEAD)",
-      "Bash(git restore:*)"
+      "Bash(git restore:*)",
+      "Bash(xargs basename:*)",
+      "mcp__juce-docs__get-juce-class-docs",
+      "Bash(ninja:*)",
+      "Bash(timeout 5 ./cmake-build-debug/magda/daw/magda_daw_app_artefacts/Debug/MAGDA.app/Contents/MacOS/MAGDA:*)",
+      "Bash(git push:*)",
+      "Bash(git fetch:*)"
     ]
   },
   "enableAllProjectMcpServers": true,

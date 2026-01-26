@@ -135,6 +135,9 @@ ParamSlotComponent::ParamSlotComponent(int paramIndex) : paramIndex_(paramIndex)
 }
 
 ParamSlotComponent::~ParamSlotComponent() {
+    // Stop modulation animation timer
+    stopTimer();
+
     // Clean up tooltip if it's on desktop
     if (amountLabel_.isOnDesktop()) {
         amountLabel_.removeFromDesktop();
