@@ -1,8 +1,5 @@
 #include "MacroPanelComponent.hpp"
 
-#include "ui/themes/DarkTheme.hpp"
-#include "ui/themes/FontManager.hpp"
-
 namespace magda::daw::ui {
 
 MacroPanelComponent::MacroPanelComponent() : PagedControlPanel(magda::MACROS_PER_PAGE) {

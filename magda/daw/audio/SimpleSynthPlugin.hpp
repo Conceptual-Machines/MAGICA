@@ -71,7 +71,7 @@ class SimpleSynthVoice : public juce::SynthesiserVoice {
  */
 class SimpleSynthPlugin : public te::Plugin {
   public:
-    SimpleSynthPlugin(te::PluginCreationInfo);
+    SimpleSynthPlugin(const te::PluginCreationInfo&);
     ~SimpleSynthPlugin() override;
 
     //==============================================================================

@@ -23,7 +23,7 @@ class WaveformDisplay : public juce::Component, private juce::Timer {
         startTimer(33);  // 30 FPS animation
     }
 
-    ~WaveformDisplay() {
+    ~WaveformDisplay() override {
         stopTimer();
     }
 

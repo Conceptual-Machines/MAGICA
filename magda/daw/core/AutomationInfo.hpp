@@ -4,7 +4,6 @@
 #include <juce_graphics/juce_graphics.h>
 
 #include <array>
-#include <cmath>
 #include <vector>
 
 #include "AutomationTypes.hpp"

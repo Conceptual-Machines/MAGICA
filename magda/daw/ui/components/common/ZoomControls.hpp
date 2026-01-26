@@ -4,8 +4,6 @@
 
 #include <functional>
 
-#include "../../themes/DarkTheme.hpp"
-
 namespace magda {
 
 /**

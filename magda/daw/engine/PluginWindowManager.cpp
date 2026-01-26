@@ -30,7 +30,7 @@ PluginWindowManager::~PluginWindowManager() {
 // Window Control
 // =============================================================================
 
-void PluginWindowManager::showPluginWindow(DeviceId deviceId, te::Plugin::Ptr plugin) {
+void PluginWindowManager::showPluginWindow(DeviceId deviceId, const te::Plugin::Ptr& plugin) {
     if (isShuttingDown_.load(std::memory_order_acquire)) {
         return;
     }
@@ -70,7 +70,7 @@ void PluginWindowManager::showPluginWindow(DeviceId deviceId, te::Plugin::Ptr pl
     }
 }
 
-void PluginWindowManager::hidePluginWindow(DeviceId deviceId, te::Plugin::Ptr plugin) {
+void PluginWindowManager::hidePluginWindow(DeviceId deviceId, const te::Plugin::Ptr& plugin) {
     if (isShuttingDown_.load(std::memory_order_acquire)) {
         return;
     }
@@ -103,12 +103,12 @@ void PluginWindowManager::hidePluginWindow(DeviceId deviceId, te::Plugin::Ptr pl
     }
 }
 
-bool PluginWindowManager::togglePluginWindow(DeviceId deviceId, te::Plugin::Ptr plugin) {
+bool PluginWindowManager::togglePluginWindow(DeviceId deviceId, const te::Plugin::Ptr& plugin) {
     if (isShuttingDown_.load(std::memory_order_acquire)) {
         return false;
     }
 
-    if (isPluginWindowOpen(deviceId, plugin)) {
+    if (isPluginWindowOpen(plugin)) {
         hidePluginWindow(deviceId, plugin);
         return false;
     } else {
@@ -117,8 +117,7 @@ bool PluginWindowManager::togglePluginWindow(DeviceId deviceId, te::Plugin::Ptr 
     }
 }
 
-bool PluginWindowManager::isPluginWindowOpen(DeviceId /* deviceId */,
-                                             te::Plugin::Ptr plugin) const {
+bool PluginWindowManager::isPluginWindowOpen(const te::Plugin::Ptr& plugin) const {
     if (isShuttingDown_.load(std::memory_order_acquire)) {
         return false;
     }

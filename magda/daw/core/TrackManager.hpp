@@ -413,7 +413,7 @@ class TrackManager {
     void notifyDeviceParameterChanged(DeviceId deviceId, int paramIndex, float newValue);
 
     // Helper for recursive mod updates
-    void updateRackMods(RackInfo& rack, double deltaTime);
+    void updateRackMods(const RackInfo& rack, double deltaTime);
 
     juce::String generateTrackName() const;
 };

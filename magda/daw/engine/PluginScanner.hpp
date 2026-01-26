@@ -40,8 +40,9 @@ class PluginScanner : private juce::Thread {
      * @param progressCallback Called with progress updates (on message thread)
      * @param completionCallback Called when scan completes (on message thread)
      */
-    void startScan(juce::AudioPluginFormatManager& formatManager, ProgressCallback progressCallback,
-                   CompletionCallback completionCallback);
+    void startScan(juce::AudioPluginFormatManager& formatManager,
+                   const ProgressCallback& progressCallback,
+                   const CompletionCallback& completionCallback);
 
     /**
      * @brief Abort the current scan

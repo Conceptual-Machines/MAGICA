@@ -4,11 +4,7 @@
 #include <vector>
 
 #include "ClipTypes.hpp"
-#include "DeviceInfo.hpp"
-#include "MacroInfo.hpp"
-#include "ModInfo.hpp"
 #include "RackInfo.hpp"
-#include "TrackTypes.hpp"
 #include "TypeIds.hpp"
 
 namespace magda {

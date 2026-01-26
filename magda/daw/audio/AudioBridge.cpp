@@ -1461,8 +1461,7 @@ bool AudioBridge::isPluginWindowOpen(DeviceId deviceId) const {
     if (windowManager_) {
         auto plugin = getPlugin(deviceId);
         if (plugin) {
-            // NOLINTNEXTLINE - false positive from static analysis
-            return windowManager_->isPluginWindowOpen(deviceId, plugin);
+            return windowManager_->isPluginWindowOpen(plugin);
         }
     }
     return false;

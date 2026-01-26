@@ -19,7 +19,7 @@ namespace magda {
  */
 class AudioEngine : public AudioEngineListener {
   public:
-    virtual ~AudioEngine() = default;
+    ~AudioEngine() override = default;
 
     // ===== Lifecycle =====
     virtual bool initialize() = 0;

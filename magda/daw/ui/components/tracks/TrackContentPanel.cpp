@@ -1,13 +1,10 @@
 #include "TrackContentPanel.hpp"
 
 #include <functional>
-#include <iostream>
 
-#include "../../layout/LayoutConfig.hpp"
 #include "../../panels/state/PanelController.hpp"
 #include "../../state/TimelineEvents.hpp"
 #include "../../themes/DarkTheme.hpp"
-#include "../../themes/FontManager.hpp"
 #include "../../utils/TimelineUtils.hpp"
 #include "../automation/AutomationLaneComponent.hpp"
 #include "../clips/ClipComponent.hpp"

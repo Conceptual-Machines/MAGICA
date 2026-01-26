@@ -32,6 +32,10 @@ class MidiBridge : public juce::MidiInputCallback {
     explicit MidiBridge(te::Engine& engine);
     ~MidiBridge() override;
 
+    // Explicitly delete move operations (copy operations deleted by JUCE macro)
+    MidiBridge(MidiBridge&&) = delete;
+    MidiBridge& operator=(MidiBridge&&) = delete;
+
     /**
      * @brief Set AudioBridge reference for triggering MIDI activity and track lookup
      * Must be called after AudioBridge is created

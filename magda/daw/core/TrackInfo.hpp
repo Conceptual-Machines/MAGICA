@@ -3,7 +3,6 @@
 #include <juce_core/juce_core.h>
 #include <juce_graphics/juce_graphics.h>
 
-#include "DeviceInfo.hpp"
 #include "RackInfo.hpp"
 #include "TrackTypes.hpp"
 #include "TrackViewSettings.hpp"

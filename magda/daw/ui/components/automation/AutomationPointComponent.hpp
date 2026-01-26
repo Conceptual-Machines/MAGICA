@@ -7,7 +7,6 @@
 
 #include "BezierHandleComponent.hpp"
 #include "core/AutomationInfo.hpp"
-#include "core/AutomationTypes.hpp"
 
 namespace magda {
 

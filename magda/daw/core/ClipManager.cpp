@@ -11,10 +11,6 @@ ClipManager& ClipManager::getInstance() {
     return instance;
 }
 
-ClipManager::ClipManager() {
-    // Project starts with no clips
-}
-
 // ============================================================================
 // Clip Creation
 // ============================================================================

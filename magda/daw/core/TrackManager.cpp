@@ -2467,7 +2467,7 @@ void TrackManager::notifyDeviceParameterChanged(DeviceId deviceId, int paramInde
     }
 }
 
-void TrackManager::updateRackMods(RackInfo& rack, double deltaTime) {
+void TrackManager::updateRackMods(const RackInfo& rack, double deltaTime) {
     // TODO: Recursively update mods in rack, chains, and nested racks
     (void)rack;
     (void)deltaTime;

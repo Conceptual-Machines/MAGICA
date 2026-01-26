@@ -483,7 +483,8 @@ void ExternalPluginProcessor::syncFromDeviceInfo(const DeviceInfo& info) {
     // Sync parameter values
     if (auto* ext = getExternalPlugin()) {
         auto params = ext->getAutomatableParameters();
-        for (size_t i = 0; i < info.parameters.size() && i < params.size(); ++i) {
+        for (size_t i = 0; i < info.parameters.size() && i < static_cast<size_t>(params.size());
+             ++i) {
             if (params[i]) {
                 params[i]->setParameter(info.parameters[i].currentValue,
                                         juce::dontSendNotification);
@@ -566,7 +567,7 @@ void ExternalPluginProcessor::parameterChanged(te::AutomatableParameter& param, 
     int parameterIndex = -1;
     if (auto* ext = getExternalPlugin()) {
         auto params = ext->getAutomatableParameters();
-        for (size_t i = 0; i < params.size(); ++i) {
+        for (size_t i = 0; i < static_cast<size_t>(params.size()); ++i) {
             if (params[i] == &param) {
                 parameterIndex = static_cast<int>(i);
                 break;

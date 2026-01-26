@@ -3,7 +3,6 @@
 #include <juce_gui_basics/juce_gui_basics.h>
 
 #include <functional>
-#include <memory>
 
 #include "core/AutomationInfo.hpp"
 #include "core/AutomationManager.hpp"

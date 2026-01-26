@@ -1,18 +1,13 @@
 #include "ChainPanel.hpp"
 
-#include <BinaryData.h>
-
 #include "DeviceSlotComponent.hpp"
 #include "NodeComponent.hpp"
 #include "RackComponent.hpp"
 #include "core/MacroInfo.hpp"
 #include "core/ModInfo.hpp"
 #include "core/SelectionManager.hpp"
-#include "ui/components/common/SvgButton.hpp"
-#include "ui/components/common/TextSlider.hpp"
 #include "ui/debug/DebugSettings.hpp"
 #include "ui/themes/DarkTheme.hpp"
-#include "ui/themes/FontManager.hpp"
 #include "ui/themes/SmallButtonLookAndFeel.hpp"
 
 namespace magda::daw::ui {

@@ -7,6 +7,7 @@
 
 #include "ClipTypes.hpp"
 #include "TrackTypes.hpp"
+#include "TypeIds.hpp"
 
 namespace magda {
 

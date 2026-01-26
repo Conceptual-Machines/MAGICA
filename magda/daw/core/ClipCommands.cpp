@@ -9,7 +9,7 @@ namespace magda {
 // ============================================================================
 
 SplitClipCommand::SplitClipCommand(ClipId clipId, double splitTime)
-    : originalClipId_(clipId), splitTime_(splitTime) {}
+    : originalClipId_(clipId), splitTime_(splitTime), originalLength_(0.0) {}
 
 void SplitClipCommand::execute() {
     auto& clipManager = ClipManager::getInstance();
@@ -62,7 +62,7 @@ void SplitClipCommand::undo() {
 // ============================================================================
 
 MoveClipCommand::MoveClipCommand(ClipId clipId, double newStartTime)
-    : clipId_(clipId), newStartTime_(newStartTime) {}
+    : clipId_(clipId), oldStartTime_(0.0), newStartTime_(newStartTime) {}
 
 void MoveClipCommand::execute() {
     auto& clipManager = ClipManager::getInstance();
@@ -108,7 +108,7 @@ void MoveClipCommand::mergeWith(const UndoableCommand* other) {
 // ============================================================================
 
 MoveClipToTrackCommand::MoveClipToTrackCommand(ClipId clipId, TrackId newTrackId)
-    : clipId_(clipId), newTrackId_(newTrackId) {}
+    : clipId_(clipId), oldTrackId_(INVALID_TRACK_ID), newTrackId_(newTrackId) {}
 
 void MoveClipToTrackCommand::execute() {
     auto& clipManager = ClipManager::getInstance();
@@ -140,7 +140,12 @@ void MoveClipToTrackCommand::undo() {
 // ============================================================================
 
 ResizeClipCommand::ResizeClipCommand(ClipId clipId, double newLength, bool fromStart)
-    : clipId_(clipId), newLength_(newLength), fromStart_(fromStart) {}
+    : clipId_(clipId),
+      oldStartTime_(0.0),
+      oldLength_(0.0),
+      newStartTime_(0.0),
+      newLength_(newLength),
+      fromStart_(fromStart) {}
 
 void ResizeClipCommand::execute() {
     auto& clipManager = ClipManager::getInstance();

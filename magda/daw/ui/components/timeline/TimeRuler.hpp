@@ -4,9 +4,6 @@
 
 #include <functional>
 
-#include "../../layout/LayoutConfig.hpp"
-#include "../../themes/DarkTheme.hpp"
-
 namespace magda {
 
 /**

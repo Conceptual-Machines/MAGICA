@@ -181,7 +181,7 @@ ModulatorEditorPanel::ModulatorEditorPanel() {
                                                            BinaryData::save_svgSize);
     savePresetButton_->setNormalColor(DarkTheme::getSecondaryTextColour());
     savePresetButton_->setHoverColor(DarkTheme::getTextColour());
-    savePresetButton_->onClick = [this]() {
+    savePresetButton_->onClick = []() {
         // TODO: Show save preset dialog
     };
     addChildComponent(savePresetButton_.get());
@@ -289,7 +289,7 @@ ModulatorEditorPanel::ModulatorEditorPanel() {
                                                          BinaryData::settings_nobg_svgSize);
     advancedButton_->setNormalColor(DarkTheme::getSecondaryTextColour());
     advancedButton_->setHoverColor(DarkTheme::getTextColour());
-    advancedButton_->onClick = [this]() {
+    advancedButton_->onClick = []() {
         // TODO: Show advanced trigger settings popup
     };
     addAndMakeVisible(advancedButton_.get());
@@ -413,7 +413,7 @@ void ModulatorEditorPanel::paint(juce::Graphics& g) {
     triggerRow.removeFromRight(4);  // Skip gap before dot
 
     // Draw trigger indicator dot
-    const float dotRadius = 3.0f;
+    constexpr float dotRadius = 3.0f;
     auto dotBounds =
         juce::Rectangle<float>(static_cast<float>(dotArea.getX()), dotArea.getCentreY() - dotRadius,
                                dotRadius * 2, dotRadius * 2);

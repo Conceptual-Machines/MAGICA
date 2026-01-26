@@ -1,7 +1,5 @@
 #include "ZoomControls.hpp"
 
-#include <cmath>
-
 namespace magda {
 
 ZoomControls::ZoomControls() {

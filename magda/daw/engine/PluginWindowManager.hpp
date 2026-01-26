@@ -44,14 +44,14 @@ class PluginWindowManager : public juce::Timer {
      * @param deviceId MAGDA device ID
      * @param plugin The plugin to show
      */
-    void showPluginWindow(DeviceId deviceId, te::Plugin::Ptr plugin);
+    void showPluginWindow(DeviceId deviceId, const te::Plugin::Ptr& plugin);
 
     /**
      * @brief Hide/close the plugin's native editor window
      * @param deviceId MAGDA device ID
      * @param plugin The plugin to hide
      */
-    void hidePluginWindow(DeviceId deviceId, te::Plugin::Ptr plugin);
+    void hidePluginWindow(DeviceId deviceId, const te::Plugin::Ptr& plugin);
 
     /**
      * @brief Toggle the plugin's window (open if closed, close if open)
@@ -59,15 +59,14 @@ class PluginWindowManager : public juce::Timer {
      * @param plugin The plugin to toggle
      * @return true if the window is now open, false if now closed
      */
-    bool togglePluginWindow(DeviceId deviceId, te::Plugin::Ptr plugin);
+    bool togglePluginWindow(DeviceId deviceId, const te::Plugin::Ptr& plugin);
 
     /**
      * @brief Check if a plugin window is currently open
-     * @param deviceId MAGDA device ID
      * @param plugin The plugin to check
      * @return true if the plugin window is visible
      */
-    bool isPluginWindowOpen(DeviceId deviceId, te::Plugin::Ptr plugin) const;
+    bool isPluginWindowOpen(const te::Plugin::Ptr& plugin) const;
 
     // =========================================================================
     // Bulk Operations

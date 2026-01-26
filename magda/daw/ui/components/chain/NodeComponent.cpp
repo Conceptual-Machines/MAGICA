@@ -2,8 +2,6 @@
 
 #include <BinaryData.h>
 
-#include <cstdlib>
-
 #include "MacroEditorPanel.hpp"
 #include "MacroPanelComponent.hpp"
 #include "ModsPanelComponent.hpp"

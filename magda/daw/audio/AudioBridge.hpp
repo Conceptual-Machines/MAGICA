@@ -27,7 +27,7 @@ struct PluginLoadResult {
     juce::String errorMessage;
     te::Plugin::Ptr plugin;
 
-    static PluginLoadResult Success(te::Plugin::Ptr p) {
+    static PluginLoadResult Success(const te::Plugin::Ptr& p) {
         return {true, {}, p};
     }
     static PluginLoadResult Failure(const juce::String& msg) {

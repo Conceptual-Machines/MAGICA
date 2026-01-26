@@ -226,7 +226,6 @@ void TracktionEngineWrapper::changeListenerCallback(juce::ChangeBroadcaster* sou
         // Check if MIDI devices have appeared
         auto midiDevices = dm.getMidiInDevices();
         bool hasMidiDevices = !midiDevices.empty();
-        bool enabledNewMidi = false;
 
         DBG("Device change callback: " << midiDevices.size() << " MIDI input devices");
 
@@ -235,7 +234,6 @@ void TracktionEngineWrapper::changeListenerCallback(juce::ChangeBroadcaster* sou
             if (midiIn && !midiIn->isEnabled()) {
                 midiIn->setEnabled(true);
                 DBG("Device change: Enabled MIDI input: " << midiIn->getName());
-                enabledNewMidi = true;
             }
         }
 

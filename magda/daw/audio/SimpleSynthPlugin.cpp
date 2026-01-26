@@ -81,7 +81,7 @@ void SimpleSynthVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer, i
 // SimpleSynthPlugin Implementation
 //==============================================================================
 
-SimpleSynthPlugin::SimpleSynthPlugin(te::PluginCreationInfo info) : Plugin(info) {
+SimpleSynthPlugin::SimpleSynthPlugin(const te::PluginCreationInfo& info) : Plugin(info) {
     auto um = getUndoManager();
 
     // Waveform: 0 = Sine, 1 = Noise
@@ -92,20 +92,39 @@ SimpleSynthPlugin::SimpleSynthPlugin(te::PluginCreationInfo info) : Plugin(info)
 
     // Level (dB)
     levelValue.referTo(state, te::IDs::level, um, -12.0f);
-    levelParam = addParam("level", "Level", {-60.0f, 0.0f, -12.0f, 4.0f}, "dB");
+    levelParam = addParam(
+        "level", "Level", {-60.0f, 0.0f, -12.0f, 4.0f},
+        [](float v) { return juce::String(v, 1) + " dB"; },
+        [](const juce::String& s) {
+            return s.upToFirstOccurrenceOf(" ", false, false).getFloatValue();
+        });
 
     // ADSR
     attackValue.referTo(state, te::IDs::attack, um, 0.01f);
-    attackParam = addParam("attack", "Attack", {0.001f, 5.0f, 0.01f}, "s");
+    attackParam = addParam(
+        "attack", "Attack", {0.001f, 5.0f, 0.01f},
+        [](float v) { return juce::String(v, 3) + " s"; },
+        [](const juce::String& s) {
+            return s.upToFirstOccurrenceOf(" ", false, false).getFloatValue();
+        });
 
     decayValue.referTo(state, te::IDs::decay, um, 0.1f);
-    decayParam = addParam("decay", "Decay", {0.001f, 5.0f, 0.1f}, "s");
+    decayParam = addParam(
+        "decay", "Decay", {0.001f, 5.0f, 0.1f}, [](float v) { return juce::String(v, 3) + " s"; },
+        [](const juce::String& s) {
+            return s.upToFirstOccurrenceOf(" ", false, false).getFloatValue();
+        });
 
     sustainValue.referTo(state, te::IDs::sustain, um, 0.8f);
     sustainParam = addParam("sustain", "Sustain", {0.0f, 1.0f});
 
     releaseValue.referTo(state, te::IDs::release, um, 0.2f);
-    releaseParam = addParam("release", "Release", {0.001f, 10.0f, 0.2f}, "s");
+    releaseParam = addParam(
+        "release", "Release", {0.001f, 10.0f, 0.2f},
+        [](float v) { return juce::String(v, 3) + " s"; },
+        [](const juce::String& s) {
+            return s.upToFirstOccurrenceOf(" ", false, false).getFloatValue();
+        });
 
     // Initialize synthesiser
     synthesiser.clearVoices();

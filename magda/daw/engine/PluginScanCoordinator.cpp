@@ -86,8 +86,8 @@ bool PluginScanCoordinator::launchScannerProcess() {
 }
 
 void PluginScanCoordinator::startScan(juce::AudioPluginFormatManager& formatManager,
-                                      ProgressCallback progressCallback,
-                                      CompletionCallback completionCallback) {
+                                      const ProgressCallback& progressCallback,
+                                      const CompletionCallback& completionCallback) {
     if (isScanning_) {
         std::cout << "[ScanCoordinator] Scan already in progress" << std::endl;
         return;
@@ -531,9 +531,9 @@ void PluginScanCoordinator::loadBlacklist() {
 }
 
 void PluginScanCoordinator::saveBlacklist() {
-    auto file = getBlacklistFile();
-    file.getParentDirectory().createDirectory();
-    file.replaceWithText(blacklistedPlugins_.joinIntoString("\n"));
+    const auto file = getBlacklistFile();
+    (void)file.getParentDirectory().createDirectory();
+    (void)file.replaceWithText(blacklistedPlugins_.joinIntoString("\n"));
 }
 
 }  // namespace magda

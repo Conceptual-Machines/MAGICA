@@ -13,8 +13,8 @@ PluginScanner::~PluginScanner() {
 }
 
 void PluginScanner::startScan(juce::AudioPluginFormatManager& formatManager,
-                              ProgressCallback progressCallback,
-                              CompletionCallback completionCallback) {
+                              const ProgressCallback& progressCallback,
+                              const CompletionCallback& completionCallback) {
     if (isThreadRunning()) {
         std::cout << "Scan already in progress" << std::endl;
         return;
@@ -76,7 +76,7 @@ void PluginScanner::run() {
             juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
                 .getChildFile("MAGDA")
                 .getChildFile("scanning_" + formatName + ".txt");
-        deadMansPedal.getParentDirectory().createDirectory();
+        (void)deadMansPedal.getParentDirectory().createDirectory();
 
         // Check if there's a dead man's pedal from a previous crash
         if (deadMansPedal.existsAsFile()) {
@@ -104,7 +104,7 @@ void PluginScanner::run() {
             }
 
             scanned++;
-            float progress = scanner.getProgress();
+            [[maybe_unused]] float progress = scanner.getProgress();
 
             // Report progress on message thread
             if (progressCallback_) {
@@ -133,7 +133,7 @@ void PluginScanner::run() {
         }
 
         // Clean up dead man's pedal
-        deadMansPedal.deleteFile();
+        (void)deadMansPedal.deleteFile();
     }
 
     if (threadShouldExit()) {
@@ -195,8 +195,8 @@ void PluginScanner::loadBlacklist() {
 
 void PluginScanner::saveBlacklist() {
     auto file = getBlacklistFile();
-    file.getParentDirectory().createDirectory();
-    file.replaceWithText(blacklistedPlugins_.joinIntoString("\n"));
+    (void)file.getParentDirectory().createDirectory();
+    (void)file.replaceWithText(blacklistedPlugins_.joinIntoString("\n"));
 }
 
 }  // namespace magda

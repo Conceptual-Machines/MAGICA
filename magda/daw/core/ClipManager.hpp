@@ -238,7 +238,7 @@ class ClipManager {
     void createTestClips();
 
   private:
-    ClipManager();
+    ClipManager() = default;
     ~ClipManager() = default;
 
     std::vector<ClipInfo> clips_;

@@ -1,7 +1,5 @@
 #include "TimelineComponent.hpp"
 
-#include <BinaryData.h>
-
 #include <algorithm>
 #include <cmath>
 #include <iostream>

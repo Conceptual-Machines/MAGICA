@@ -59,15 +59,19 @@ void LFOPhaseOverlay::paintGrid(juce::Graphics& g) {
 }
 
 void LFOPhaseOverlay::paintCurve(juce::Graphics& g) {
-    if (modInfo_->curvePoints.empty())
+    const auto* mod = modInfo_;
+    if (!mod)
         return;
 
-    auto bounds = getLocalBounds();
-    float width = static_cast<float>(bounds.getWidth());
-    float height = static_cast<float>(bounds.getHeight());
+    if (mod->curvePoints.empty())
+        return;
+
+    const auto bounds = getLocalBounds();
+    const float width = static_cast<float>(bounds.getWidth());
+    const float height = static_cast<float>(bounds.getHeight());
 
     juce::Path curvePath;
-    const auto& points = modInfo_->curvePoints;
+    const auto& points = mod->curvePoints;
 
     // Start at first point
     float startX = points[0].phase * width;
@@ -91,7 +95,7 @@ void LFOPhaseOverlay::paintCurve(juce::Graphics& g) {
             curvePath.lineTo(x2, y2);
         } else {
             // Tension-based curve
-            const int NUM_SEGMENTS = 16;
+            constexpr int NUM_SEGMENTS = 16;
             for (int seg = 1; seg <= NUM_SEGMENTS; ++seg) {
                 double t = static_cast<double>(seg) / NUM_SEGMENTS;
                 double curvedT = applyTension(t, tension);
@@ -117,10 +121,14 @@ void LFOPhaseOverlay::paintCurve(juce::Graphics& g) {
 }
 
 void LFOPhaseOverlay::paintPhaseIndicator(juce::Graphics& g) {
+    const auto* mod = modInfo_;
+    if (!mod)
+        return;
+
     auto bounds = getLocalBounds();
 
-    float phase = modInfo_->phase;
-    float value = modInfo_->value;
+    float phase = mod->phase;
+    float value = mod->value;
 
     int x = static_cast<int>(phase * bounds.getWidth());
     int y = static_cast<int>((1.0f - value) * bounds.getHeight());

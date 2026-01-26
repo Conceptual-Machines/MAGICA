@@ -1,0 +1,13 @@
+{
+  "paths": [
+    "magda/**/*.cpp",
+    "magda/**/*.hpp",
+    "tests/**/*.cpp",
+    "tests/**/*.hpp"
+  ],
+  "filterPre": [
+    ".*",
+    "third_party/**"
+  ],
+  "buildRoot": "./build"
+}
