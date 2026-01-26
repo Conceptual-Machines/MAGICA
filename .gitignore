@@ -76,5 +76,6 @@ JuceLibraryCode/
 Builds/
 *.jucer.bak
 .mcp.json
-.claude/settings.local.json
+
+# Claude Code local settings
 .claude/settings.local.json
