@@ -400,8 +400,9 @@ target_link_libraries(magda_daw
     juce::juce_gui_basics
     tracktion::tracktion_engine
     MagdaAssets
-    # Link GTK/WebKit dependencies on Linux for web browser support
+    # Link GTK/WebKit and curl dependencies on Linux
     $<$<PLATFORM_ID:Linux>:juce::pkgconfig_JUCE_BROWSER_LINUX_DEPS>
+    $<$<PLATFORM_ID:Linux>:juce::pkgconfig_JUCE_CURL_LINUX_DEPS>
 )
 
 # Enable plugin hosting for external VST3/AU plugins
@@ -422,8 +423,9 @@ target_link_libraries(magda_daw_app
     juce::juce_audio_processors
     juce::juce_audio_utils
     tracktion::tracktion_engine
-    # Link GTK/WebKit dependencies on Linux for web browser support
+    # Link GTK/WebKit and curl dependencies on Linux
     $<$<PLATFORM_ID:Linux>:juce::pkgconfig_JUCE_BROWSER_LINUX_DEPS>
+    $<$<PLATFORM_ID:Linux>:juce::pkgconfig_JUCE_CURL_LINUX_DEPS>
 )
 
 # Enable plugin hosting for the app target as well
@@ -500,6 +502,8 @@ target_link_libraries(magda_plugin_scanner
     juce::juce_events
     juce::juce_audio_basics
     juce::juce_audio_processors
+    # Link curl dependencies on Linux for networking
+    $<$<PLATFORM_ID:Linux>:juce::pkgconfig_JUCE_CURL_LINUX_DEPS>
 )
 
 target_compile_definitions(magda_plugin_scanner
