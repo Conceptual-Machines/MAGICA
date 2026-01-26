@@ -7,20 +7,51 @@ on:
     branches: [ main, develop ]
 
 jobs:
+  build-docker-image:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Build and export Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        tags: magda-build:latest
+        outputs: type=docker,dest=/tmp/magda-build.tar
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+    - name: Upload Docker image artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: magda-build-image
+        path: /tmp/magda-build.tar
+        retention-days: 1
+
   build-and-test-linux:
     runs-on: ubuntu-latest
+    needs: build-docker-image
 
     steps:
     - uses: actions/checkout@v4
       with:
         submodules: recursive
 
-    - name: Build Docker image
-      run: docker build -t magda-build .
+    - name: Download Docker image artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: magda-build-image
+        path: /tmp
+
+    - name: Load Docker image
+      run: docker load --input /tmp/magda-build.tar
 
     - name: Configure CMake in Docker
       run: |
-        docker run --rm -v $PWD:/workspace magda-build \
+        docker run --rm -v $PWD:/workspace magda-build:latest \
           cmake -B build -G Ninja \
             -DCMAKE_BUILD_TYPE=Debug \
             -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
@@ -28,8 +59,8 @@ jobs:
 
     - name: Build in Docker
       run: |
-        docker run --rm -v $PWD:/workspace magda-build \
-          bash -c "echo 'Building with $(nproc) cores...' && cmake --build build --config Debug -j$(nproc) -- -v"
+        docker run --rm -v $PWD:/workspace magda-build:latest \
+          bash -c 'echo "Building with $(nproc) cores..." && cmake --build build --config Debug -j$(nproc) -- -v'
 
     - name: Check build artifacts
       run: |
@@ -41,7 +72,7 @@ jobs:
       run: |
         if [ -f build/tests/magda_tests ]; then
           echo "Running tests..."
-          docker run --rm -v $PWD:/workspace magda-build \
+          docker run --rm -v $PWD:/workspace magda-build:latest \
             ./build/tests/magda_tests
         else
           echo "❌ Tests executable not found at build/tests/magda_tests"
@@ -57,28 +88,35 @@ jobs:
 
   code-quality:
     runs-on: ubuntu-latest
+    needs: build-docker-image
 
     steps:
     - uses: actions/checkout@v4
       with:
         submodules: recursive
 
-    - name: Build Docker image
-      run: docker build -t magda-build .
+    - name: Download Docker image artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: magda-build-image
+        path: /tmp
+
+    - name: Load Docker image
+      run: docker load --input /tmp/magda-build.tar
 
     - name: Check code formatting
       run: |
-        docker run --rm -v $PWD:/workspace magda-build \
-          bash -c "
-            echo 'Checking code formatting with clang-format...'
-            find magda/daw magda/agents tests -name '*.cpp' -o -name '*.hpp' -o -name '*.h' 2>/dev/null | \
+        docker run --rm -v $PWD:/workspace magda-build:latest \
+          bash -c '
+            echo "Checking code formatting with clang-format..."
+            find magda/daw magda/agents tests -name "*.cpp" -o -name "*.hpp" -o -name "*.h" 2>/dev/null | \
               xargs clang-format --dry-run --Werror 2>&1 | tee format-check.log || true
 
-            if grep -q 'warning:' format-check.log; then
-              echo '❌ Format check found issues'
-              echo 'Run make format to fix formatting issues'
+            if grep -q "warning:" format-check.log; then
+              echo "❌ Format check found issues"
+              echo "Run make format to fix formatting issues"
               exit 1
             else
-              echo '✅ Format check passed!'
+              echo "✅ Format check passed!"
             fi
-          "
+          '
