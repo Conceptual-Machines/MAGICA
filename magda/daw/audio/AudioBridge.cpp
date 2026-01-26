@@ -511,6 +511,9 @@ void AudioBridge::syncTrackPlugins(TrackId trackId) {
         }
 
         for (auto deviceId : toRemove) {
+            // Close plugin window before removing device
+            hidePluginWindow(deviceId);
+
             auto it = deviceToPlugin_.find(deviceId);
             if (it != deviceToPlugin_.end()) {
                 auto plugin = it->second;
@@ -518,6 +521,9 @@ void AudioBridge::syncTrackPlugins(TrackId trackId) {
                 deviceToPlugin_.erase(it);
                 plugin->deleteFromParent();
             }
+
+            // Clean up device processor
+            deviceProcessors_.erase(deviceId);
         }
     }
 
@@ -663,6 +669,21 @@ void AudioBridge::applyPendingMidiRoutes() {
 void AudioBridge::timerCallback() {
     // Apply any pending MIDI routes now that playback context may be available
     applyPendingMidiRoutes();
+
+    // Sync window states - detect if windows were closed externally by user
+    {
+        juce::ScopedLock lock(windowStateLock_);
+        for (auto& [deviceId, isOpen] : openPluginWindows_) {
+            if (isOpen) {
+                // Check if window is actually still open
+                bool actuallyOpen = isPluginWindowOpen(deviceId);
+                if (!actuallyOpen) {
+                    // Window was closed externally - update our tracking
+                    isOpen = false;
+                }
+            }
+        }
+    }
 
     // Update metering from level measurers (runs at 30 FPS on message thread)
     juce::ScopedLock lock(mappingLock_);
@@ -1413,6 +1434,10 @@ void AudioBridge::showPluginWindow(DeviceId deviceId) {
         if (extPlugin->windowState) {
             extPlugin->windowState->showWindowExplicitly();
             DBG("Showing plugin window for: " << extPlugin->getName());
+
+            // Track window state
+            juce::ScopedLock lock(windowStateLock_);
+            openPluginWindows_[deviceId] = true;
         } else {
             DBG("Plugin has no windowState: " << extPlugin->getName());
         }
@@ -1433,6 +1458,10 @@ void AudioBridge::hidePluginWindow(DeviceId deviceId) {
         if (extPlugin->windowState) {
             extPlugin->windowState->closeWindowExplicitly();
             DBG("Hiding plugin window for: " << extPlugin->getName());
+
+            // Update window state
+            juce::ScopedLock lock(windowStateLock_);
+            openPluginWindows_[deviceId] = false;
         }
     }
 }

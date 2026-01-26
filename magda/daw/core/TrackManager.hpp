@@ -60,6 +60,11 @@ class TrackManagerListener {
     virtual void devicePropertyChanged(DeviceId deviceId) {
         juce::ignoreUnused(deviceId);
     }
+
+    // Called when a device parameter value changes (for live parameter updates)
+    virtual void deviceParameterChanged(DeviceId deviceId, int paramIndex, float newValue) {
+        juce::ignoreUnused(deviceId, paramIndex, newValue);
+    }
 };
 
 /**
@@ -405,6 +410,7 @@ class TrackManager {
     void notifyTrackSelectionChanged(TrackId trackId);
     void notifyTrackDevicesChanged(TrackId trackId);
     void notifyDevicePropertyChanged(DeviceId deviceId);
+    void notifyDeviceParameterChanged(DeviceId deviceId, int paramIndex, float newValue);
 
     // Helper for recursive mod updates
     void updateRackMods(RackInfo& rack, double deltaTime);

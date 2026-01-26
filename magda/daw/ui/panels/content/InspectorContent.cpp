@@ -383,6 +383,19 @@ InspectorContent::InspectorContent() {
     chainNodeNameValue_.setColour(juce::Label::textColourId, DarkTheme::getTextColour());
     addChildComponent(chainNodeNameValue_);
 
+    // ========================================================================
+    // Device parameters section
+    // ========================================================================
+
+    deviceParamsLabel_.setText("Parameters", juce::dontSendNotification);
+    deviceParamsLabel_.setFont(FontManager::getInstance().getUIFont(11.0f));
+    deviceParamsLabel_.setColour(juce::Label::textColourId, DarkTheme::getSecondaryTextColour());
+    addChildComponent(deviceParamsLabel_);
+
+    deviceParamsViewport_.setViewedComponent(&deviceParamsContainer_, false);
+    deviceParamsViewport_.setScrollBarsShown(true, false);
+    addChildComponent(deviceParamsViewport_);
+
     // Register as listeners
     magda::TrackManager::getInstance().addListener(this);
     magda::ClipManager::getInstance().addListener(this);
@@ -552,6 +565,16 @@ void InspectorContent::resized() {
 
         chainNodeNameLabel_.setBounds(bounds.removeFromTop(16));
         chainNodeNameValue_.setBounds(bounds.removeFromTop(24));
+        bounds.removeFromTop(16);
+
+        // Device parameters section (if visible)
+        if (deviceParamsLabel_.isVisible()) {
+            deviceParamsLabel_.setBounds(bounds.removeFromTop(16));
+            bounds.removeFromTop(4);
+
+            // Viewport takes remaining space
+            deviceParamsViewport_.setBounds(bounds);
+        }
     }
 }
 
@@ -592,6 +615,49 @@ void InspectorContent::trackSelectionChanged(magda::TrackId trackId) {
     if (currentSelectionType_ == magda::SelectionType::Track) {
         selectedTrackId_ = trackId;
         updateFromSelectedTrack();
+    }
+}
+
+void InspectorContent::deviceParameterChanged(magda::DeviceId deviceId, int paramIndex,
+                                              float newValue) {
+    // Check if this parameter belongs to the currently selected device
+    if (!selectedChainNode_.isValid()) {
+        return;
+    }
+
+    // Get the device ID from the current selection
+    magda::DeviceId selectedDeviceId = magda::INVALID_DEVICE_ID;
+
+    if (selectedChainNode_.getType() == magda::ChainNodeType::TopLevelDevice) {
+        selectedDeviceId = selectedChainNode_.topLevelDeviceId;
+    } else if (selectedChainNode_.getType() == magda::ChainNodeType::Device) {
+        auto resolved = magda::TrackManager::getInstance().resolvePath(selectedChainNode_);
+        if (resolved.valid && resolved.device) {
+            selectedDeviceId = resolved.device->id;
+        }
+    }
+
+    // If this is the selected device, update the UI
+    if (selectedDeviceId == deviceId) {
+        if (paramIndex >= 0 && paramIndex < static_cast<int>(deviceParamControls_.size())) {
+            auto* control = deviceParamControls_[paramIndex].get();
+            if (control) {
+                // Update slider without triggering callback
+                control->slider.setValue(newValue, juce::dontSendNotification);
+
+                // Update value label
+                const auto* device = magda::TrackManager::getInstance().getDevice(
+                    selectedChainNode_.trackId, deviceId);
+                if (device && paramIndex < static_cast<int>(device->parameters.size())) {
+                    const auto& param = device->parameters[paramIndex];
+                    juce::String valueText = juce::String(newValue, 2);
+                    if (param.unit.isNotEmpty()) {
+                        valueText += " " + param.unit;
+                    }
+                    control->valueLabel.setText(valueText, juce::dontSendNotification);
+                }
+            }
+        }
     }
 }
 
@@ -1069,6 +1135,46 @@ void InspectorContent::updateFromSelectedChainNode() {
 
     showChainNodeControls(true);
     noSelectionLabel_.setVisible(false);
+
+    // Show device parameters if this is a device
+    if (selectedChainNode_.getType() == magda::ChainNodeType::Device ||
+        selectedChainNode_.getType() == magda::ChainNodeType::TopLevelDevice) {
+        // Get the device info
+        const magda::DeviceInfo* deviceInfo = nullptr;
+
+        if (selectedChainNode_.getType() == magda::ChainNodeType::TopLevelDevice) {
+            // Top-level device - search track's chain elements
+            const auto* track =
+                magda::TrackManager::getInstance().getTrack(selectedChainNode_.trackId);
+            if (track) {
+                for (const auto& element : track->chainElements) {
+                    if (magda::isDevice(element)) {
+                        const auto& device = magda::getDevice(element);
+                        if (device.id == selectedChainNode_.topLevelDeviceId) {
+                            deviceInfo = &device;
+                            break;
+                        }
+                    }
+                }
+            }
+        } else {
+            // Nested device - use TrackManager's getDevice()
+            // First, we need the device ID from the resolved path
+            auto resolved = magda::TrackManager::getInstance().resolvePath(selectedChainNode_);
+            if (resolved.valid && resolved.device) {
+                deviceInfo = resolved.device;
+            }
+        }
+
+        if (deviceInfo && !deviceInfo->parameters.empty()) {
+            createDeviceParamControls(*deviceInfo);
+            showDeviceParamControls(true);
+        } else {
+            showDeviceParamControls(false);
+        }
+    } else {
+        showDeviceParamControls(false);
+    }
 
     resized();
     repaint();
@@ -1576,6 +1682,105 @@ void InspectorContent::updateRoutingSelectorsFromTrack() {
         // TODO: Find specific output in list
         audioOutSelector_->setEnabled(true);
     }
+}
+
+void InspectorContent::createDeviceParamControls(const magda::DeviceInfo& device) {
+    // Clear existing controls
+    deviceParamControls_.clear();
+    deviceParamsContainer_.removeAllChildren();
+
+    if (device.parameters.empty()) {
+        deviceParamsContainer_.setSize(0, 0);
+        return;
+    }
+
+    const int rowHeight = 50;
+    const int nameWidth = 120;
+    const int valueWidth = 60;
+    const int padding = 8;
+
+    int y = padding;
+    for (size_t i = 0; i < device.parameters.size(); ++i) {
+        const auto& param = device.parameters[i];
+
+        auto control = std::make_unique<DeviceParamControl>();
+        control->paramIndex = static_cast<int>(i);
+
+        // Name label
+        control->nameLabel.setText(param.name, juce::dontSendNotification);
+        control->nameLabel.setFont(FontManager::getInstance().getUIFont(11.0f));
+        control->nameLabel.setColour(juce::Label::textColourId, DarkTheme::getTextColour());
+        control->nameLabel.setBounds(padding, y, nameWidth, 20);
+        deviceParamsContainer_.addAndMakeVisible(control->nameLabel);
+
+        // Value label (shows current value + unit)
+        juce::String valueText = juce::String(param.currentValue, 2);
+        if (param.unit.isNotEmpty()) {
+            valueText += " " + param.unit;
+        }
+        control->valueLabel.setText(valueText, juce::dontSendNotification);
+        control->valueLabel.setFont(FontManager::getInstance().getUIFont(10.0f));
+        control->valueLabel.setColour(juce::Label::textColourId,
+                                      DarkTheme::getSecondaryTextColour());
+        control->valueLabel.setJustificationType(juce::Justification::centredRight);
+        control->valueLabel.setBounds(getWidth() - valueWidth - padding, y, valueWidth, 20);
+        deviceParamsContainer_.addAndMakeVisible(control->valueLabel);
+
+        // Slider
+        control->slider.setSliderStyle(juce::Slider::LinearHorizontal);
+        control->slider.setTextBoxStyle(juce::Slider::NoTextBox, false, 0, 0);
+        control->slider.setColour(juce::Slider::trackColourId,
+                                  DarkTheme::getColour(DarkTheme::SURFACE));
+        control->slider.setColour(juce::Slider::thumbColourId,
+                                  DarkTheme::getColour(DarkTheme::ACCENT_BLUE));
+
+        // Set range based on parameter type
+        if (param.scale == magda::ParameterScale::Logarithmic) {
+            control->slider.setSkewFactorFromMidPoint(std::sqrt(param.minValue * param.maxValue));
+        }
+        control->slider.setRange(param.minValue, param.maxValue, 0.0);
+        control->slider.setValue(param.currentValue, juce::dontSendNotification);
+
+        // Wire up callback to update parameter via TrackManager
+        int paramIndex = static_cast<int>(i);
+        control->slider.onValueChange = [this, deviceId = device.id,
+                                         trackId = selectedChainNode_.trackId,
+                                         devicePath = selectedChainNode_, paramIndex]() {
+            auto* ctrl = deviceParamControls_[paramIndex].get();
+            if (ctrl) {
+                float newValue = static_cast<float>(ctrl->slider.getValue());
+
+                // Update value label
+                const auto* dev = magda::TrackManager::getInstance().getDevice(trackId, deviceId);
+                if (dev && paramIndex < static_cast<int>(dev->parameters.size())) {
+                    const auto& param = dev->parameters[paramIndex];
+                    juce::String valueText = juce::String(newValue, 2);
+                    if (param.unit.isNotEmpty()) {
+                        valueText += " " + param.unit;
+                    }
+                    ctrl->valueLabel.setText(valueText, juce::dontSendNotification);
+                }
+
+                // Push parameter change to audio engine
+                magda::TrackManager::getInstance().setDeviceParameterValue(devicePath, paramIndex,
+                                                                           newValue);
+            }
+        };
+
+        control->slider.setBounds(padding, y + 22, getWidth() - 2 * padding, 20);
+        deviceParamsContainer_.addAndMakeVisible(control->slider);
+
+        deviceParamControls_.push_back(std::move(control));
+        y += rowHeight;
+    }
+
+    // Set container size based on parameter count
+    deviceParamsContainer_.setSize(getWidth() - 20, y);
+}
+
+void InspectorContent::showDeviceParamControls(bool show) {
+    deviceParamsLabel_.setVisible(show);
+    deviceParamsViewport_.setVisible(show);
 }
 
 }  // namespace magda::daw::ui

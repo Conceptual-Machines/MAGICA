@@ -1307,12 +1307,16 @@ void TrackManager::setDeviceParameterValueFromPlugin(const ChainNodePath& device
     // It updates the DeviceInfo but does NOT call notifyDevicePropertyChanged()
     // to avoid triggering AudioBridge sync (which would cause a feedback loop).
     //
-    // Instead, we notify the modulation system which will update the UI.
+    // Instead, we notify UI listeners directly about the parameter change.
 
     if (auto* device = getDeviceInChainByPath(devicePath)) {
         if (paramIndex >= 0 && paramIndex < static_cast<int>(device->parameters.size())) {
             device->parameters[static_cast<size_t>(paramIndex)].currentValue = value;
-            // Notify modulation/UI that values changed (for display updates only)
+
+            // Notify listeners about parameter change (for UI updates)
+            notifyDeviceParameterChanged(device->id, paramIndex, value);
+
+            // Also notify modulation system for display updates
             notifyModulationChanged();
         }
     }
@@ -2491,6 +2495,12 @@ void TrackManager::notifyTrackDevicesChanged(TrackId trackId) {
 void TrackManager::notifyDevicePropertyChanged(DeviceId deviceId) {
     for (auto* listener : listeners_) {
         listener->devicePropertyChanged(deviceId);
+    }
+}
+
+void TrackManager::notifyDeviceParameterChanged(DeviceId deviceId, int paramIndex, float newValue) {
+    for (auto* listener : listeners_) {
+        listener->deviceParameterChanged(deviceId, paramIndex, newValue);
     }
 }
 

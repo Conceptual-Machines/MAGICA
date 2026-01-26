@@ -115,6 +115,9 @@ class DeviceSlotComponent : public NodeComponent {
     void macroSelectionChanged(const magda::MacroSelection& selection) override;
     void paramSelectionChanged(const magda::ParamSelection& selection) override;
 
+    // Mouse handling
+    void mouseDown(const juce::MouseEvent& e) override;
+
   private:
     magda::DeviceInfo device_;
 

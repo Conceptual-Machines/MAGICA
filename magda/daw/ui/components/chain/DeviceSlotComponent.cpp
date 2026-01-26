@@ -906,6 +906,28 @@ void DeviceSlotComponent::paramSelectionChanged(const magda::ParamSelection& sel
 }
 
 // =============================================================================
+// Mouse Handling
+// =============================================================================
+
+void DeviceSlotComponent::mouseDown(const juce::MouseEvent& e) {
+    // Check for double-click
+    if (e.getNumberOfClicks() == 2) {
+        // Toggle plugin window on double-click
+        auto* audioEngine = magda::TrackManager::getInstance().getAudioEngine();
+        if (audioEngine) {
+            if (auto* bridge = audioEngine->getAudioBridge()) {
+                bool isOpen = bridge->togglePluginWindow(device_.id);
+                uiButton_->setToggleState(isOpen, juce::dontSendNotification);
+                uiButton_->setActive(isOpen);
+            }
+        }
+    } else {
+        // Pass to base class for normal click handling
+        NodeComponent::mouseDown(e);
+    }
+}
+
+// =============================================================================
 // Custom UI for Internal Devices
 // =============================================================================
 

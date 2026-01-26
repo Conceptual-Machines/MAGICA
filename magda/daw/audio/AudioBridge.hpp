@@ -488,6 +488,10 @@ class AudioBridge : public TrackManagerListener, public juce::Timer {
     std::vector<std::pair<TrackId, juce::String>> pendingMidiRoutes_;
     void applyPendingMidiRoutes();
 
+    // Plugin window state tracking
+    std::unordered_map<DeviceId, bool> openPluginWindows_;
+    mutable juce::CriticalSection windowStateLock_;
+
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(AudioBridge)
 };
 

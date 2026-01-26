@@ -52,6 +52,7 @@ class InspectorContent : public PanelContent,
     void tracksChanged() override;
     void trackPropertyChanged(int trackId) override;
     void trackSelectionChanged(magda::TrackId trackId) override;
+    void deviceParameterChanged(magda::DeviceId deviceId, int paramIndex, float newValue) override;
 
     // ClipManagerListener
     void clipsChanged() override;
@@ -147,6 +148,19 @@ class InspectorContent : public PanelContent,
     juce::Label macrosPanelTitleLabel_;
     juce::Label macrosPanelPathLabel_;
 
+    // Device parameters section
+    struct DeviceParamControl {
+        juce::Label nameLabel;
+        juce::Label valueLabel;
+        juce::Slider slider;
+        int paramIndex;
+    };
+
+    juce::Label deviceParamsLabel_;
+    juce::Viewport deviceParamsViewport_;
+    juce::Component deviceParamsContainer_;
+    std::vector<std::unique_ptr<DeviceParamControl>> deviceParamControls_;
+
     void updateFromSelectedTrack();
     void updateFromSelectedClip();
     void updateFromSelectedNotes();
@@ -166,6 +180,9 @@ class InspectorContent : public PanelContent,
     void populateMidiInputOptions();
     void populateMidiOutputOptions();
     void updateRoutingSelectorsFromTrack();
+
+    void createDeviceParamControls(const magda::DeviceInfo& device);
+    void showDeviceParamControls(bool show);
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(InspectorContent)
 };
