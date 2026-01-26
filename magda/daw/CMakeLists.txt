@@ -502,6 +502,7 @@ target_compile_definitions(magda_plugin_scanner
     PRIVATE
     JUCE_PLUGINHOST_VST3=1
     JUCE_PLUGINHOST_AU=1
+    JUCE_WEB_BROWSER=0
 )
 
 # Link AudioUnit framework for AU plugin hosting on macOS
