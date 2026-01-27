@@ -27,6 +27,9 @@ void Config::saveToFile(const std::string& filename) {
     file << "zoomInSensitivityShift=" << zoomInSensitivityShift << std::endl;
     file << "zoomOutSensitivityShift=" << zoomOutSensitivityShift << std::endl;
     file << "scrollbarOnLeft=" << (scrollbarOnLeft ? 1 : 0) << std::endl;
+    file << "preferredAudioDevice=" << preferredAudioDevice << std::endl;
+    file << "preferredInputChannels=" << preferredInputChannels << std::endl;
+    file << "preferredOutputChannels=" << preferredOutputChannels << std::endl;
 
     file.close();
     std::cout << "Config saved to: " << filename << std::endl;
@@ -49,26 +52,37 @@ void Config::loadFromFile(const std::string& filename) {
         std::string value = line.substr(equalPos + 1);
 
         try {
-            double numValue = std::stod(value);
+            // Handle string values
+            if (key == "preferredAudioDevice") {
+                preferredAudioDevice = value;
+            }
+            // Handle numeric values
+            else {
+                double numValue = std::stod(value);
 
-            if (key == "defaultTimelineLength") {
-                defaultTimelineLength = numValue;
-            } else if (key == "defaultZoomViewDuration") {
-                defaultZoomViewDuration = numValue;
-            } else if (key == "minZoomLevel") {
-                minZoomLevel = numValue;
-            } else if (key == "maxZoomLevel") {
-                maxZoomLevel = numValue;
-            } else if (key == "zoomInSensitivity") {
-                zoomInSensitivity = numValue;
-            } else if (key == "zoomOutSensitivity") {
-                zoomOutSensitivity = numValue;
-            } else if (key == "zoomInSensitivityShift") {
-                zoomInSensitivityShift = numValue;
-            } else if (key == "zoomOutSensitivityShift") {
-                zoomOutSensitivityShift = numValue;
-            } else if (key == "scrollbarOnLeft") {
-                scrollbarOnLeft = (numValue != 0);
+                if (key == "defaultTimelineLength") {
+                    defaultTimelineLength = numValue;
+                } else if (key == "defaultZoomViewDuration") {
+                    defaultZoomViewDuration = numValue;
+                } else if (key == "minZoomLevel") {
+                    minZoomLevel = numValue;
+                } else if (key == "maxZoomLevel") {
+                    maxZoomLevel = numValue;
+                } else if (key == "zoomInSensitivity") {
+                    zoomInSensitivity = numValue;
+                } else if (key == "zoomOutSensitivity") {
+                    zoomOutSensitivity = numValue;
+                } else if (key == "zoomInSensitivityShift") {
+                    zoomInSensitivityShift = numValue;
+                } else if (key == "zoomOutSensitivityShift") {
+                    zoomOutSensitivityShift = numValue;
+                } else if (key == "scrollbarOnLeft") {
+                    scrollbarOnLeft = (numValue != 0);
+                } else if (key == "preferredInputChannels") {
+                    preferredInputChannels = static_cast<int>(numValue);
+                } else if (key == "preferredOutputChannels") {
+                    preferredOutputChannels = static_cast<int>(numValue);
+                }
             }
         } catch (const std::exception& e) {
             std::cerr << "Error parsing config value: " << key << "=" << value << std::endl;

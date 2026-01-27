@@ -1,6 +1,7 @@
 #pragma once
 
 #include <memory>
+#include <string>
 
 namespace magda {
 
@@ -116,6 +117,28 @@ class Config {
         scrollbarOnLeft = onLeft;
     }
 
+    // Audio Device Configuration
+    std::string getPreferredAudioDevice() const {
+        return preferredAudioDevice;
+    }
+    void setPreferredAudioDevice(const std::string& deviceName) {
+        preferredAudioDevice = deviceName;
+    }
+
+    int getPreferredInputChannels() const {
+        return preferredInputChannels;
+    }
+    void setPreferredInputChannels(int channels) {
+        preferredInputChannels = channels;
+    }
+
+    int getPreferredOutputChannels() const {
+        return preferredOutputChannels;
+    }
+    void setPreferredOutputChannels(int channels) {
+        preferredOutputChannels = channels;
+    }
+
     // Save/Load Configuration (for future use)
     void saveToFile(const std::string& filename);
     void loadFromFile(const std::string& filename);
@@ -148,6 +171,11 @@ class Config {
 
     // Layout settings
     bool scrollbarOnLeft = false;  // Scrollbar on right by default
+
+    // Audio device settings
+    std::string preferredAudioDevice = "M4";  // Preferred audio interface (empty = system default)
+    int preferredInputChannels = 8;   // Preferred input channel count (0 = use device default)
+    int preferredOutputChannels = 4;  // Preferred output channel count (0 = use device default)
 };
 
 }  // namespace magda

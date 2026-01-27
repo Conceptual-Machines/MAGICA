@@ -4,6 +4,7 @@
 
 #include "../audio/AudioBridge.hpp"
 #include "../audio/MidiBridge.hpp"
+#include "../core/Config.hpp"
 #include "../core/DeviceInfo.hpp"
 #include "../core/TrackManager.hpp"
 #include "MagdaUIBehaviour.hpp"
@@ -78,10 +79,76 @@ bool TracktionEngineWrapper::initialize() {
             }
         }
 
-        // Initialize with default channel counts - JUCE/Tracktion Engine will use system defaults
-        // or previously saved user preferences from AudioDeviceManager settings
-        dm.initialise(0, 2);
-        DBG("DeviceManager initialized with default settings");
+        // Get user's preferred audio device settings from Config
+        auto& config = magda::Config::getInstance();
+        std::string preferredDevice = config.getPreferredAudioDevice();
+        int preferredInputs = config.getPreferredInputChannels();
+        int preferredOutputs = config.getPreferredOutputChannels();
+
+        // Initialize DeviceManager with preferred channel counts
+        // If preference is 0, use system defaults (0, 2)
+        int inputChannels = (preferredInputs > 0) ? preferredInputs : 0;
+        int outputChannels = (preferredOutputs > 0) ? preferredOutputs : 2;
+        dm.initialise(inputChannels, outputChannels);
+        DBG("DeviceManager initialized with " << inputChannels << " input / " << outputChannels
+                                              << " output channels");
+
+        // Try to select preferred audio device if specified
+        if (!preferredDevice.empty()) {
+            auto& deviceTypes = juceDeviceManager.getAvailableDeviceTypes();
+            if (!deviceTypes.isEmpty()) {
+                auto* deviceType = deviceTypes[0];  // Use first available type (CoreAudio on macOS)
+                deviceType->scanForDevices();
+
+                auto outputDevices = deviceType->getDeviceNames(false);  // outputs
+                auto inputDevices = deviceType->getDeviceNames(true);    // inputs
+
+                // Check if preferred device is available
+                bool hasPreferredOutput = outputDevices.contains(preferredDevice);
+                bool hasPreferredInput = inputDevices.contains(preferredDevice);
+
+                if (hasPreferredOutput && hasPreferredInput) {
+                    DBG("Found preferred device '" << preferredDevice
+                                                   << "' - attempting to select it");
+
+                    juce::AudioDeviceManager::AudioDeviceSetup setup;
+                    juceDeviceManager.getAudioDeviceSetup(setup);
+
+                    setup.outputDeviceName = preferredDevice;
+                    setup.inputDeviceName = preferredDevice;
+
+                    // Enable channels based on preference
+                    setup.inputChannels.clear();
+                    setup.outputChannels.clear();
+
+                    if (preferredInputs > 0) {
+                        for (int i = 0; i < preferredInputs; ++i) {
+                            setup.inputChannels.setBit(i, true);
+                        }
+                    }
+
+                    if (preferredOutputs > 0) {
+                        for (int i = 0; i < preferredOutputs; ++i) {
+                            setup.outputChannels.setBit(i, true);
+                        }
+                    }
+
+                    // Try to set the device
+                    auto result = juceDeviceManager.setAudioDeviceSetup(setup, true);
+                    if (result.isEmpty()) {
+                        DBG("Successfully selected preferred device '"
+                            << preferredDevice << "' with " << preferredInputs << " inputs / "
+                            << preferredOutputs << " outputs");
+                    } else {
+                        DBG("Failed to select preferred device '" << preferredDevice
+                                                                  << "': " << result);
+                    }
+                } else {
+                    DBG("Preferred device '" << preferredDevice
+                                             << "' not found - using system default");
+                }
+            }
+        }
 
         // Log currently selected device
         if (auto* currentDevice = juceDeviceManager.getCurrentAudioDevice()) {
