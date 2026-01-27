@@ -739,6 +739,9 @@ void AudioBridge::updateTransportState(bool isPlaying, bool justStarted, bool ju
             // Test Tone is always transport-synced
             // Simply bypass when stopped, enable when playing
             toneProc->setBypassed(!isPlaying);
+            DBG("AudioBridge::updateTransportState - Tone generator device "
+                << deviceId << " bypassed=" << (!isPlaying ? "YES" : "NO")
+                << " (isPlaying=" << (isPlaying ? "YES" : "NO") << ")");
         }
     }
 }
@@ -887,6 +890,16 @@ te::Plugin::Ptr AudioBridge::createToneGenerator(te::AudioTrack* track) {
     auto plugin = edit_.getPluginCache().createNewPlugin(te::ToneGeneratorPlugin::xmlTypeName, {});
     if (plugin) {
         track->pluginList.insertPlugin(plugin, -1, nullptr);
+        DBG("AudioBridge::createToneGenerator - Created tone generator on track: " +
+            track->getName());
+        DBG("  Plugin enabled: " << (plugin->isEnabled() ? "YES" : "NO"));
+        if (auto* outputDevice = track->getOutput().getOutputDevice(false)) {
+            DBG("  Track output device: " + outputDevice->getName());
+        } else {
+            DBG("  Track output device: NULL!");
+        }
+    } else {
+        DBG("AudioBridge::createToneGenerator - FAILED to create tone generator!");
     }
     return plugin;
 }
