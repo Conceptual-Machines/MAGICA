@@ -12,7 +12,7 @@ using namespace magda;
 /**
  * Test suite for parameter page navigation fix.
  *
- * Context: All parameter pages were showing the same first 16 parameters instead
+ * Context: All parameter pages were showing the same first 32 parameters instead
  * of their respective parameter ranges. This was fixed by adding proper page
  * offset calculation in DeviceSlotComponent::updateParameterSlots().
  *
@@ -26,12 +26,12 @@ TEST_CASE("DeviceInfo - Parameter pagination state", "[device][pagination]") {
     device.pluginId = "test.plugin";
     device.manufacturer = "Test Vendor";
 
-    // Create 50 parameters (more than 3 pages at 16 params per page)
-    for (int i = 0; i < 50; ++i) {
+    // Create 100 parameters (more than 3 pages at 32 params per page)
+    for (int i = 0; i < 100; ++i) {
         ParameterInfo param;
         param.paramIndex = i;
         param.name = juce::String("Param ") + juce::String(i);
-        param.currentValue = static_cast<float>(i) / 50.0f;
+        param.currentValue = static_cast<float>(i) / 100.0f;
         device.parameters.push_back(param);
     }
 
@@ -45,19 +45,19 @@ TEST_CASE("DeviceInfo - Parameter pagination state", "[device][pagination]") {
     }
 
     SECTION("Parameters are accessible by index") {
-        REQUIRE(device.parameters.size() == 50);
+        REQUIRE(device.parameters.size() == 100);
         REQUIRE(device.parameters[0].paramIndex == 0);
-        REQUIRE(device.parameters[15].paramIndex == 15);
-        REQUIRE(device.parameters[16].paramIndex == 16);
         REQUIRE(device.parameters[31].paramIndex == 31);
-        REQUIRE(device.parameters[49].paramIndex == 49);
+        REQUIRE(device.parameters[32].paramIndex == 32);
+        REQUIRE(device.parameters[63].paramIndex == 63);
+        REQUIRE(device.parameters[99].paramIndex == 99);
     }
 }
 
 TEST_CASE("Parameter page offset calculation", "[device][pagination]") {
-    constexpr int NUM_PARAMS_PER_PAGE = 16;
+    constexpr int NUM_PARAMS_PER_PAGE = 32;
 
-    SECTION("Page 0 shows parameters 0-15") {
+    SECTION("Page 0 shows parameters 0-31") {
         int currentPage = 0;
         int pageOffset = currentPage * NUM_PARAMS_PER_PAGE;
 
@@ -65,44 +65,44 @@ TEST_CASE("Parameter page offset calculation", "[device][pagination]") {
 
         // First slot shows param 0
         REQUIRE(pageOffset + 0 == 0);
-        // Last slot shows param 15
-        REQUIRE(pageOffset + 15 == 15);
-    }
-
-    SECTION("Page 1 shows parameters 16-31") {
-        int currentPage = 1;
-        int pageOffset = currentPage * NUM_PARAMS_PER_PAGE;
-
-        REQUIRE(pageOffset == 16);
-
-        // First slot shows param 16
-        REQUIRE(pageOffset + 0 == 16);
         // Last slot shows param 31
-        REQUIRE(pageOffset + 15 == 31);
+        REQUIRE(pageOffset + 31 == 31);
     }
 
-    SECTION("Page 2 shows parameters 32-47") {
-        int currentPage = 2;
+    SECTION("Page 1 shows parameters 32-63") {
+        int currentPage = 1;
         int pageOffset = currentPage * NUM_PARAMS_PER_PAGE;
 
         REQUIRE(pageOffset == 32);
 
         // First slot shows param 32
         REQUIRE(pageOffset + 0 == 32);
-        // Last slot shows param 47
-        REQUIRE(pageOffset + 15 == 47);
+        // Last slot shows param 63
+        REQUIRE(pageOffset + 31 == 63);
+    }
+
+    SECTION("Page 2 shows parameters 64-95") {
+        int currentPage = 2;
+        int pageOffset = currentPage * NUM_PARAMS_PER_PAGE;
+
+        REQUIRE(pageOffset == 64);
+
+        // First slot shows param 64
+        REQUIRE(pageOffset + 0 == 64);
+        // Last slot shows param 95
+        REQUIRE(pageOffset + 31 == 95);
     }
 }
 
 TEST_CASE("Parameter page boundary handling", "[device][pagination]") {
-    constexpr int NUM_PARAMS_PER_PAGE = 16;
+    constexpr int NUM_PARAMS_PER_PAGE = 32;
 
     DeviceInfo device;
     device.name = "Test Plugin";
 
-    SECTION("50 parameters results in 4 total pages") {
-        // Create 50 parameters
-        for (int i = 0; i < 50; ++i) {
+    SECTION("100 parameters results in 4 total pages") {
+        // Create 100 parameters
+        for (int i = 0; i < 100; ++i) {
             ParameterInfo param;
             param.paramIndex = i;
             device.parameters.push_back(param);
@@ -112,14 +112,14 @@ TEST_CASE("Parameter page boundary handling", "[device][pagination]") {
         int totalPages = (paramCount + NUM_PARAMS_PER_PAGE - 1) / NUM_PARAMS_PER_PAGE;
 
         REQUIRE(totalPages == 4);
-        // Page 0: params 0-15
-        // Page 1: params 16-31
-        // Page 2: params 32-47
-        // Page 3: params 48-49 (only 2 params on last page)
+        // Page 0: params 0-31
+        // Page 1: params 32-63
+        // Page 2: params 64-95
+        // Page 3: params 96-99 (only 4 params on last page)
     }
 
-    SECTION("16 parameters results in exactly 1 page") {
-        for (int i = 0; i < 16; ++i) {
+    SECTION("32 parameters results in exactly 1 page") {
+        for (int i = 0; i < 32; ++i) {
             ParameterInfo param;
             param.paramIndex = i;
             device.parameters.push_back(param);
@@ -131,8 +131,8 @@ TEST_CASE("Parameter page boundary handling", "[device][pagination]") {
         REQUIRE(totalPages == 1);
     }
 
-    SECTION("17 parameters results in 2 pages") {
-        for (int i = 0; i < 17; ++i) {
+    SECTION("33 parameters results in 2 pages") {
+        for (int i = 0; i < 33; ++i) {
             ParameterInfo param;
             param.paramIndex = i;
             device.parameters.push_back(param);
@@ -144,8 +144,8 @@ TEST_CASE("Parameter page boundary handling", "[device][pagination]") {
         REQUIRE(totalPages == 2);
     }
 
-    SECTION("32 parameters results in exactly 2 pages") {
-        for (int i = 0; i < 32; ++i) {
+    SECTION("64 parameters results in exactly 2 pages") {
+        for (int i = 0; i < 64; ++i) {
             ParameterInfo param;
             param.paramIndex = i;
             device.parameters.push_back(param);
@@ -172,13 +172,13 @@ TEST_CASE("Parameter page boundary handling", "[device][pagination]") {
 }
 
 TEST_CASE("Parameter page navigation simulation", "[device][pagination]") {
-    constexpr int NUM_PARAMS_PER_PAGE = 16;
+    constexpr int NUM_PARAMS_PER_PAGE = 32;
 
     DeviceInfo device;
     device.name = "Test Plugin";
 
-    // Create 50 parameters
-    for (int i = 0; i < 50; ++i) {
+    // Create 100 parameters
+    for (int i = 0; i < 100; ++i) {
         ParameterInfo param;
         param.paramIndex = i;
         param.name = juce::String("Param ") + juce::String(i);
@@ -232,14 +232,14 @@ TEST_CASE("Parameter page navigation simulation", "[device][pagination]") {
         REQUIRE(device.currentParameterPage == 2);
 
         // Simulate device update (e.g., parameter value change)
-        device.parameters[32].currentValue = 0.99f;
+        device.parameters[64].currentValue = 0.99f;
 
         // Page should remain at 2
         REQUIRE(device.currentParameterPage == 2);
 
-        // User should still see parameters 32-47
+        // User should still see parameters 64-95
         int pageOffset = device.currentParameterPage * NUM_PARAMS_PER_PAGE;
-        REQUIRE(pageOffset == 32);
+        REQUIRE(pageOffset == 64);
     }
 }
 
@@ -248,30 +248,30 @@ TEST_CASE("Parameter page fix - regression test", "[device][pagination][regressi
      * This test documents the bug that was fixed:
      *
      * BEFORE FIX:
-     * - All pages showed parameters 0-15 because parameter index was not
+     * - All pages showed parameters 0-31 because parameter index was not
      *   recalculated based on current page
-     * - User sees same 16 parameters on every page
+     * - User sees same 32 parameters on every page
      *
      * AFTER FIX:
      * - Parameter index = currentPage * NUM_PARAMS_PER_PAGE + slotIndex
      * - Each page shows its correct range of parameters
      */
 
-    constexpr int NUM_PARAMS_PER_PAGE = 16;
+    constexpr int NUM_PARAMS_PER_PAGE = 32;
 
     DeviceInfo device;
 
-    // Create 64 parameters (exactly 4 pages)
-    for (int i = 0; i < 64; ++i) {
+    // Create 128 parameters (exactly 4 pages)
+    for (int i = 0; i < 128; ++i) {
         ParameterInfo param;
         param.paramIndex = i;
         param.name = juce::String("Param ") + juce::String(i);
         device.parameters.push_back(param);
     }
 
-    SECTION("Bug: All pages showed parameters 0-15 (BEFORE)") {
+    SECTION("Bug: All pages showed parameters 0-31 (BEFORE)") {
         // This simulates the OLD buggy behavior
-        // Where paramIndex was always slot index (0-15), ignoring currentPage
+        // Where paramIndex was always slot index (0-31), ignoring currentPage
 
         device.currentParameterPage = 2;  // User navigates to page 3
 
@@ -279,9 +279,9 @@ TEST_CASE("Parameter page fix - regression test", "[device][pagination][regressi
         // paramIndex = slotIndex (ignoring page offset!)
         int buggyParamIndex = 0;  // First slot, buggy calculation
 
-        REQUIRE(buggyParamIndex == 0);  // Always showed param 0, not param 32!
+        REQUIRE(buggyParamIndex == 0);  // Always showed param 0, not param 64!
 
-        // This was wrong - page 2 should show param 32, not param 0
+        // This was wrong - page 2 should show param 64, not param 0
     }
 
     SECTION("Fix: Each page shows correct parameter range (AFTER)") {
@@ -290,29 +290,29 @@ TEST_CASE("Parameter page fix - regression test", "[device][pagination][regressi
         device.currentParameterPage = 0;
         int pageOffset = device.currentParameterPage * NUM_PARAMS_PER_PAGE;
         int firstParamOnPage = pageOffset + 0;
-        int lastParamOnPage = pageOffset + 15;
+        int lastParamOnPage = pageOffset + 31;
         REQUIRE(firstParamOnPage == 0);
-        REQUIRE(lastParamOnPage == 15);
+        REQUIRE(lastParamOnPage == 31);
 
         device.currentParameterPage = 1;
         pageOffset = device.currentParameterPage * NUM_PARAMS_PER_PAGE;
         firstParamOnPage = pageOffset + 0;
-        lastParamOnPage = pageOffset + 15;
-        REQUIRE(firstParamOnPage == 16);
-        REQUIRE(lastParamOnPage == 31);
+        lastParamOnPage = pageOffset + 31;
+        REQUIRE(firstParamOnPage == 32);
+        REQUIRE(lastParamOnPage == 63);
 
         device.currentParameterPage = 2;
         pageOffset = device.currentParameterPage * NUM_PARAMS_PER_PAGE;
         firstParamOnPage = pageOffset + 0;
-        lastParamOnPage = pageOffset + 15;
-        REQUIRE(firstParamOnPage == 32);
-        REQUIRE(lastParamOnPage == 47);
+        lastParamOnPage = pageOffset + 31;
+        REQUIRE(firstParamOnPage == 64);
+        REQUIRE(lastParamOnPage == 95);
 
         device.currentParameterPage = 3;
         pageOffset = device.currentParameterPage * NUM_PARAMS_PER_PAGE;
         firstParamOnPage = pageOffset + 0;
-        lastParamOnPage = pageOffset + 15;
-        REQUIRE(firstParamOnPage == 48);
-        REQUIRE(lastParamOnPage == 63);
+        lastParamOnPage = pageOffset + 31;
+        REQUIRE(firstParamOnPage == 96);
+        REQUIRE(lastParamOnPage == 127);
     }
 }

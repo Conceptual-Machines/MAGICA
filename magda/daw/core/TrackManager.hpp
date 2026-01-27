@@ -214,6 +214,7 @@ class TrackManager {
 
     // Update device parameters (called by AudioBridge when processor is created)
     void updateDeviceParameters(DeviceId deviceId, const std::vector<ParameterInfo>& params);
+    void setDeviceVisibleParameters(DeviceId deviceId, const std::vector<int>& visibleParams);
 
     // Set a specific device parameter value
     void setDeviceParameterValue(const ChainNodePath& devicePath, int paramIndex, float value);

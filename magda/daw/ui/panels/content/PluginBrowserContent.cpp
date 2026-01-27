@@ -648,7 +648,13 @@ void PluginBrowserContent::showPluginContextMenu(const PluginBrowserInfo& plugin
 }
 
 void PluginBrowserContent::showParameterConfigDialog(const PluginBrowserInfo& plugin) {
-    ParameterConfigDialog::show(plugin.name, this);
+    // If it's an external plugin with a unique ID, load real parameters
+    if (!plugin.uniqueId.isEmpty()) {
+        ParameterConfigDialog::showForPlugin(plugin.uniqueId, plugin.name, this);
+    } else {
+        // Fall back to mock data for internal plugins or plugins without IDs
+        ParameterConfigDialog::show(plugin.name, this);
+    }
 }
 
 }  // namespace magda::daw::ui
