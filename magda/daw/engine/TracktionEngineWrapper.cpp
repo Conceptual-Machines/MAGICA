@@ -81,7 +81,8 @@ bool TracktionEngineWrapper::initialize() {
 
         // Get user's preferred audio device settings from Config
         auto& config = magda::Config::getInstance();
-        std::string preferredDevice = config.getPreferredAudioDevice();
+        std::string preferredInputDevice = config.getPreferredInputDevice();
+        std::string preferredOutputDevice = config.getPreferredOutputDevice();
         int preferredInputs = config.getPreferredInputChannels();
         int preferredOutputs = config.getPreferredOutputChannels();
 
@@ -93,8 +94,8 @@ bool TracktionEngineWrapper::initialize() {
         DBG("DeviceManager initialized with " << inputChannels << " input / " << outputChannels
                                               << " output channels");
 
-        // Try to select preferred audio device if specified
-        if (!preferredDevice.empty()) {
+        // Try to select preferred audio devices if specified
+        if (!preferredInputDevice.empty() || !preferredOutputDevice.empty()) {
             auto& deviceTypes = juceDeviceManager.getAvailableDeviceTypes();
             if (!deviceTypes.isEmpty()) {
                 auto* deviceType = deviceTypes[0];  // Use first available type (CoreAudio on macOS)
@@ -103,49 +104,46 @@ bool TracktionEngineWrapper::initialize() {
                 auto outputDevices = deviceType->getDeviceNames(false);  // outputs
                 auto inputDevices = deviceType->getDeviceNames(true);    // inputs
 
-                // Check if preferred device is available
-                bool hasPreferredOutput = outputDevices.contains(preferredDevice);
-                bool hasPreferredInput = inputDevices.contains(preferredDevice);
+                juce::AudioDeviceManager::AudioDeviceSetup setup;
+                juceDeviceManager.getAudioDeviceSetup(setup);
 
-                if (hasPreferredOutput && hasPreferredInput) {
-                    DBG("Found preferred device '" << preferredDevice
-                                                   << "' - attempting to select it");
+                // Set input device if specified
+                if (!preferredInputDevice.empty() && inputDevices.contains(preferredInputDevice)) {
+                    setup.inputDeviceName = preferredInputDevice;
+                    DBG("Found preferred input device: " << preferredInputDevice);
+                }
 
-                    juce::AudioDeviceManager::AudioDeviceSetup setup;
-                    juceDeviceManager.getAudioDeviceSetup(setup);
+                // Set output device if specified
+                if (!preferredOutputDevice.empty() &&
+                    outputDevices.contains(preferredOutputDevice)) {
+                    setup.outputDeviceName = preferredOutputDevice;
+                    DBG("Found preferred output device: " << preferredOutputDevice);
+                }
 
-                    setup.outputDeviceName = preferredDevice;
-                    setup.inputDeviceName = preferredDevice;
+                // Enable channels based on preference
+                setup.inputChannels.clear();
+                setup.outputChannels.clear();
 
-                    // Enable channels based on preference
-                    setup.inputChannels.clear();
-                    setup.outputChannels.clear();
-
-                    if (preferredInputs > 0) {
-                        for (int i = 0; i < preferredInputs; ++i) {
-                            setup.inputChannels.setBit(i, true);
-                        }
+                if (preferredInputs > 0) {
+                    for (int i = 0; i < preferredInputs; ++i) {
+                        setup.inputChannels.setBit(i, true);
                     }
+                }
 
-                    if (preferredOutputs > 0) {
-                        for (int i = 0; i < preferredOutputs; ++i) {
-                            setup.outputChannels.setBit(i, true);
-                        }
+                if (preferredOutputs > 0) {
+                    for (int i = 0; i < preferredOutputs; ++i) {
+                        setup.outputChannels.setBit(i, true);
                     }
+                }
 
-                    // Try to set the device
-                    auto result = juceDeviceManager.setAudioDeviceSetup(setup, true);
-                    if (result.isEmpty()) {
-                        DBG("Successfully selected preferred device '"
-                            << preferredDevice << "' with " << preferredInputs << " inputs / "
-                            << preferredOutputs << " outputs");
-                    } else {
-                        DBG("Failed to select preferred device '" << preferredDevice
-                                                                  << "': " << result);
-                    }
+                // Try to set the devices
+                auto result = juceDeviceManager.setAudioDeviceSetup(setup, true);
+                if (result.isEmpty()) {
+                    DBG("Successfully selected preferred devices - Input: "
+                        << setup.inputDeviceName << " (" << preferredInputs << " ch), Output: "
+                        << setup.outputDeviceName << " (" << preferredOutputs << " ch)");
                 } else {
-                    DBG("Preferred device '" << preferredDevice
-                                             << "' not found - using system default");
+                    DBG("Failed to select preferred devices: " << result);
                 }
             }
         }

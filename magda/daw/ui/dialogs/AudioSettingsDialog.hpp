@@ -54,16 +54,19 @@ class AudioSettingsDialog : public juce::Component {
     static void showDialog(juce::Component* parent, juce::AudioDeviceManager* deviceManager);
 
   private:
-    void populateDeviceList();
-    void onDeviceSelected();
+    void populateDeviceLists();
+    void onInputDeviceSelected();
+    void onOutputDeviceSelected();
     void savePreferencesIfNeeded();
 
     std::unique_ptr<juce::AudioDeviceSelectorComponent> deviceSelector_;
     std::unique_ptr<CustomChannelSelector> inputChannelSelector_;
     std::unique_ptr<CustomChannelSelector> outputChannelSelector_;
 
-    juce::Label deviceLabel_;
-    juce::ComboBox deviceComboBox_;
+    juce::Label inputDeviceLabel_;
+    juce::ComboBox inputDeviceComboBox_;
+    juce::Label outputDeviceLabel_;
+    juce::ComboBox outputDeviceComboBox_;
     juce::ToggleButton setAsPreferredCheckbox_;
 
     juce::TextButton closeButton_;

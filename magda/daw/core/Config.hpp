@@ -125,6 +125,20 @@ class Config {
         preferredAudioDevice = deviceName;
     }
 
+    std::string getPreferredInputDevice() const {
+        return preferredInputDevice;
+    }
+    void setPreferredInputDevice(const std::string& deviceName) {
+        preferredInputDevice = deviceName;
+    }
+
+    std::string getPreferredOutputDevice() const {
+        return preferredOutputDevice;
+    }
+    void setPreferredOutputDevice(const std::string& deviceName) {
+        preferredOutputDevice = deviceName;
+    }
+
     int getPreferredInputChannels() const {
         return preferredInputChannels;
     }
@@ -173,9 +187,11 @@ class Config {
     bool scrollbarOnLeft = false;  // Scrollbar on right by default
 
     // Audio device settings
-    std::string preferredAudioDevice = "M4";  // Preferred audio interface (empty = system default)
-    int preferredInputChannels = 8;   // Preferred input channel count (0 = use device default)
-    int preferredOutputChannels = 4;  // Preferred output channel count (0 = use device default)
+    std::string preferredAudioDevice = "";   // Preferred audio interface (empty = system default)
+    std::string preferredInputDevice = "";   // Preferred input device (empty = system default)
+    std::string preferredOutputDevice = "";  // Preferred output device (empty = system default)
+    int preferredInputChannels = 0;   // Preferred input channel count (0 = use device default)
+    int preferredOutputChannels = 0;  // Preferred output channel count (0 = use device default)
 };
 
 }  // namespace magda
