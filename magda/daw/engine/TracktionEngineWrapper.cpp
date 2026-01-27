@@ -78,58 +78,10 @@ bool TracktionEngineWrapper::initialize() {
             }
         }
 
-        // Initialize with enough channels for common audio interfaces
-        // M4 has 8 inputs and 4 outputs, so we initialize with those channel counts
-        dm.initialise(8, 4);
-        DBG("DeviceManager initialized with 8 input / 4 output channels");
-
-        // Try to select M4 interface if available
-        auto* coreAudioType = juceDeviceManager.getAvailableDeviceTypes()[0];
-        if (coreAudioType) {
-            auto outputDevices = coreAudioType->getDeviceNames(false);  // outputs
-            auto inputDevices = coreAudioType->getDeviceNames(true);    // inputs
-
-            // Look for M4 in the device list
-            bool hasM4Output = outputDevices.contains("M4");
-            bool hasM4Input = inputDevices.contains("M4");
-
-            if (hasM4Output && hasM4Input) {
-                std::cout << "Found M4 interface - attempting to select it" << std::endl;
-
-                // Get current audio device setup from JUCE device manager
-                juce::AudioDeviceManager::AudioDeviceSetup setup;
-                juceDeviceManager.getAudioDeviceSetup(setup);
-
-                setup.outputDeviceName = "M4";
-                setup.inputDeviceName = "M4";
-
-                // Enable all available channels (M4 has 8 inputs, 4 outputs)
-                // Set up BigIntegers to enable all channels
-                setup.inputChannels.clear();
-                setup.outputChannels.clear();
-
-                // Enable all 8 input channels
-                for (int i = 0; i < 8; ++i) {
-                    setup.inputChannels.setBit(i, true);
-                }
-
-                // Enable all 4 output channels
-                for (int i = 0; i < 4; ++i) {
-                    setup.outputChannels.setBit(i, true);
-                }
-
-                // Try to set it
-                auto result = juceDeviceManager.setAudioDeviceSetup(setup, true);
-                if (result.isEmpty()) {
-                    std::cout << "Successfully selected M4 interface with all channels enabled"
-                              << std::endl;
-                } else {
-                    std::cout << "Failed to select M4: " << result.toStdString() << std::endl;
-                }
-            } else {
-                std::cout << "M4 interface not found in device list" << std::endl;
-            }
-        }
+        // Initialize with default channel counts - JUCE/Tracktion Engine will use system defaults
+        // or previously saved user preferences from AudioDeviceManager settings
+        dm.initialise(0, 2);
+        DBG("DeviceManager initialized with default settings");
 
         // Log currently selected device
         if (auto* currentDevice = juceDeviceManager.getCurrentAudioDevice()) {
@@ -855,8 +807,15 @@ void TracktionEngineWrapper::previewNoteOnTrack(const std::string& track_id, int
         return;
     }
 
-    // Convert string track ID to integer (MAGDA TrackId)
-    int magdaTrackId = std::stoi(track_id);
+    // Convert string track ID to integer (MAGDA TrackId) with validation
+    int magdaTrackId = 0;
+    try {
+        magdaTrackId = std::stoi(track_id);
+    } catch (const std::exception& e) {
+        DBG("TracktionEngineWrapper: WARNING - Invalid track ID '"
+            << track_id << "' passed to previewNoteOnTrack: " << e.what());
+        return;
+    }
     DBG("TracktionEngineWrapper: Looking up MAGDA track ID: " << magdaTrackId);
 
     // Use AudioBridge to get the Tracktion AudioTrack
@@ -873,9 +832,9 @@ void TracktionEngineWrapper::previewNoteOnTrack(const std::string& track_id, int
     auto currentMode = midiInput.getMonitorMode();
     DBG("TracktionEngineWrapper: Current monitor mode: " << (int)currentMode);
 
-    if (currentMode != te::InputDevice::MonitorMode::on) {
+    if (currentMode != tracktion::InputDevice::MonitorMode::on) {
         DBG("TracktionEngineWrapper: Enabling monitor mode");
-        midiInput.setMonitorMode(te::InputDevice::MonitorMode::on);
+        midiInput.setMonitorMode(tracktion::InputDevice::MonitorMode::on);
     }
 
     // Create MIDI message
@@ -941,9 +900,9 @@ std::string TracktionEngineWrapper::addMidiClip(const std::string& track_id, dou
         te::BeatPosition startBeat = te::BeatPosition::fromBeats(note.startBeat);
         te::BeatDuration lengthBeats = te::BeatDuration::fromBeats(note.lengthBeats);
 
-        std::cout << "Adding MIDI note: number=" << note.noteNumber << " start=" << note.startBeat
-                  << " beats, length=" << note.lengthBeats << " beats, velocity=" << note.velocity
-                  << std::endl;
+        DBG("Adding MIDI note: number=" << note.noteNumber << " start=" << note.startBeat
+                                        << " beats, length=" << note.lengthBeats
+                                        << " beats, velocity=" << note.velocity);
 
         sequence.addNote(note.noteNumber, startBeat, lengthBeats, note.velocity,
                          0,         // colour index

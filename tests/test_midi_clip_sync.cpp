@@ -124,7 +124,7 @@ TEST_CASE("MidiClip - Length changes preserve note positions", "[midi][clip][len
         ClipInfo clip;
         clip.type = ClipType::MIDI;
         clip.startTime = 0.0;
-        clip.length = 16.0;  // 8 bars at 120 BPM
+        clip.length = 16.0;  // 16 seconds = 32 beats = 8 bars at 120 BPM
 
         // Add 4 notes at beats 0, 1, 2, 3
         for (int i = 0; i < 4; i++) {
@@ -136,7 +136,7 @@ TEST_CASE("MidiClip - Length changes preserve note positions", "[midi][clip][len
             clip.midiNotes.push_back(note);
         }
 
-        // Shorten clip to 2 bars (4 beats)
+        // Shorten clip to 2 bars (4 seconds = 8 beats at 120 BPM)
         clip.length = 4.0;
 
         // ALL notes should still have same positions
@@ -156,7 +156,7 @@ TEST_CASE("MidiClip - Length changes preserve note positions", "[midi][clip][len
         ClipInfo clip;
         clip.type = ClipType::MIDI;
         clip.startTime = 2.0;
-        clip.length = 2.0;  // Start with 1 bar
+        clip.length = 2.0;  // 2 seconds = 4 beats = 1 bar at 120 BPM
 
         MidiNote note;
         note.startBeat = 0.5;
@@ -167,8 +167,8 @@ TEST_CASE("MidiClip - Length changes preserve note positions", "[midi][clip][len
 
         double originalBeat = clip.midiNotes[0].startBeat;
 
-        // Extend clip
-        clip.length = 8.0;  // Extend to 4 bars
+        // Extend clip to 4 bars (8 seconds = 16 beats at 120 BPM)
+        clip.length = 8.0;
 
         // Note position unchanged
         REQUIRE(clip.midiNotes[0].startBeat == originalBeat);
@@ -183,7 +183,7 @@ TEST_CASE("MidiClip - Notes beyond clip boundary", "[midi][clip][boundary]") {
         ClipInfo clip;
         clip.type = ClipType::MIDI;
         clip.startTime = 0.0;
-        clip.length = 4.0;  // 2 bars at 120 BPM = 4 beats
+        clip.length = 4.0;  // 4 seconds = 8 beats = 2 bars at 120 BPM
 
         // Add notes at various positions
         MidiNote note1;
@@ -199,7 +199,7 @@ TEST_CASE("MidiClip - Notes beyond clip boundary", "[midi][clip][boundary]") {
         clip.midiNotes.push_back(note2);
 
         MidiNote note3;
-        note3.startBeat = 7.0;  // Beyond boundary (7 > 4 beats)
+        note3.startBeat = 7.0;  // Within boundary (7 < 8 beats)
         note3.lengthBeats = 1.0;
         note3.noteNumber = 67;
         clip.midiNotes.push_back(note3);
@@ -282,7 +282,7 @@ TEST_CASE("MidiClip - Real-world scenario", "[midi][clip][integration]") {
         ClipInfo clip;
         clip.type = ClipType::MIDI;
         clip.startTime = 0.0;  // Bar 1
-        clip.length = 8.0;     // 4 bars at 120 BPM
+        clip.length = 8.0;     // 8 seconds = 16 beats = 4 bars at 120 BPM
 
         // Add 4 notes at start
         for (int i = 0; i < 4; i++) {

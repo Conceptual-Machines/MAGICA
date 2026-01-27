@@ -159,10 +159,18 @@ void AudioBridge::devicePropertyChanged(DeviceId deviceId) {
 // =============================================================================
 
 void AudioBridge::clipsChanged() {
-    // Clips were added/removed - for now, do nothing here
-    // Clips will be synced lazily when clipPropertyChanged() is called
-    // This avoids rapid audio graph rebuilds that can cause crashes
     DBG("AudioBridge::clipsChanged - clips list changed");
+
+    // If we're shutting down, don't attempt to modify the engine graph
+    if (isShuttingDown_.load(std::memory_order_acquire))
+        return;
+
+    // TODO: Properly reconcile added/removed clips with the engine
+    // Currently, deleting a clip in ClipManager will leave the old Tracktion clip
+    // playing/visible in the engine (and mappings may become stale).
+    // Need to detect removed clip IDs and call removeClipFromEngine, and
+    // optionally sync newly added clips. For now, clips are synced lazily
+    // when clipPropertyChanged() is called, which avoids rapid audio graph rebuilds.
 }
 
 void AudioBridge::clipPropertyChanged(ClipId clipId) {

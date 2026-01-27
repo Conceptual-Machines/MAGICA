@@ -681,14 +681,18 @@ void PianoRollContent::clipPropertyChanged(magda::ClipId clipId) {
         // Defer UI refresh asynchronously to prevent deleting components during event handling
         // This is the core of the Observer pattern - data changes notify listeners,
         // and listeners schedule their own UI updates safely
-        juce::MessageManager::callAsync([this, clipId]() {
-            // Verify clip is still being edited (could have changed during async delay)
-            if (clipId == editingClipId_) {
-                gridComponent_->refreshNotes();
-                updateGridSize();
-                updateTimeRuler();
-                updateVelocityLane();
-                repaint();
+        // Use SafePointer to avoid use-after-free if component is destroyed before callback runs
+        juce::Component::SafePointer<PianoRollContent> safeThis(this);
+        juce::MessageManager::callAsync([safeThis, clipId]() {
+            if (auto* self = safeThis.getComponent()) {
+                // Verify clip is still being edited (could have changed during async delay)
+                if (clipId == self->editingClipId_) {
+                    self->gridComponent_->refreshNotes();
+                    self->updateGridSize();
+                    self->updateTimeRuler();
+                    self->updateVelocityLane();
+                    self->repaint();
+                }
             }
         });
     }
