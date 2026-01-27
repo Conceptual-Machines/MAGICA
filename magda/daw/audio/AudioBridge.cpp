@@ -167,6 +167,7 @@ void AudioBridge::clipsChanged() {
 
 void AudioBridge::clipPropertyChanged(ClipId clipId) {
     // A specific clip's properties changed - sync to engine
+    DBG("AudioBridge::clipPropertyChanged - clipId=" << clipId);
     syncClipToEngine(clipId);
 }
 
@@ -181,6 +182,8 @@ void AudioBridge::clipSelectionChanged(ClipId clipId) {
 // =============================================================================
 
 void AudioBridge::syncClipToEngine(ClipId clipId) {
+    DBG(">>> syncClipToEngine called for clipId=" << clipId);
+
     auto* clip = ClipManager::getInstance().getClip(clipId);
     if (!clip) {
         DBG("syncClipToEngine: Clip not found: " << clipId);
@@ -189,6 +192,7 @@ void AudioBridge::syncClipToEngine(ClipId clipId) {
 
     // Only handle MIDI clips for now
     if (clip->type != ClipType::MIDI) {
+        DBG("syncClipToEngine: Skipping non-MIDI clip");
         return;
     }
 
@@ -198,6 +202,8 @@ void AudioBridge::syncClipToEngine(ClipId clipId) {
         DBG("syncClipToEngine: Tracktion track not found for MAGDA track: " << clip->trackId);
         return;
     }
+
+    DBG("syncClipToEngine: Found audio track for MAGDA track " << clip->trackId);
 
     namespace te = tracktion;
     te::MidiClip* midiClipPtr = nullptr;
@@ -250,16 +256,58 @@ void AudioBridge::syncClipToEngine(ClipId clipId) {
     }
 
     // Update clip position/length
-    midiClipPtr->setStart(te::TimePosition::fromSeconds(clip->startTime), false, false);
+    // CRITICAL: Use preserveSync=true to maintain the content offset
+    // When false, Tracktion adjusts the content offset which breaks note playback
+    midiClipPtr->setStart(te::TimePosition::fromSeconds(clip->startTime), true, false);
     midiClipPtr->setEnd(te::TimePosition::fromSeconds(clip->startTime + clip->length), false);
+
+    // Force offset to 0 to ensure notes play from clip start
+    midiClipPtr->setOffset(te::TimeDuration::fromSeconds(0.0));
 
     // Clear existing notes and add all notes from ClipManager
     auto& sequence = midiClipPtr->getSequence();
     sequence.clear(nullptr);  // Clear all notes
 
+    // Get tempo info for conversion verification
+    auto& tempoSeq = midiClipPtr->edit.tempoSequence;
+    auto clipStartTime = te::TimePosition::fromSeconds(clip->startTime);
+    auto clipStartBeat = tempoSeq.timeToBeats(clipStartTime);
+
+    DBG("=== syncClipToEngine Debug ===");
+    DBG("Clip ID: " << clipId);
+    DBG("Clip startTime: " << clip->startTime << "s, length: " << clip->length << "s");
+    DBG("Clip END time: " << (clip->startTime + clip->length) << "s");
+    DBG("Clip startBeat on timeline: " << clipStartBeat.inBeats());
+    DBG("Current tempo: " << tempoSeq.getTempoAt(clipStartTime).getBpm());
+    DBG("Number of notes: " << clip->midiNotes.size());
+
+    // Calculate clip end beat for boundary checking
+    auto clipEndTime = te::TimePosition::fromSeconds(clip->startTime + clip->length);
+    auto clipEndBeat = tempoSeq.timeToBeats(clipEndTime);
+    double clipLengthInBeats = clipEndBeat.inBeats() - clipStartBeat.inBeats();
+    DBG("Clip length in beats: " << clipLengthInBeats);
+
     for (const auto& note : clip->midiNotes) {
         te::BeatPosition startBeat = te::BeatPosition::fromBeats(note.startBeat);
         te::BeatDuration lengthBeats = te::BeatDuration::fromBeats(note.lengthBeats);
+
+        // Convert to absolute timeline time for verification
+        auto noteAbsoluteTime = tempoSeq.beatsToTime(
+            te::BeatPosition::fromBeats(clipStartBeat.inBeats() + note.startBeat));
+        auto noteEndTime = tempoSeq.beatsToTime(te::BeatPosition::fromBeats(
+            clipStartBeat.inBeats() + note.startBeat + note.lengthBeats));
+
+        // Check if note is within clip boundary
+        bool noteStartWithinClip = note.startBeat < clipLengthInBeats;
+        bool noteEndWithinClip = (note.startBeat + note.lengthBeats) <= clipLengthInBeats;
+
+        DBG("  Note " << note.noteNumber << ": clip-relative beat=" << note.startBeat
+                      << ", length=" << note.lengthBeats << ", velocity=" << note.velocity);
+        DBG("    -> Absolute timeline: " << noteAbsoluteTime.inSeconds() << "s to "
+                                         << noteEndTime.inSeconds() << "s");
+        DBG("    -> Within clip boundary? start=" << (noteStartWithinClip ? "YES" : "NO")
+                                                  << ", end="
+                                                  << (noteEndWithinClip ? "YES" : "NO"));
 
         sequence.addNote(note.noteNumber, startBeat, lengthBeats, note.velocity,
                          0,         // colour index

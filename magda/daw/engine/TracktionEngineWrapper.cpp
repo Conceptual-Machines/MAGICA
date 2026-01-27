@@ -197,9 +197,6 @@ bool TracktionEngineWrapper::initialize() {
             // Note: Master track automatically routes to default audio device (first enabled stereo
             // pair) This is configured by Tracktion Engine's default behavior
 
-            // Create a default test project with one MIDI clip
-            createDefaultTestProject();
-
             // Ensure the playback context is created and graph is allocated
             // This is needed for MIDI routing to work even before pressing play
             currentEdit_->getTransport().ensureContextAllocated();
@@ -305,61 +302,51 @@ void TracktionEngineWrapper::shutdown() {
     std::cout << "Tracktion Engine shutdown complete" << std::endl;
 }
 
-void TracktionEngineWrapper::createDefaultTestProject() {
-    if (!currentEdit_) {
-        return;
-    }
+// =============================================================================
+// PDC Query Methods
+// =============================================================================
 
-    std::cout << "Creating default test project..." << std::endl;
-
-    // Create one instrument track
-    auto trackPtr =
-        currentEdit_->insertNewAudioTrack(te::TrackInsertPoint(nullptr, nullptr), nullptr);
-    if (!trackPtr) {
-        std::cerr << "Failed to create audio track" << std::endl;
-        return;
-    }
-
-    auto* track = trackPtr.get();
-    track->setName("Test Track");
-    std::cout << "Created audio track: " << track->getName() << std::endl;
-
-    // Load 4OSC synth on the track
-    auto fourOscPlugin =
-        track->edit.getPluginCache().createNewPlugin(te::FourOscPlugin::xmlTypeName, {});
-    if (fourOscPlugin) {
-        track->pluginList.insertPlugin(fourOscPlugin, 0, nullptr);
-        std::cout << "Loaded 4OSC synth on track" << std::endl;
-    } else {
-        std::cerr << "Failed to create 4OSC plugin" << std::endl;
-    }
-
-    // Create one MIDI clip from 1 to 3 seconds (one bar at 120 BPM = 4 beats = 2 seconds)
-    auto timeRange =
-        te::TimeRange(te::TimePosition::fromSeconds(1.0), te::TimePosition::fromSeconds(3.0));
-
-    auto midiClip = track->insertMIDIClip(timeRange, nullptr);
-    if (!midiClip) {
-        std::cerr << "Failed to create MIDI clip" << std::endl;
-        return;
-    }
-
-    std::cout << "Created MIDI clip from 1.0s to 3.0s" << std::endl;
-
-    // Add one C4 note for the duration of the clip (2 seconds = 4 beats = 1 bar at 4/4, 120 BPM)
-    auto& sequence = midiClip->getSequence();
-    te::BeatPosition startBeat = te::BeatPosition::fromBeats(0.0);    // Start of clip
-    te::BeatDuration lengthBeats = te::BeatDuration::fromBeats(4.0);  // 4 beats = 1 bar at 4/4
-
-    sequence.addNote(60,  // C4 (middle C)
-                     startBeat, lengthBeats,
-                     100,       // velocity
-                     0,         // colour index
-                     nullptr);  // undo manager
-
-    std::cout << "Added C4 note to clip (4 beats = 1 bar duration)" << std::endl;
-    std::cout << "Default test project created! Press Play to hear it." << std::endl;
+double TracktionEngineWrapper::getPluginLatencySeconds(const std::string& effect_id) const {
+    // TODO: Implement when we have effect tracking
+    // For now, iterate all tracks and their plugins to find by ID
+    juce::ignoreUnused(effect_id);
+    return 0.0;
 }
+
+double TracktionEngineWrapper::getGlobalLatencySeconds() const {
+    if (!currentEdit_) {
+        return 0.0;
+    }
+
+    // Get the playback context which contains the audio graph
+    auto* context = currentEdit_->getCurrentPlaybackContext();
+    if (!context) {
+        return 0.0;
+    }
+
+    // Tracktion Engine calculates PDC automatically and stores max latency
+    // The easiest approach is to iterate all tracks and find max plugin latency
+    double maxLatency = 0.0;
+
+    for (auto* track : currentEdit_->getTrackList()) {
+        if (auto* audioTrack = dynamic_cast<tracktion::AudioTrack*>(track)) {
+            // Check all plugins on this track
+            for (auto* plugin : audioTrack->pluginList) {
+                // Use base Plugin class method (works for all plugin types)
+                maxLatency = std::max(maxLatency, plugin->getLatencySeconds());
+            }
+        }
+    }
+
+    // Add device latency
+    maxLatency += engine_->getDeviceManager().getOutputLatencySeconds();
+
+    return maxLatency;
+}
+
+// =============================================================================
+// Change Listener
+// =============================================================================
 
 void TracktionEngineWrapper::changeListenerCallback(juce::ChangeBroadcaster* source) {
     // DeviceManager changed - this happens during MIDI device scanning
@@ -485,7 +472,13 @@ void TracktionEngineWrapper::play() {
     }
 
     if (currentEdit_) {
-        currentEdit_->getTransport().play(false);
+        auto& transport = currentEdit_->getTransport();
+
+        // Tracktion Engine handles PDC (Plugin Delay Compensation) internally
+        // by analyzing the playback graph and shifting audio streams accordingly.
+        // Notes are stored clip-relative, so they play at the correct absolute time
+        // regardless of PDC. No pre-roll needed!
+        transport.play(false);
         std::cout << "Playback started" << std::endl;
     }
 }

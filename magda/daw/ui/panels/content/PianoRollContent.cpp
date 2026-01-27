@@ -258,37 +258,36 @@ PianoRollContent::~PianoRollContent() {
 
 void PianoRollContent::setupGridCallbacks() {
     // Handle note addition
-    gridComponent_->onNoteAdded = [this](magda::ClipId clipId, double beat, int noteNumber,
-                                         int velocity) {
+    gridComponent_->onNoteAdded = [](magda::ClipId clipId, double beat, int noteNumber,
+                                     int velocity) {
         double defaultLength = 1.0;
         auto cmd = std::make_unique<magda::AddMidiNoteCommand>(clipId, beat, noteNumber,
                                                                defaultLength, velocity);
         magda::UndoManager::getInstance().executeCommand(std::move(cmd));
-        gridComponent_->refreshNotes();
+        // Note: UI refresh handled via ClipManagerListener::clipPropertyChanged()
     };
 
     // Handle note movement
-    gridComponent_->onNoteMoved = [this](magda::ClipId clipId, size_t noteIndex, double newBeat,
-                                         int newNoteNumber) {
+    gridComponent_->onNoteMoved = [](magda::ClipId clipId, size_t noteIndex, double newBeat,
+                                     int newNoteNumber) {
         auto cmd =
             std::make_unique<magda::MoveMidiNoteCommand>(clipId, noteIndex, newBeat, newNoteNumber);
         magda::UndoManager::getInstance().executeCommand(std::move(cmd));
-        gridComponent_->refreshNotes();
+        // Note: UI refresh handled via ClipManagerListener::clipPropertyChanged()
     };
 
     // Handle note resizing
-    gridComponent_->onNoteResized = [this](magda::ClipId clipId, size_t noteIndex,
-                                           double newLength) {
+    gridComponent_->onNoteResized = [](magda::ClipId clipId, size_t noteIndex, double newLength) {
         auto cmd = std::make_unique<magda::ResizeMidiNoteCommand>(clipId, noteIndex, newLength);
         magda::UndoManager::getInstance().executeCommand(std::move(cmd));
-        gridComponent_->refreshNotes();
+        // Note: UI refresh handled via ClipManagerListener::clipPropertyChanged()
     };
 
     // Handle note deletion
-    gridComponent_->onNoteDeleted = [this](magda::ClipId clipId, size_t noteIndex) {
+    gridComponent_->onNoteDeleted = [](magda::ClipId clipId, size_t noteIndex) {
         auto cmd = std::make_unique<magda::DeleteMidiNoteCommand>(clipId, noteIndex);
         magda::UndoManager::getInstance().executeCommand(std::move(cmd));
-        gridComponent_->refreshNotes();
+        // Note: UI refresh handled via ClipManagerListener::clipPropertyChanged()
     };
 
     // Handle note selection - update SelectionManager
@@ -656,11 +655,19 @@ void PianoRollContent::clipsChanged() {
 
 void PianoRollContent::clipPropertyChanged(magda::ClipId clipId) {
     if (clipId == editingClipId_) {
-        gridComponent_->refreshNotes();
-        updateGridSize();
-        updateTimeRuler();
-        updateVelocityLane();
-        repaint();
+        // Defer UI refresh asynchronously to prevent deleting components during event handling
+        // This is the core of the Observer pattern - data changes notify listeners,
+        // and listeners schedule their own UI updates safely
+        juce::MessageManager::callAsync([this, clipId]() {
+            // Verify clip is still being edited (could have changed during async delay)
+            if (clipId == editingClipId_) {
+                gridComponent_->refreshNotes();
+                updateGridSize();
+                updateTimeRuler();
+                updateVelocityLane();
+                repaint();
+            }
+        });
     }
 }
 

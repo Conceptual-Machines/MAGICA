@@ -283,6 +283,24 @@ class TracktionEngineWrapper : public AudioEngine,
      */
     juce::File getPluginListFile() const;
 
+    // =========================================================================
+    // PDC (Plugin Delay Compensation) Query
+    // =========================================================================
+
+    /**
+     * @brief Get the latency of a specific plugin in seconds
+     * @param effect_id The effect/plugin ID
+     * @return Latency in seconds, or 0 if plugin not found
+     */
+    double getPluginLatencySeconds(const std::string& effect_id) const;
+
+    /**
+     * @brief Get the maximum latency across all tracks in the playback graph
+     * This is the total PDC that Tracktion Engine compensates for
+     * @return Maximum latency in seconds
+     */
+    double getGlobalLatencySeconds() const;
+
     /**
      * @brief Callback when plugin scan completes
      * Called with (success, number of plugins found, failed plugins)
@@ -320,7 +338,6 @@ class TracktionEngineWrapper : public AudioEngine,
     std::string generateTrackId();
     std::string generateClipId();
     std::string generateEffectId();
-    void createDefaultTestProject();
 
     // State tracking
     std::map<std::string, tracktion::Track::Ptr> trackMap_;
