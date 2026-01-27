@@ -160,6 +160,9 @@ class Config {
   private:
     Config() = default;
 
+    // Helper to parse a single config line
+    void parseConfigLine(const std::string& key, const std::string& value);
+
     // Timeline settings
     double defaultTimelineLength = 300.0;   // 5 minutes in seconds
     double defaultZoomViewDuration = 60.0;  // Show 1 minute by default
