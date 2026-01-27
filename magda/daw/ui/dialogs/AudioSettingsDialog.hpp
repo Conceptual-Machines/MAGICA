@@ -58,6 +58,7 @@ class AudioSettingsDialog : public juce::Component {
     std::unique_ptr<CustomChannelSelector> inputChannelSelector_;
     std::unique_ptr<CustomChannelSelector> outputChannelSelector_;
     juce::TextButton closeButton_;
+    juce::Label deviceNameLabel_;
     juce::AudioDeviceManager* deviceManager_;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(AudioSettingsDialog)

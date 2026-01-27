@@ -268,6 +268,19 @@ AudioSettingsDialog::AudioSettingsDialog(juce::AudioDeviceManager* deviceManager
     outputChannelSelector_ = std::make_unique<CustomChannelSelector>(deviceManager, false);
     addAndMakeVisible(*outputChannelSelector_);
 
+    // Setup device name label
+    deviceNameLabel_.setFont(juce::Font(16.0f, juce::Font::bold));
+    deviceNameLabel_.setJustificationType(juce::Justification::centred);
+    if (auto* device = deviceManager->getCurrentAudioDevice()) {
+        juce::String labelText = "Current Device: " + device->getName();
+        labelText += " (" + juce::String(device->getInputChannelNames().size()) + " in, ";
+        labelText += juce::String(device->getOutputChannelNames().size()) + " out)";
+        deviceNameLabel_.setText(labelText, juce::dontSendNotification);
+    } else {
+        deviceNameLabel_.setText("No audio device selected", juce::dontSendNotification);
+    }
+    addAndMakeVisible(deviceNameLabel_);
+
     // Setup close button
     closeButton_.setButtonText("Close");
     closeButton_.onClick = [this]() {
@@ -289,6 +302,10 @@ void AudioSettingsDialog::paint(juce::Graphics& g) {
 
 void AudioSettingsDialog::resized() {
     auto bounds = getLocalBounds().reduced(10);
+
+    // Device name label at top
+    deviceNameLabel_.setBounds(bounds.removeFromTop(30));
+    bounds.removeFromTop(10);  // spacing
 
     // Button at bottom
     const int buttonHeight = 28;

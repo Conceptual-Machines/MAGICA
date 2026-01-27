@@ -82,14 +82,47 @@ bool TracktionEngineWrapper::initialize() {
         dm.initialise(2, 2);
         DBG("DeviceManager initialized with stereo I/O");
 
+        // Try to select M4 interface if available
+        auto* coreAudioType = juceDeviceManager.getAvailableDeviceTypes()[0];
+        if (coreAudioType) {
+            auto outputDevices = coreAudioType->getDeviceNames(false);  // outputs
+            auto inputDevices = coreAudioType->getDeviceNames(true);    // inputs
+
+            // Look for M4 in the device list
+            bool hasM4Output = outputDevices.contains("M4");
+            bool hasM4Input = inputDevices.contains("M4");
+
+            if (hasM4Output && hasM4Input) {
+                std::cout << "Found M4 interface - attempting to select it" << std::endl;
+
+                // Get current audio device setup from JUCE device manager
+                juce::AudioDeviceManager::AudioDeviceSetup setup;
+                juceDeviceManager.getAudioDeviceSetup(setup);
+
+                setup.outputDeviceName = "M4";
+                setup.inputDeviceName = "M4";
+
+                // Try to set it
+                auto result = juceDeviceManager.setAudioDeviceSetup(setup, true);
+                if (result.isEmpty()) {
+                    std::cout << "Successfully selected M4 interface" << std::endl;
+                } else {
+                    std::cout << "Failed to select M4: " << result.toStdString() << std::endl;
+                }
+            } else {
+                std::cout << "M4 interface not found in device list" << std::endl;
+            }
+        }
+
         // Log currently selected device
         if (auto* currentDevice = juceDeviceManager.getCurrentAudioDevice()) {
-            DBG("Current audio device: " << currentDevice->getName());
-            DBG("  Type: " << currentDevice->getTypeName());
-            DBG("  Sample rate: " << currentDevice->getCurrentSampleRate());
-            DBG("  Buffer size: " << currentDevice->getCurrentBufferSizeSamples());
-            DBG("  Input channels: " << currentDevice->getInputChannelNames().size());
-            DBG("  Output channels: " << currentDevice->getOutputChannelNames().size());
+            DBG("Current audio device: " + currentDevice->getName());
+            DBG("  Type: " + currentDevice->getTypeName());
+            DBG("  Sample rate: " + juce::String(currentDevice->getCurrentSampleRate()));
+            DBG("  Buffer size: " + juce::String(currentDevice->getCurrentBufferSizeSamples()));
+            DBG("  Input channels: " + juce::String(currentDevice->getInputChannelNames().size()));
+            DBG("  Output channels: " +
+                juce::String(currentDevice->getOutputChannelNames().size()));
         } else {
             DBG("WARNING: No audio device selected!");
         }
