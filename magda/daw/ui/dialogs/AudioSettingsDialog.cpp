@@ -24,13 +24,24 @@ void CustomChannelSelector::updateFromDevice() {
     channelToggles_.clear();
 
     auto* device = deviceManager_->getCurrentAudioDevice();
-    if (!device)
+    if (!device) {
+        DBG("CustomChannelSelector::updateFromDevice - No current audio device!");
         return;
+    }
+
+    DBG("CustomChannelSelector::updateFromDevice - Device: " + device->getName() +
+        " (isInput=" + juce::String(isInput_ ? "true" : "false") + ")");
 
     // Get channel names and active channels from current setup
     auto setup = deviceManager_->getAudioDeviceSetup();
     auto channelNames = isInput_ ? device->getInputChannelNames() : device->getOutputChannelNames();
     auto activeChannels = isInput_ ? setup.inputChannels : setup.outputChannels;
+
+    DBG("  Channel count: " + juce::String(channelNames.size()));
+    DBG("  Active channels: " + activeChannels.toString(2));
+    for (int i = 0; i < channelNames.size(); ++i) {
+        DBG("    Channel " + juce::String(i) + ": " + channelNames[i]);
+    }
 
     // Determine how many channels to show
     // If channels are already active, show up to the highest active channel

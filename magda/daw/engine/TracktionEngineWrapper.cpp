@@ -54,11 +54,47 @@ bool TracktionEngineWrapper::initialize() {
         // Initialize the DeviceManager FIRST - this creates MIDI device wrappers
         // Parameters: default number of input channels, default number of output channels
         auto& dm = engine_->getDeviceManager();
-        dm.initialise(2, 2);  // 2 inputs, 2 outputs (stereo in/out)
+
+        // Get JUCE's AudioDeviceManager to access device list
+        auto& juceDeviceManager = dm.deviceManager;
+
+        // Log available audio device types (CoreAudio on macOS)
+        DBG("Available audio device types:");
+        for (auto* type : juceDeviceManager.getAvailableDeviceTypes()) {
+            DBG("  - " << type->getTypeName());
+
+            // Log devices for each type
+            type->scanForDevices();
+            auto inputNames = type->getDeviceNames(true);    // inputs
+            auto outputNames = type->getDeviceNames(false);  // outputs
+
+            DBG("    Input devices:");
+            for (const auto& name : inputNames) {
+                DBG("      - " << name);
+            }
+            DBG("    Output devices:");
+            for (const auto& name : outputNames) {
+                DBG("      - " << name);
+            }
+        }
+
+        // Initialize with stereo I/O
+        dm.initialise(2, 2);
         DBG("DeviceManager initialized with stereo I/O");
 
+        // Log currently selected device
+        if (auto* currentDevice = juceDeviceManager.getCurrentAudioDevice()) {
+            DBG("Current audio device: " << currentDevice->getName());
+            DBG("  Type: " << currentDevice->getTypeName());
+            DBG("  Sample rate: " << currentDevice->getCurrentSampleRate());
+            DBG("  Buffer size: " << currentDevice->getCurrentBufferSizeSamples());
+            DBG("  Input channels: " << currentDevice->getInputChannelNames().size());
+            DBG("  Output channels: " << currentDevice->getOutputChannelNames().size());
+        } else {
+            DBG("WARNING: No audio device selected!");
+        }
+
         // Enable MIDI devices at JUCE level - this must be done so TE picks them up
-        auto& juceDeviceManager = dm.deviceManager;
         auto midiInputs = juce::MidiInput::getAvailableDevices();
         DBG("JUCE MIDI inputs available: " << midiInputs.size());
         for (const auto& midiInput : midiInputs) {
