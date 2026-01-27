@@ -242,10 +242,6 @@ void MenuManager::menuItemSelected(int menuItemID, int topLevelMenuIndex) {
             if (callbacks_.onAudioSettings)
                 callbacks_.onAudioSettings();
             break;
-        case MidiSettings:
-            if (callbacks_.onMidiSettings)
-                callbacks_.onMidiSettings();
-            break;
         case PluginScan:
             if (callbacks_.onPluginScan)
                 callbacks_.onPluginScan();

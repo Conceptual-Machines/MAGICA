@@ -121,16 +121,17 @@ bool TracktionEngineWrapper::initialize() {
                 }
 
                 // Enable channels based on preference
-                setup.inputChannels.clear();
-                setup.outputChannels.clear();
-
+                // Only override channel configuration if user specified a preference (> 0)
+                // Otherwise, keep the existing channel setup (device defaults)
                 if (preferredInputs > 0) {
+                    setup.inputChannels.clear();
                     for (int i = 0; i < preferredInputs; ++i) {
                         setup.inputChannels.setBit(i, true);
                     }
                 }
 
                 if (preferredOutputs > 0) {
+                    setup.outputChannels.clear();
                     for (int i = 0; i < preferredOutputs; ++i) {
                         setup.outputChannels.setBit(i, true);
                     }
