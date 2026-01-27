@@ -5,6 +5,8 @@
 #include <functional>
 #include <vector>
 
+#include "core/DeviceInfo.hpp"
+
 namespace magda::daw::ui {
 
 /**
@@ -52,21 +54,43 @@ class ParameterConfigDialog : public juce::Component, public juce::TableListBoxM
     // Show dialog modally
     static void show(const juce::String& pluginName, juce::Component* parent);
 
+    // Show dialog for a specific plugin (loads real parameters)
+    static void showForPlugin(const juce::String& uniqueId, const juce::String& pluginName,
+                              juce::Component* parent);
+
+    // Load saved parameter configuration and apply to DeviceInfo
+    static bool applyConfigToDevice(const juce::String& uniqueId, magda::DeviceInfo& device);
+
   private:
     juce::String pluginName_;
+    juce::String pluginUniqueId_;  // For saving/loading parameter configuration
     std::vector<MockParameterInfo> parameters_;
+    std::vector<int> filteredIndices_;  // Indices of filtered parameters
+    juce::String currentSearchText_;
 
     juce::TableListBox table_;
     juce::TextButton okButton_;
     juce::TextButton cancelButton_;
     juce::TextButton applyButton_;
+    juce::TextButton selectAllButton_;
+    juce::TextButton deselectAllButton_;
     juce::Label titleLabel_;
+    juce::TextEditor searchBox_;
+    juce::Label searchLabel_;
 
     // Column IDs
     enum ColumnIds { ParamName = 1, Visible, Unit, RangeMin, RangeMax, RangeCenter, UseAsGain };
 
     void buildMockParameters();
+    void loadParameters(const juce::String& uniqueId);
     bool isLikelyGainParameter(const juce::String& name);
+    void saveParameterConfiguration();
+    void loadParameterConfiguration();
+    void selectAllParameters();
+    void deselectAllParameters();
+    void filterParameters(const juce::String& searchText);
+    void rebuildFilteredList();
+    int getParamIndexForRow(int row) const;
 
     // Custom cell components
     class ToggleCell;

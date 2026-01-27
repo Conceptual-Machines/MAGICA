@@ -1,9 +1,16 @@
 #include "ParameterConfigDialog.hpp"
 
+#include <juce_audio_processors/juce_audio_processors.h>
+
 #include "../themes/DarkTheme.hpp"
 #include "../themes/FontManager.hpp"
+#include "core/TrackManager.hpp"
+#include "engine/TracktionEngineWrapper.hpp"
 
 namespace magda::daw::ui {
+
+// Static cache of scanned plugin parameters (persists across dialog instances)
+static std::map<juce::String, std::vector<MockParameterInfo>> parameterCache_;
 
 //==============================================================================
 // ToggleCell - Checkbox cell for visible/use as gain columns
@@ -17,15 +24,18 @@ class ParameterConfigDialog::ToggleCell : public juce::Component {
         toggle_.setColour(juce::ToggleButton::tickDisabledColourId,
                           DarkTheme::getColour(DarkTheme::TEXT_DIM));
         toggle_.onClick = [this]() {
-            if (row_ < static_cast<int>(owner_.parameters_.size())) {
+            int paramIndex = owner_.getParamIndexForRow(row_);
+            if (paramIndex >= 0 && paramIndex < static_cast<int>(owner_.parameters_.size())) {
                 if (column_ == ColumnIds::Visible) {
-                    owner_.parameters_[row_].isVisible = toggle_.getToggleState();
+                    owner_.parameters_[static_cast<size_t>(paramIndex)].isVisible =
+                        toggle_.getToggleState();
                 } else if (column_ == ColumnIds::UseAsGain) {
                     // Uncheck all others first (only one gain stage)
                     for (auto& p : owner_.parameters_) {
                         p.useAsGain = false;
                     }
-                    owner_.parameters_[row_].useAsGain = toggle_.getToggleState();
+                    owner_.parameters_[static_cast<size_t>(paramIndex)].useAsGain =
+                        toggle_.getToggleState();
                     // Force refresh all cells to update enabled states
                     owner_.table_.updateContent();
                 }
@@ -37,8 +47,9 @@ class ParameterConfigDialog::ToggleCell : public juce::Component {
     void update(int row, int column) {
         row_ = row;
         column_ = column;
-        if (row_ < static_cast<int>(owner_.parameters_.size())) {
-            const auto& param = owner_.parameters_[row_];
+        int paramIndex = owner_.getParamIndexForRow(row_);
+        if (paramIndex >= 0 && paramIndex < static_cast<int>(owner_.parameters_.size())) {
+            const auto& param = owner_.parameters_[static_cast<size_t>(paramIndex)];
             if (column_ == ColumnIds::Visible) {
                 toggle_.setToggleState(param.isVisible, juce::dontSendNotification);
                 toggle_.setEnabled(true);
@@ -232,6 +243,7 @@ ParameterConfigDialog::ParameterConfigDialog(const juce::String& pluginName)
                         DarkTheme::getColour(DarkTheme::ACCENT_BLUE));
     okButton_.setColour(juce::TextButton::textColourOffId, juce::Colours::white);
     okButton_.onClick = [this]() {
+        saveParameterConfiguration();
         if (auto* dw = findParentComponentOfClass<juce::DialogWindow>()) {
             dw->exitModalState(1);
         }
@@ -254,13 +266,41 @@ ParameterConfigDialog::ParameterConfigDialog(const juce::String& pluginName)
                            DarkTheme::getColour(DarkTheme::BUTTON_NORMAL));
     applyButton_.setColour(juce::TextButton::textColourOffId, DarkTheme::getTextColour());
     applyButton_.onClick = [this]() {
-        // Would save settings here
-        DBG("Apply parameter config");
+        saveParameterConfiguration();
+        DBG("Applied parameter config");
     };
     addAndMakeVisible(applyButton_);
 
+    // Select/Deselect all buttons
+    selectAllButton_.setButtonText("Select All");
+    selectAllButton_.setColour(juce::TextButton::buttonColourId,
+                               DarkTheme::getColour(DarkTheme::BUTTON_NORMAL));
+    selectAllButton_.setColour(juce::TextButton::textColourOffId, DarkTheme::getTextColour());
+    selectAllButton_.onClick = [this]() { selectAllParameters(); };
+    addAndMakeVisible(selectAllButton_);
+
+    deselectAllButton_.setButtonText("Deselect All");
+    deselectAllButton_.setColour(juce::TextButton::buttonColourId,
+                                 DarkTheme::getColour(DarkTheme::BUTTON_NORMAL));
+    deselectAllButton_.setColour(juce::TextButton::textColourOffId, DarkTheme::getTextColour());
+    deselectAllButton_.onClick = [this]() { deselectAllParameters(); };
+    addAndMakeVisible(deselectAllButton_);
+
+    // Search box
+    searchLabel_.setText("Search:", juce::dontSendNotification);
+    searchLabel_.setColour(juce::Label::textColourId, DarkTheme::getTextColour());
+    addAndMakeVisible(searchLabel_);
+
+    searchBox_.setColour(juce::TextEditor::backgroundColourId,
+                         DarkTheme::getColour(DarkTheme::SURFACE));
+    searchBox_.setColour(juce::TextEditor::textColourId, DarkTheme::getTextColour());
+    searchBox_.setColour(juce::TextEditor::outlineColourId, DarkTheme::getBorderColour());
+    searchBox_.onTextChange = [this]() { filterParameters(searchBox_.getText()); };
+    addAndMakeVisible(searchBox_);
+
     // Build mock data
     buildMockParameters();
+    rebuildFilteredList();
 
     setSize(620, 500);
 }
@@ -275,6 +315,23 @@ void ParameterConfigDialog::resized() {
     // Title at top
     titleLabel_.setBounds(bounds.removeFromTop(28));
     bounds.removeFromTop(12);
+
+    // Search box
+    auto searchRow = bounds.removeFromTop(28);
+    bounds.removeFromTop(8);
+    searchLabel_.setBounds(searchRow.removeFromLeft(50));
+    searchRow.removeFromLeft(4);
+    searchBox_.setBounds(searchRow);
+    bounds.removeFromTop(8);
+
+    // Select/Deselect all buttons
+    auto selectionButtonRow = bounds.removeFromTop(28);
+    bounds.removeFromTop(8);
+    const int selButtonWidth = 90;
+    const int selButtonSpacing = 8;
+    selectAllButton_.setBounds(selectionButtonRow.removeFromLeft(selButtonWidth));
+    selectionButtonRow.removeFromLeft(selButtonSpacing);
+    deselectAllButton_.setBounds(selectionButtonRow.removeFromLeft(selButtonWidth));
 
     // Buttons at bottom
     auto buttonRow = bounds.removeFromBottom(32);
@@ -294,7 +351,7 @@ void ParameterConfigDialog::resized() {
 }
 
 int ParameterConfigDialog::getNumRows() {
-    return static_cast<int>(parameters_.size());
+    return static_cast<int>(filteredIndices_.size());
 }
 
 void ParameterConfigDialog::paintRowBackground(juce::Graphics& g, int rowNumber, int width,
@@ -311,10 +368,14 @@ void ParameterConfigDialog::paintRowBackground(juce::Graphics& g, int rowNumber,
 
 void ParameterConfigDialog::paintCell(juce::Graphics& g, int rowNumber, int columnId, int width,
                                       int height, bool /*rowIsSelected*/) {
-    if (rowNumber >= static_cast<int>(parameters_.size()))
+    if (rowNumber >= static_cast<int>(filteredIndices_.size()))
         return;
 
-    const auto& param = parameters_[rowNumber];
+    int paramIndex = filteredIndices_[static_cast<size_t>(rowNumber)];
+    if (paramIndex >= static_cast<int>(parameters_.size()))
+        return;
+
+    const auto& param = parameters_[static_cast<size_t>(paramIndex)];
 
     g.setColour(DarkTheme::getTextColour());
     g.setFont(FontManager::getInstance().getUIFont(11.0f));
@@ -417,6 +478,328 @@ void ParameterConfigDialog::show(const juce::String& pluginName, juce::Component
     options.resizable = true;
 
     options.launchAsync();
+}
+
+void ParameterConfigDialog::showForPlugin(const juce::String& uniqueId,
+                                          const juce::String& pluginName,
+                                          juce::Component* /*parent*/) {
+    auto* dialog = new ParameterConfigDialog(pluginName);
+    dialog->pluginUniqueId_ = uniqueId;
+
+    // Load parameters from the plugin
+    dialog->loadParameters(uniqueId);
+
+    // Rebuild filtered list to include all loaded parameters
+    dialog->rebuildFilteredList();
+
+    // Try to load saved configuration
+    dialog->loadParameterConfiguration();
+
+    // Refresh table to show loaded data
+    dialog->table_.updateContent();
+
+    juce::DialogWindow::LaunchOptions options;
+    options.dialogTitle = "Configure Parameters - " + pluginName;
+    options.dialogBackgroundColour = DarkTheme::getColour(DarkTheme::PANEL_BACKGROUND);
+    options.content.setOwned(dialog);
+    options.escapeKeyTriggersCloseButton = true;
+    options.useNativeTitleBar = true;
+    options.resizable = true;
+
+    options.launchAsync();
+}
+
+void ParameterConfigDialog::loadParameters(const juce::String& uniqueId) {
+    // Check if we have cached parameters for this plugin
+    auto it = parameterCache_.find(uniqueId);
+    if (it != parameterCache_.end()) {
+        DBG("Loading cached parameters for " << uniqueId);
+        parameters_ = it->second;
+        return;
+    }
+
+    DBG("Scanning parameters for " << uniqueId);
+
+    // Get access to the audio engine to load the plugin
+    auto* audioEngine = magda::TrackManager::getInstance().getAudioEngine();
+    if (!audioEngine) {
+        DBG("No audio engine available");
+        buildMockParameters();
+        return;
+    }
+
+    // Get the TracktionEngineWrapper to access KnownPluginList
+    auto* tracktionEngine = dynamic_cast<magda::TracktionEngineWrapper*>(audioEngine);
+    if (!tracktionEngine) {
+        DBG("Audio engine is not TracktionEngineWrapper");
+        buildMockParameters();
+        return;
+    }
+
+    // Find the plugin description in the known plugin list
+    auto& knownPlugins = tracktionEngine->getKnownPluginList();
+    const juce::PluginDescription* pluginDesc = nullptr;
+
+    for (const auto& desc : knownPlugins.getTypes()) {
+        if (desc.createIdentifierString() == uniqueId) {
+            pluginDesc = &desc;
+            break;
+        }
+    }
+
+    if (!pluginDesc) {
+        DBG("Plugin description not found for " << uniqueId);
+        buildMockParameters();
+        return;
+    }
+
+    // Instantiate the plugin temporarily to scan its parameters
+    juce::String errorMessage;
+    auto& formatManager = tracktionEngine->getEdit()->engine.getPluginManager().pluginFormatManager;
+
+    auto instance = formatManager.createPluginInstance(*pluginDesc, 44100.0, 512, errorMessage);
+
+    if (!instance) {
+        DBG("Failed to instantiate plugin: " << errorMessage);
+        buildMockParameters();
+        return;
+    }
+
+    // Scan all parameters from the plugin
+    parameters_.clear();
+    int numParams = instance->getParameters().size();
+
+    for (int i = 0; i < numParams; ++i) {
+        auto* param = instance->getParameters()[i];
+        if (!param)
+            continue;
+
+        MockParameterInfo info;
+        info.name = param->getName(128);
+        info.defaultValue = param->getDefaultValue();
+        info.isVisible = true;  // All visible by default
+        info.unit = param->getLabel();
+
+        // Try to get parameter range if it's a RangedAudioParameter
+        if (auto* rangedParam = dynamic_cast<juce::RangedAudioParameter*>(param)) {
+            auto range = rangedParam->getNormalisableRange();
+            info.rangeMin = range.start;
+            info.rangeMax = range.end;
+            info.rangeCenter = (range.start + range.end) / 2.0f;
+        } else {
+            // Use default 0-1 range for non-ranged parameters
+            info.rangeMin = 0.0f;
+            info.rangeMax = 1.0f;
+            info.rangeCenter = 0.5f;
+        }
+
+        info.useAsGain = false;
+        info.canBeGain = isLikelyGainParameter(info.name);
+
+        parameters_.push_back(info);
+    }
+
+    DBG("Scanned " << parameters_.size() << " parameters");
+
+    // Cache the results for future use
+    parameterCache_[uniqueId] = parameters_;
+}
+
+void ParameterConfigDialog::selectAllParameters() {
+    for (auto& param : parameters_) {
+        param.isVisible = true;
+    }
+    table_.updateContent();
+}
+
+void ParameterConfigDialog::deselectAllParameters() {
+    for (auto& param : parameters_) {
+        param.isVisible = false;
+    }
+    table_.updateContent();
+}
+
+void ParameterConfigDialog::saveParameterConfiguration() {
+    if (pluginUniqueId_.isEmpty()) {
+        DBG("Cannot save parameter config - no plugin unique ID");
+        return;
+    }
+
+    // Get the config directory
+    auto configDir = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
+                         .getChildFile("MAGDA")
+                         .getChildFile("PluginConfigs");
+
+    if (!configDir.exists()) {
+        configDir.createDirectory();
+    }
+
+    // Create config file for this plugin
+    auto configFile = configDir.getChildFile(pluginUniqueId_.replace(":", "_") + ".xml");
+
+    juce::XmlElement root("ParameterConfig");
+    root.setAttribute("pluginId", pluginUniqueId_);
+
+    // Save visible parameters
+    auto* visibleParams = root.createNewChildElement("VisibleParameters");
+    int visibleCount = 0;
+    for (size_t i = 0; i < parameters_.size(); ++i) {
+        if (parameters_[i].isVisible) {
+            auto* param = visibleParams->createNewChildElement("Param");
+            param->setAttribute("index", static_cast<int>(i));
+            param->setAttribute("name", parameters_[i].name);
+            visibleCount++;
+        }
+    }
+
+    // Save gain parameter index
+    for (size_t i = 0; i < parameters_.size(); ++i) {
+        if (parameters_[i].useAsGain) {
+            root.setAttribute("gainParamIndex", static_cast<int>(i));
+            break;
+        }
+    }
+
+    if (root.writeTo(configFile)) {
+        DBG("Saved parameter config for " << pluginUniqueId_ << " - " << visibleCount
+                                          << " visible params to " << configFile.getFullPathName());
+    } else {
+        DBG("Failed to save parameter config for " << pluginUniqueId_);
+    }
+}
+
+void ParameterConfigDialog::loadParameterConfiguration() {
+    if (pluginUniqueId_.isEmpty()) {
+        DBG("Cannot load parameter config - no plugin unique ID");
+        return;
+    }
+
+    auto configDir = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
+                         .getChildFile("MAGDA")
+                         .getChildFile("PluginConfigs");
+
+    auto configFile = configDir.getChildFile(pluginUniqueId_.replace(":", "_") + ".xml");
+
+    DBG("Looking for config at: " << configFile.getFullPathName());
+
+    if (!configFile.existsAsFile()) {
+        DBG("No saved config for " << pluginUniqueId_);
+        return;
+    }
+
+    auto xml = juce::parseXML(configFile);
+    if (!xml) {
+        DBG("Failed to parse config file for " << pluginUniqueId_);
+        return;
+    }
+
+    // First, mark all as invisible
+    for (auto& param : parameters_) {
+        param.isVisible = false;
+        param.useAsGain = false;
+    }
+
+    // Load visible parameters
+    int loadedCount = 0;
+    if (auto* visibleParams = xml->getChildByName("VisibleParameters")) {
+        for (auto* paramElem : visibleParams->getChildIterator()) {
+            int index = paramElem->getIntAttribute("index", -1);
+            if (index >= 0 && index < static_cast<int>(parameters_.size())) {
+                parameters_[static_cast<size_t>(index)].isVisible = true;
+                loadedCount++;
+            }
+        }
+    }
+
+    // Load gain parameter
+    int gainIndex = xml->getIntAttribute("gainParamIndex", -1);
+    if (gainIndex >= 0 && gainIndex < static_cast<int>(parameters_.size())) {
+        parameters_[static_cast<size_t>(gainIndex)].useAsGain = true;
+    }
+
+    DBG("Loaded parameter config for " << pluginUniqueId_ << " - " << loadedCount
+                                       << " visible params");
+}
+
+bool ParameterConfigDialog::applyConfigToDevice(const juce::String& uniqueId,
+                                                magda::DeviceInfo& device) {
+    if (uniqueId.isEmpty()) {
+        DBG("Cannot apply config - no plugin unique ID");
+        return false;
+    }
+
+    auto configDir = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
+                         .getChildFile("MAGDA")
+                         .getChildFile("PluginConfigs");
+
+    auto configFile = configDir.getChildFile(uniqueId.replace(":", "_") + ".xml");
+
+    DBG("applyConfigToDevice: Looking for " << configFile.getFullPathName());
+
+    if (!configFile.existsAsFile()) {
+        DBG("No saved config for " << uniqueId << " - using all parameters");
+        return false;
+    }
+
+    auto xml = juce::parseXML(configFile);
+    if (!xml) {
+        DBG("Failed to parse config file for " << uniqueId);
+        return false;
+    }
+
+    // Load visible parameters
+    device.visibleParameters.clear();
+    if (auto* visibleParams = xml->getChildByName("VisibleParameters")) {
+        for (auto* paramElem : visibleParams->getChildIterator()) {
+            int index = paramElem->getIntAttribute("index", -1);
+            juce::String name = paramElem->getStringAttribute("name");
+            DBG("  Found visible param: index=" << index << " name=" << name);
+            if (index >= 0 && index < static_cast<int>(device.parameters.size())) {
+                device.visibleParameters.push_back(index);
+            }
+        }
+    }
+
+    // Load gain parameter
+    device.gainParameterIndex = xml->getIntAttribute("gainParamIndex", -1);
+
+    DBG("Applied parameter config for " << uniqueId << " - " << device.visibleParameters.size()
+                                        << " visible params");
+    return true;
+}
+
+void ParameterConfigDialog::rebuildFilteredList() {
+    filteredIndices_.clear();
+    for (size_t i = 0; i < parameters_.size(); ++i) {
+        filteredIndices_.push_back(static_cast<int>(i));
+    }
+}
+
+void ParameterConfigDialog::filterParameters(const juce::String& searchText) {
+    currentSearchText_ = searchText;
+    filteredIndices_.clear();
+
+    if (searchText.isEmpty()) {
+        // No filter - show all
+        rebuildFilteredList();
+    } else {
+        // Filter by search text
+        juce::String lowerSearch = searchText.toLowerCase();
+        for (size_t i = 0; i < parameters_.size(); ++i) {
+            if (parameters_[i].name.toLowerCase().contains(lowerSearch)) {
+                filteredIndices_.push_back(static_cast<int>(i));
+            }
+        }
+    }
+
+    table_.updateContent();
+}
+
+int ParameterConfigDialog::getParamIndexForRow(int row) const {
+    if (row >= 0 && row < static_cast<int>(filteredIndices_.size())) {
+        return filteredIndices_[static_cast<size_t>(row)];
+    }
+    return -1;
 }
 
 }  // namespace magda::daw::ui

@@ -34,6 +34,7 @@ class ParamSlotComponent : public juce::Component,
     void setParameterInfo(const magda::ParameterInfo& info);  // Set full param info for formatting
     void setShowEmptyText(bool show);  // Show "-" instead of value for empty slots
     void setFonts(const juce::Font& labelFont, const juce::Font& valueFont);
+    bool isBeingDragged() const;  // Check if user is actively dragging this parameter
 
     // Set the device this param belongs to (for mod/macro lookups)
     void setDeviceId(magda::DeviceId deviceId) {

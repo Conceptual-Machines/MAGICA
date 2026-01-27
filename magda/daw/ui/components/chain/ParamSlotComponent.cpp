@@ -355,6 +355,10 @@ void ParamSlotComponent::setParamValue(double value) {
     valueSlider_.setValue(value, juce::dontSendNotification);
 }
 
+bool ParamSlotComponent::isBeingDragged() const {
+    return valueSlider_.isBeingDragged();
+}
+
 void ParamSlotComponent::setShowEmptyText(bool show) {
     valueSlider_.setShowEmptyText(show);
 }

@@ -464,8 +464,8 @@ void ExternalPluginProcessor::populateParameters(DeviceInfo& info) const {
 
     if (auto* ext = getExternalPlugin()) {
         auto params = ext->getAutomatableParameters();
-        // Limit to first 128 parameters to avoid overwhelming the UI
-        int maxParams = juce::jmin(static_cast<int>(params.size()), 128);
+        // Load all parameters - UI uses user-selectable visibility and pagination
+        int maxParams = static_cast<int>(params.size());
 
         for (int i = 0; i < maxParams; ++i) {
             info.parameters.push_back(getParameterInfo(i));
