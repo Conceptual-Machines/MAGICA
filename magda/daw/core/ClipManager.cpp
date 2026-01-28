@@ -171,10 +171,19 @@ void ClipManager::resizeClip(ClipId clipId, double newLength, bool fromStart, do
         newLength = std::max(0.1, newLength);  // Minimum clip length
 
         if (fromStart) {
-            // Resizing from left edge: adjust start time
-            // Notes maintain their relative position within the clip (startBeat unchanged)
-            double lengthDelta = clip->length - newLength;
+            // Resizing from left edge: adjust start time (absolute mode - container only)
+            double lengthDelta = clip->length - newLength;  // Amount trimmed off the left
             clip->startTime = std::max(0.0, clip->startTime + lengthDelta);
+
+            // For audio clips: adjust source positions to maintain absolute timeline position
+            // This keeps audio at the same absolute timeline position (like moving a viewport)
+            if (clip->type == ClipType::Audio) {
+                for (auto& source : clip->audioSources) {
+                    // Simply shift position left by the amount trimmed from clip start
+                    // Net effect: Audio stays at same absolute timeline position
+                    source.position = std::max(0.0, source.position - lengthDelta);
+                }
+            }
         }
 
         clip->length = newLength;
@@ -290,6 +299,41 @@ void ClipManager::setAudioSourceStretchFactor(ClipId clipId, int sourceIndex,
         if (clip->type == ClipType::Audio && sourceIndex >= 0 &&
             sourceIndex < static_cast<int>(clip->audioSources.size())) {
             clip->audioSources[sourceIndex].stretchFactor = juce::jlimit(0.25, 4.0, stretchFactor);
+            notifyClipPropertyChanged(clipId);
+        }
+    }
+}
+
+void ClipManager::trimAudioSourceFromStart(ClipId clipId, int sourceIndex, double trimAmount) {
+    if (auto* clip = getClip(clipId)) {
+        if (clip->type == ClipType::Audio && sourceIndex >= 0 &&
+            sourceIndex < static_cast<int>(clip->audioSources.size())) {
+            auto& source = clip->audioSources[sourceIndex];
+
+            // Advance file offset (accounting for stretch)
+            double fileTrimAmount = trimAmount / source.stretchFactor;
+            source.offset = std::max(0.0, source.offset + fileTrimAmount);
+
+            // Reduce length by trim amount
+            source.length = std::max(0.1, source.length - trimAmount);
+
+            // Move position forward by trim amount
+            source.position = std::max(0.0, source.position + trimAmount);
+
+            notifyClipPropertyChanged(clipId);
+        }
+    }
+}
+
+void ClipManager::trimAudioSourceFromEnd(ClipId clipId, int sourceIndex, double trimAmount) {
+    if (auto* clip = getClip(clipId)) {
+        if (clip->type == ClipType::Audio && sourceIndex >= 0 &&
+            sourceIndex < static_cast<int>(clip->audioSources.size())) {
+            auto& source = clip->audioSources[sourceIndex];
+
+            // Simply reduce length (no offset change)
+            source.length = std::max(0.1, source.length - trimAmount);
+
             notifyClipPropertyChanged(clipId);
         }
     }

@@ -159,6 +159,18 @@ class ClipManager {
     void setAudioSourceLength(ClipId clipId, int sourceIndex, double length);
     void setAudioSourceStretchFactor(ClipId clipId, int sourceIndex, double stretchFactor);
 
+    /**
+     * @brief Trim audio source from start (advances offset, reduces length)
+     * Used by WaveformEditor for content trimming
+     */
+    void trimAudioSourceFromStart(ClipId clipId, int sourceIndex, double trimAmount);
+
+    /**
+     * @brief Trim audio source from end (reduces length only)
+     * Used by WaveformEditor for content trimming
+     */
+    void trimAudioSourceFromEnd(ClipId clipId, int sourceIndex, double trimAmount);
+
     // MIDI-specific
     void addMidiNote(ClipId clipId, const MidiNote& note);
     void removeMidiNote(ClipId clipId, int noteIndex);
