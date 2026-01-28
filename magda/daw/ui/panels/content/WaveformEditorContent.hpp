@@ -62,12 +62,14 @@ class WaveformEditorContent : public PanelContent, public magda::ClipManagerList
     double horizontalZoom_ = 100.0;  // pixels per second
 
     // Drag state
-    enum class DragMode { None, ResizeLeft, ResizeRight, Move };
+    enum class DragMode { None, ResizeLeft, ResizeRight, Move, StretchLeft, StretchRight };
     DragMode dragMode_ = DragMode::None;
     double dragStartPosition_ = 0.0;
     double dragStartAudioOffset_ = 0.0;
     double dragStartLength_ = 0.0;
     int dragStartX_ = 0;
+    double dragStartStretchFactor_ = 1.0;
+    double dragStartFileDuration_ = 0.0;  // Cached file duration at drag start
 
     // Painting helpers
     void paintHeader(juce::Graphics& g, juce::Rectangle<int> area);

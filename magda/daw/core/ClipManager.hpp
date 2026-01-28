@@ -157,6 +157,7 @@ class ClipManager {
     // Audio-specific
     void setAudioSourcePosition(ClipId clipId, int sourceIndex, double position);
     void setAudioSourceLength(ClipId clipId, int sourceIndex, double length);
+    void setAudioSourceStretchFactor(ClipId clipId, int sourceIndex, double stretchFactor);
 
     // MIDI-specific
     void addMidiNote(ClipId clipId, const MidiNote& note);

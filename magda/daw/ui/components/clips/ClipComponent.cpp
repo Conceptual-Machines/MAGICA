@@ -87,8 +87,9 @@ void ClipComponent::paintAudioClip(juce::Graphics& g, const ClipInfo& clip,
                               .getIntersection(waveformArea);
 
         if (!sourceRect.isEmpty()) {
+            double fileWindow = source.length / source.stretchFactor;
             double displayStart = source.offset;
-            double displayEnd = source.offset + source.length;
+            double displayEnd = source.offset + fileWindow;
 
             thumbnailManager.drawWaveform(g, sourceRect, source.filePath, displayStart, displayEnd,
                                           clip.colour.brighter(0.2f));
@@ -264,16 +265,17 @@ void ClipComponent::mouseDown(const juce::MouseEvent& e) {
         return;
     }
 
-    // Handle Shift+click for range selection
+    // Handle Shift+click on edges for stretch, otherwise range selection
     if (e.mods.isShiftDown()) {
-        selectionManager.extendSelectionTo(clipId_);
-        // Update local state
-        isSelected_ = selectionManager.isClipSelected(clipId_);
-
-        // Don't start dragging on Shift+click - it's just for selection
-        dragMode_ = DragMode::None;
-        repaint();
-        return;
+        if (isOnLeftEdge(e.x) || isOnRightEdge(e.x)) {
+            // Shift+edge = stretch mode — fall through to drag setup below
+        } else {
+            selectionManager.extendSelectionTo(clipId_);
+            isSelected_ = selectionManager.isClipSelected(clipId_);
+            dragMode_ = DragMode::None;
+            repaint();
+            return;
+        }
     }
 
     // Handle Alt+click for blade/split
@@ -332,10 +334,21 @@ void ClipComponent::mouseDown(const juce::MouseEvent& e) {
     isDragging_ = false;
 
     // Determine drag mode based on click position
+    // Shift+edge = stretch mode (time-stretches audio source along with clip)
     if (isOnLeftEdge(e.x)) {
-        dragMode_ = DragMode::ResizeLeft;
+        if (e.mods.isShiftDown() && clip->type == ClipType::Audio && !clip->audioSources.empty()) {
+            dragMode_ = DragMode::StretchLeft;
+            dragStartStretchFactor_ = clip->audioSources[0].stretchFactor;
+        } else {
+            dragMode_ = DragMode::ResizeLeft;
+        }
     } else if (isOnRightEdge(e.x)) {
-        dragMode_ = DragMode::ResizeRight;
+        if (e.mods.isShiftDown() && clip->type == ClipType::Audio && !clip->audioSources.empty()) {
+            dragMode_ = DragMode::StretchRight;
+            dragStartStretchFactor_ = clip->audioSources[0].stretchFactor;
+        } else {
+            dragMode_ = DragMode::ResizeRight;
+        }
     } else {
         dragMode_ = DragMode::Move;
     }
@@ -483,6 +496,69 @@ void ClipComponent::mouseDrag(const juce::MouseEvent& e) {
             break;
         }
 
+        case DragMode::StretchRight: {
+            // Shift+right edge: stretch clip and audio source proportionally
+            double rawEndTime = dragStartTime_ + dragStartLength_ + deltaTime;
+            double finalEndTime = rawEndTime;
+
+            if (snapTimeToGrid) {
+                double snappedEndTime = snapTimeToGrid(rawEndTime);
+                double snapDeltaPixels = std::abs((snappedEndTime - rawEndTime) * pixelsPerSecond);
+                if (snapDeltaPixels <= SNAP_THRESHOLD_PIXELS) {
+                    finalEndTime = snappedEndTime;
+                }
+            }
+
+            double finalLength = juce::jmax(0.1, finalEndTime - dragStartTime_);
+
+            // Clamp by stretch factor limits [0.25, 4.0]
+            double stretchRatio = finalLength / dragStartLength_;
+            double newStretchFactor = dragStartStretchFactor_ * stretchRatio;
+            newStretchFactor = juce::jlimit(0.25, 4.0, newStretchFactor);
+            // Back-compute the allowed length from the clamped stretch factor
+            finalLength = dragStartLength_ * (newStretchFactor / dragStartStretchFactor_);
+
+            previewLength_ = finalLength;
+
+            int newX = parentPanel_->timeToPixel(dragStartTime_);
+            int newWidth = static_cast<int>(finalLength * pixelsPerSecond);
+            setBounds(newX, getY(), juce::jmax(10, newWidth), getHeight());
+            break;
+        }
+
+        case DragMode::StretchLeft: {
+            // Shift+left edge: stretch from left, right edge stays fixed
+            double endTime = dragStartTime_ + dragStartLength_;
+            double rawStartTime = juce::jmax(0.0, dragStartTime_ + deltaTime);
+            double finalStartTime = rawStartTime;
+
+            if (snapTimeToGrid) {
+                double snappedTime = snapTimeToGrid(rawStartTime);
+                double snapDeltaPixels = std::abs((snappedTime - rawStartTime) * pixelsPerSecond);
+                if (snapDeltaPixels <= SNAP_THRESHOLD_PIXELS) {
+                    finalStartTime = snappedTime;
+                }
+            }
+
+            finalStartTime = juce::jmin(finalStartTime, endTime - 0.1);
+            double finalLength = endTime - finalStartTime;
+
+            // Clamp by stretch factor limits
+            double stretchRatio = finalLength / dragStartLength_;
+            double newStretchFactor = dragStartStretchFactor_ * stretchRatio;
+            newStretchFactor = juce::jlimit(0.25, 4.0, newStretchFactor);
+            finalLength = dragStartLength_ * (newStretchFactor / dragStartStretchFactor_);
+            finalStartTime = endTime - finalLength;
+
+            previewStartTime_ = finalStartTime;
+            previewLength_ = finalLength;
+
+            int newX = parentPanel_->timeToPixel(finalStartTime);
+            int newWidth = static_cast<int>(finalLength * pixelsPerSecond);
+            setBounds(newX, getY(), juce::jmax(10, newWidth), getHeight());
+            break;
+        }
+
         default:
             break;
     }
@@ -601,6 +677,72 @@ void ClipComponent::mouseUp(const juce::MouseEvent& e) {
                 break;
             }
 
+            case DragMode::StretchRight: {
+                double finalLength = previewLength_;
+
+                if (snapTimeToGrid) {
+                    double endTime = snapTimeToGrid(dragStartTime_ + finalLength);
+                    finalLength = endTime - dragStartTime_;
+                }
+                finalLength = juce::jmax(0.1, finalLength);
+
+                double stretchRatio = finalLength / dragStartLength_;
+                double newStretchFactor =
+                    juce::jlimit(0.25, 4.0, dragStartStretchFactor_ * stretchRatio);
+                finalLength = dragStartLength_ * (newStretchFactor / dragStartStretchFactor_);
+
+                // Resize clip
+                if (onClipResized) {
+                    onClipResized(clipId_, finalLength, false);
+                }
+                // Stretch audio source: scale length proportionally, update stretchFactor
+                auto& cm = ClipManager::getInstance();
+                if (auto* c = cm.getClip(clipId_)) {
+                    if (!c->audioSources.empty()) {
+                        double sourceLength = c->audioSources[0].length * stretchRatio;
+                        cm.setAudioSourceLength(clipId_, 0, sourceLength);
+                        cm.setAudioSourceStretchFactor(clipId_, 0, newStretchFactor);
+                    }
+                }
+                break;
+            }
+
+            case DragMode::StretchLeft: {
+                double finalStartTime = previewStartTime_;
+                double finalLength = previewLength_;
+
+                if (snapTimeToGrid) {
+                    finalStartTime = snapTimeToGrid(finalStartTime);
+                    finalLength = (dragStartTime_ + dragStartLength_) - finalStartTime;
+                }
+                finalStartTime = juce::jmax(0.0, finalStartTime);
+                finalLength = juce::jmax(0.1, finalLength);
+
+                double stretchRatio = finalLength / dragStartLength_;
+                double newStretchFactor =
+                    juce::jlimit(0.25, 4.0, dragStartStretchFactor_ * stretchRatio);
+                finalLength = dragStartLength_ * (newStretchFactor / dragStartStretchFactor_);
+                finalStartTime = (dragStartTime_ + dragStartLength_) - finalLength;
+
+                // Resize clip from start
+                if (onClipResized) {
+                    onClipResized(clipId_, finalLength, true);
+                }
+                if (onClipMoved) {
+                    onClipMoved(clipId_, finalStartTime);
+                }
+                // Stretch audio source
+                auto& cm = ClipManager::getInstance();
+                if (auto* c = cm.getClip(clipId_)) {
+                    if (!c->audioSources.empty()) {
+                        double sourceLength = c->audioSources[0].length * stretchRatio;
+                        cm.setAudioSourceLength(clipId_, 0, sourceLength);
+                        cm.setAudioSourceStretchFactor(clipId_, 0, newStretchFactor);
+                    }
+                }
+                break;
+            }
+
             default:
                 break;
         }
@@ -617,8 +759,8 @@ void ClipComponent::mouseMove(const juce::MouseEvent& e) {
     hoverLeftEdge_ = isOnLeftEdge(e.x);
     hoverRightEdge_ = isOnRightEdge(e.x);
 
-    // Always update cursor to check for Alt key (blade mode)
-    updateCursor(e.mods.isAltDown());
+    // Always update cursor to check for Alt key (blade mode) and Shift key (stretch mode)
+    updateCursor(e.mods.isAltDown(), e.mods.isShiftDown());
 
     if (hoverLeftEdge_ != wasHoverLeft || hoverRightEdge_ != wasHoverRight) {
         repaint();
@@ -628,7 +770,7 @@ void ClipComponent::mouseMove(const juce::MouseEvent& e) {
 void ClipComponent::mouseExit(const juce::MouseEvent& /*e*/) {
     hoverLeftEdge_ = false;
     hoverRightEdge_ = false;
-    updateCursor(false);
+    updateCursor(false, false);
     repaint();
 }
 
@@ -718,7 +860,7 @@ bool ClipComponent::isOnRightEdge(int x) const {
     return x > getWidth() - RESIZE_HANDLE_WIDTH;
 }
 
-void ClipComponent::updateCursor(bool isAltDown) {
+void ClipComponent::updateCursor(bool isAltDown, bool isShiftDown) {
     // Alt key = blade/scissors mode
     if (isAltDown) {
         setMouseCursor(juce::MouseCursor::CrosshairCursor);
@@ -728,8 +870,13 @@ void ClipComponent::updateCursor(bool isAltDown) {
     bool isClipSelected = SelectionManager::getInstance().isClipSelected(clipId_);
 
     if (isClipSelected && (hoverLeftEdge_ || hoverRightEdge_)) {
-        // Resize cursor only when selected
-        setMouseCursor(juce::MouseCursor::LeftRightResizeCursor);
+        if (isShiftDown) {
+            // Shift+edge = stretch cursor
+            setMouseCursor(juce::MouseCursor::UpDownLeftRightResizeCursor);
+        } else {
+            // Resize cursor only when selected
+            setMouseCursor(juce::MouseCursor::LeftRightResizeCursor);
+        }
     } else if (isClipSelected) {
         // Grab cursor when selected (can drag)
         setMouseCursor(juce::MouseCursor::DraggingHandCursor);

@@ -153,8 +153,9 @@ void WaveformEditorContent::paintWaveform(juce::Graphics& g, juce::Rectangle<int
     // Draw real waveform from audio thumbnail
     if (source.filePath.isNotEmpty()) {
         auto& thumbnailManager = magda::AudioThumbnailManager::getInstance();
+        double fileWindow = source.length / source.stretchFactor;
         double displayStart = source.offset;
-        double displayEnd = source.offset + source.length;
+        double displayEnd = source.offset + fileWindow;
 
         thumbnailManager.drawWaveform(g, waveformRect.reduced(0, 4), source.filePath, displayStart,
                                       displayEnd, clip.colour.brighter(0.2f));
@@ -234,10 +235,12 @@ void WaveformEditorContent::mouseDown(const juce::MouseEvent& event) {
     const auto& source = clip->audioSources[0];
     int x = event.x;
 
+    bool shiftHeld = event.mods.isShiftDown();
+
     if (isNearLeftEdge(x, source)) {
-        dragMode_ = DragMode::ResizeLeft;
+        dragMode_ = shiftHeld ? DragMode::StretchLeft : DragMode::ResizeLeft;
     } else if (isNearRightEdge(x, source)) {
-        dragMode_ = DragMode::ResizeRight;
+        dragMode_ = shiftHeld ? DragMode::StretchRight : DragMode::ResizeRight;
     } else if (isInsideWaveform(x, source)) {
         dragMode_ = DragMode::Move;
     } else {
@@ -249,6 +252,14 @@ void WaveformEditorContent::mouseDown(const juce::MouseEvent& event) {
     dragStartPosition_ = source.position;
     dragStartAudioOffset_ = source.offset;
     dragStartLength_ = source.length;
+    dragStartStretchFactor_ = source.stretchFactor;
+
+    // Cache file duration for trim clamping
+    dragStartFileDuration_ = 0.0;
+    auto* thumbnail = magda::AudioThumbnailManager::getInstance().getThumbnail(source.filePath);
+    if (thumbnail) {
+        dragStartFileDuration_ = thumbnail->getTotalLength();
+    }
 }
 
 void WaveformEditorContent::mouseDrag(const juce::MouseEvent& event) {
@@ -266,22 +277,63 @@ void WaveformEditorContent::mouseDrag(const juce::MouseEvent& event) {
 
     switch (dragMode_) {
         case DragMode::ResizeLeft: {
-            // Trim from left: advance both offset and position, decrease length
-            double newOffset = std::max(0.0, dragStartAudioOffset_ + deltaSeconds);
-            double offsetDelta = newOffset - dragStartAudioOffset_;
+            // Trim from left: position and length are in timeline time,
+            // offset is in file time. Convert deltaSeconds via stretchFactor.
+            double sf = dragStartStretchFactor_;
+            double fileDelta = deltaSeconds / sf;
+            double newOffset = std::max(0.0, dragStartAudioOffset_ + fileDelta);
+            if (dragStartFileDuration_ > 0.0) {
+                newOffset = std::min(newOffset, dragStartFileDuration_);
+            }
+            double actualFileDelta = newOffset - dragStartAudioOffset_;
+            double timelineDelta = actualFileDelta * sf;
             source.offset = newOffset;
-            source.position = std::max(0.0, dragStartPosition_ + offsetDelta);
-            source.length = std::max(0.1, dragStartLength_ - offsetDelta);
+            source.position = std::max(0.0, dragStartPosition_ + timelineDelta);
+            source.length = std::max(0.1, dragStartLength_ - timelineDelta);
             break;
         }
         case DragMode::ResizeRight: {
-            // Trim from right: only change length
-            source.length = std::max(0.1, dragStartLength_ + deltaSeconds);
+            // Trim from right: change length, capped so file window stays within file
+            // fileWindow = length / stretchFactor, so maxLength = (fileDuration - offset) *
+            // stretchFactor
+            double newLength = std::max(0.1, dragStartLength_ + deltaSeconds);
+            if (dragStartFileDuration_ > 0.0) {
+                double maxLength = (dragStartFileDuration_ - source.offset) * source.stretchFactor;
+                newLength = std::min(newLength, maxLength);
+            }
+            source.length = newLength;
             break;
         }
         case DragMode::Move: {
             // Move: only change position (slides block, same audio content)
             source.position = std::max(0.0, dragStartPosition_ + deltaSeconds);
+            break;
+        }
+        case DragMode::StretchRight: {
+            // Stretch from right: anchor left edge, length changes, stretchFactor updates
+            double newLength = std::max(0.1, dragStartLength_ + deltaSeconds);
+            double stretchRatio = newLength / dragStartLength_;
+            double newStretchFactor = dragStartStretchFactor_ * stretchRatio;
+            newStretchFactor = juce::jlimit(0.25, 4.0, newStretchFactor);
+            // Back-compute length from clamped stretch factor
+            newLength = dragStartLength_ * (newStretchFactor / dragStartStretchFactor_);
+            source.length = newLength;
+            source.stretchFactor = newStretchFactor;
+            // offset unchanged — same audio content, just time-stretched
+            break;
+        }
+        case DragMode::StretchLeft: {
+            // Stretch from left: anchor right edge, position shifts, length changes
+            double rightEdge = dragStartPosition_ + dragStartLength_;
+            double newLength = std::max(0.1, dragStartLength_ - deltaSeconds);
+            double stretchRatio = newLength / dragStartLength_;
+            double newStretchFactor = dragStartStretchFactor_ * stretchRatio;
+            newStretchFactor = juce::jlimit(0.25, 4.0, newStretchFactor);
+            newLength = dragStartLength_ * (newStretchFactor / dragStartStretchFactor_);
+            source.length = newLength;
+            source.position = rightEdge - newLength;
+            source.stretchFactor = newStretchFactor;
+            // offset unchanged
             break;
         }
         default:
@@ -312,7 +364,11 @@ void WaveformEditorContent::mouseMove(const juce::MouseEvent& event) {
     int x = event.x;
 
     if (isNearLeftEdge(x, source) || isNearRightEdge(x, source)) {
-        setMouseCursor(juce::MouseCursor::LeftRightResizeCursor);
+        if (event.mods.isShiftDown()) {
+            setMouseCursor(juce::MouseCursor::UpDownLeftRightResizeCursor);
+        } else {
+            setMouseCursor(juce::MouseCursor::LeftRightResizeCursor);
+        }
     } else if (isInsideWaveform(x, source)) {
         setMouseCursor(juce::MouseCursor::DraggingHandCursor);
     } else {

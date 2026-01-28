@@ -284,6 +284,17 @@ void ClipManager::setAudioSourceLength(ClipId clipId, int sourceIndex, double le
     }
 }
 
+void ClipManager::setAudioSourceStretchFactor(ClipId clipId, int sourceIndex,
+                                              double stretchFactor) {
+    if (auto* clip = getClip(clipId)) {
+        if (clip->type == ClipType::Audio && sourceIndex >= 0 &&
+            sourceIndex < static_cast<int>(clip->audioSources.size())) {
+            clip->audioSources[sourceIndex].stretchFactor = juce::jlimit(0.25, 4.0, stretchFactor);
+            notifyClipPropertyChanged(clipId);
+        }
+    }
+}
+
 void ClipManager::addMidiNote(ClipId clipId, const MidiNote& note) {
     if (auto* clip = getClip(clipId)) {
         if (clip->type == ClipType::MIDI) {
