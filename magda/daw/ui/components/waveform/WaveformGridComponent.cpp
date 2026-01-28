@@ -110,12 +110,15 @@ void WaveformGridComponent::paintWaveform(juce::Graphics& g, const magda::ClipIn
 
         // Clip drawing to waveform bounds, pass verticalZoom as amplitude gain
         auto waveDrawRect = waveformRect.reduced(0, 4);
-        g.saveState();
-        g.reduceClipRegion(waveformRect);
-        thumbnailManager.drawWaveform(g, waveDrawRect, source.filePath, displayStart, displayEnd,
-                                      clip.colour.brighter(0.2f),
-                                      static_cast<float>(verticalZoom_));
-        g.restoreState();
+        if (waveDrawRect.getWidth() > 0 && waveDrawRect.getHeight() > 0) {
+            g.saveState();
+            if (g.reduceClipRegion(waveformRect)) {
+                thumbnailManager.drawWaveform(g, waveDrawRect, source.filePath, displayStart,
+                                              displayEnd, clip.colour.brighter(0.2f),
+                                              static_cast<float>(verticalZoom_));
+            }
+            g.restoreState();
+        }
     }
 
     // Draw center line

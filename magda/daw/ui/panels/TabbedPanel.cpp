@@ -93,8 +93,12 @@ void TabbedPanel::resized() {
 
         auto contentBounds = getContentBounds();
         if (activeContent_) {
-            activeContent_->setBounds(contentBounds);
-            activeContent_->setVisible(true);
+            if (contentBounds.getWidth() > 0 && contentBounds.getHeight() > 0) {
+                activeContent_->setBounds(contentBounds);
+                activeContent_->setVisible(true);
+            } else {
+                activeContent_->setVisible(false);
+            }
         }
     }
 }
