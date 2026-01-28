@@ -1,6 +1,7 @@
 #include "AudioBridge.hpp"
 
 #include <iostream>
+#include <unordered_set>
 
 #include "../engine/PluginWindowManager.hpp"
 #include "../profiling/PerformanceProfiler.hpp"
@@ -165,17 +166,39 @@ void AudioBridge::clipsChanged() {
     if (isShuttingDown_.load(std::memory_order_acquire))
         return;
 
-    // TODO: Properly reconcile added/removed clips with the engine
-    // Currently, deleting a clip in ClipManager will leave the old Tracktion clip
-    // playing/visible in the engine (and mappings may become stale).
-    // Need to detect removed clip IDs and call removeClipFromEngine, and
-    // optionally sync newly added clips. For now, clips are synced lazily
-    // when clipPropertyChanged() is called, which avoids rapid audio graph rebuilds.
+    auto& clipManager = ClipManager::getInstance();
+    const auto& clips = clipManager.getClips();
+
+    // Build set of current clip IDs for fast lookup
+    std::unordered_set<ClipId> currentClipIds;
+    for (const auto& clip : clips) {
+        currentClipIds.insert(clip.id);
+    }
+
+    // Find clips that are in the engine but no longer in ClipManager (deleted)
+    std::vector<ClipId> clipsToRemove;
+    for (const auto& [clipId, engineId] : clipIdToEngineId_) {
+        if (currentClipIds.find(clipId) == currentClipIds.end()) {
+            clipsToRemove.push_back(clipId);
+        }
+    }
+
+    // Remove deleted clips from engine
+    for (ClipId clipId : clipsToRemove) {
+        DBG("AudioBridge::clipsChanged - removing deleted clip " << clipId);
+        removeClipFromEngine(clipId);
+    }
+
+    // Sync remaining clips to engine (add new ones, update existing)
+    for (const auto& clip : clips) {
+        syncClipToEngine(clip.id);
+    }
+
+    DBG("AudioBridge::clipsChanged - synced " << clips.size() << " clips to engine");
 }
 
 void AudioBridge::clipPropertyChanged(ClipId clipId) {
     // A specific clip's properties changed - sync to engine
-    DBG("AudioBridge::clipPropertyChanged - clipId=" << clipId);
     syncClipToEngine(clipId);
 }
 
@@ -190,20 +213,23 @@ void AudioBridge::clipSelectionChanged(ClipId clipId) {
 // =============================================================================
 
 void AudioBridge::syncClipToEngine(ClipId clipId) {
-    DBG(">>> syncClipToEngine called for clipId=" << clipId);
-
     auto* clip = ClipManager::getInstance().getClip(clipId);
     if (!clip) {
         DBG("syncClipToEngine: Clip not found: " << clipId);
         return;
     }
 
-    // Only handle MIDI clips for now
-    if (clip->type != ClipType::MIDI) {
-        DBG("syncClipToEngine: Skipping non-MIDI clip");
-        return;
+    // Route to appropriate sync method by type
+    if (clip->type == ClipType::MIDI) {
+        syncMidiClipToEngine(clipId, clip);
+    } else if (clip->type == ClipType::Audio) {
+        syncAudioClipToEngine(clipId, clip);
+    } else {
+        DBG("syncClipToEngine: Unknown clip type for clip " << clipId);
     }
+}
 
+void AudioBridge::syncMidiClipToEngine(ClipId clipId, const ClipInfo* clip) {
     // Get the Tracktion AudioTrack for this MAGDA track
     auto* audioTrack = getAudioTrack(clip->trackId);
     if (!audioTrack) {
@@ -324,6 +350,153 @@ void AudioBridge::syncClipToEngine(ClipId clipId) {
 
     DBG("syncClipToEngine: Synced clip " << clipId << " with " << clip->midiNotes.size()
                                          << " notes");
+}
+
+void AudioBridge::syncAudioClipToEngine(ClipId clipId, const ClipInfo* clip) {
+    namespace te = tracktion;
+
+    // 1. Get Tracktion track
+    auto* audioTrack = getAudioTrack(clip->trackId);
+    if (!audioTrack) {
+        DBG("AudioBridge: Track not found for audio clip " << clipId);
+        return;
+    }
+
+    // 2. Check if clip already synced
+    te::WaveAudioClip* audioClipPtr = nullptr;
+    auto it = clipIdToEngineId_.find(clipId);
+
+    if (it != clipIdToEngineId_.end()) {
+        // UPDATE existing clip
+        std::string engineId = it->second;
+
+        // Find clip in track by engine ID
+        for (auto* teClip : audioTrack->getClips()) {
+            if (teClip->itemID.toString().toStdString() == engineId) {
+                audioClipPtr = dynamic_cast<te::WaveAudioClip*>(teClip);
+                break;
+            }
+        }
+
+        // If mapping is stale, clear it
+        if (!audioClipPtr) {
+            DBG("AudioBridge: Clip mapping stale, recreating for clip " << clipId);
+            clipIdToEngineId_.erase(it);
+            engineIdToClipId_.erase(engineId);
+        }
+    }
+
+    // 3. CREATE new clip if doesn't exist
+    if (!audioClipPtr) {
+        if (clip->audioSources.empty()) {
+            DBG("AudioBridge: No audio sources for clip " << clipId);
+            return;
+        }
+        const auto& source = clip->audioSources[0];
+        juce::File audioFile(source.filePath);
+        if (!audioFile.existsAsFile()) {
+            DBG("AudioBridge: Audio file not found: " << source.filePath);
+            return;
+        }
+
+        double createStart = clip->startTime + source.position;
+        double createEnd = createStart + source.length;
+        auto timeRange = te::TimeRange(te::TimePosition::fromSeconds(createStart),
+                                       te::TimePosition::fromSeconds(createEnd));
+
+        auto clipRef =
+            insertWaveClip(*audioTrack, audioFile.getFileNameWithoutExtension(), audioFile,
+                           te::ClipPosition{timeRange}, te::DeleteExistingClips::no);
+
+        if (!clipRef) {
+            DBG("AudioBridge: Failed to create WaveAudioClip");
+            return;
+        }
+
+        audioClipPtr = clipRef.get();
+
+        // Enable timestretcher at creation time (before any speedRatio changes)
+        // Must be set before setSpeedRatio() to avoid assertion failures
+        audioClipPtr->setTimeStretchMode(te::TimeStretcher::defaultMode);
+
+        // Store bidirectional mapping
+        std::string engineClipId = audioClipPtr->itemID.toString().toStdString();
+        clipIdToEngineId_[clipId] = engineClipId;
+        engineIdToClipId_[engineClipId] = clipId;
+
+        DBG("AudioBridge: Created WaveAudioClip (engine ID: " << engineClipId << ")");
+    }
+
+    // 4. UPDATE clip position/length using audio source position within clip
+    // The engine clip plays audio starting at clip->startTime + source.position,
+    // for source.length duration, reading from source.offset in the file.
+    // IMPORTANT: Clamp to clip boundaries so audio stops at visual clip end.
+    double clipStart = clip->startTime;
+    double clipEnd = clip->startTime + clip->length;
+    double engineStart = clipStart;
+    double engineEnd = clipEnd;
+    double engineOffset = 0.0;
+
+    if (!clip->audioSources.empty()) {
+        const auto& source = clip->audioSources[0];
+        double sourceStart = clip->startTime + source.position;
+        double sourceEnd = sourceStart + source.length;
+
+        // Clamp engine boundaries to clip boundaries
+        // Audio should only play within the visible clip region
+        engineStart = std::max(sourceStart, clipStart);
+        engineEnd = std::min(sourceEnd, clipEnd);
+
+        // Adjust offset if source starts before clip (left side clipped)
+        if (sourceStart < clipStart) {
+            double clippedTime = clipStart - sourceStart;
+            engineOffset = source.offset + (clippedTime / source.stretchFactor);
+        } else {
+            engineOffset = source.offset;
+        }
+    }
+
+    auto currentPos = audioClipPtr->getPosition();
+    auto currentStart = currentPos.getStart().inSeconds();
+    auto currentEnd = currentPos.getEnd().inSeconds();
+
+    // Use setPosition() to update start and length atomically (reduces audio glitches)
+    bool needsPositionUpdate =
+        std::abs(currentStart - engineStart) > 0.001 || std::abs(currentEnd - engineEnd) > 0.001;
+
+    if (needsPositionUpdate) {
+        auto newTimeRange = te::TimeRange(te::TimePosition::fromSeconds(engineStart),
+                                          te::TimePosition::fromSeconds(engineEnd));
+        audioClipPtr->setPosition(te::ClipPosition{newTimeRange, currentPos.getOffset()});
+    }
+
+    // 5. UPDATE audio offset (trim point in file)
+    auto currentOffset = audioClipPtr->getPosition().getOffset().inSeconds();
+    if (std::abs(currentOffset - engineOffset) > 0.001) {
+        audioClipPtr->setOffset(te::TimeDuration::fromSeconds(engineOffset));
+    }
+
+    // 6. UPDATE speed ratio for time-stretching
+    // TE speedRatio: 1.0 = normal, 2.0 = 2x faster, 0.5 = 2x slower
+    // Our stretchFactor: 1.0 = normal, 2.0 = 2x slower, 0.5 = 2x faster
+    // Mapping: TE speedRatio = 1.0 / stretchFactor
+    if (!clip->audioSources.empty()) {
+        const auto& source = clip->audioSources[0];
+        double teSpeedRatio = 1.0 / source.stretchFactor;
+        double currentSpeedRatio = audioClipPtr->getSpeedRatio();
+
+        if (std::abs(currentSpeedRatio - teSpeedRatio) > 0.001) {
+            // Ensure timestretcher is enabled (may not be set for pre-existing clips)
+            if (audioClipPtr->getTimeStretchMode() == te::TimeStretcher::disabled) {
+                audioClipPtr->setTimeStretchMode(te::TimeStretcher::defaultMode);
+            }
+            // Disable autoTempo which blocks setSpeedRatio in AudioClipBase
+            if (audioClipPtr->getAutoTempo()) {
+                audioClipPtr->setAutoTempo(false);
+            }
+            audioClipPtr->setSpeedRatio(teSpeedRatio);
+        }
+    }
 }
 
 void AudioBridge::removeClipFromEngine(ClipId clipId) {

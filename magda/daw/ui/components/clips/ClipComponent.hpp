@@ -5,6 +5,7 @@
 #include "core/ClipInfo.hpp"
 #include "core/ClipManager.hpp"
 #include "core/ClipTypes.hpp"
+#include "utils/DragThrottle.hpp"
 
 namespace magda {
 
@@ -87,7 +88,7 @@ class ClipComponent : public juce::Component, public ClipManagerListener {
     bool isMarqueeHighlighted_ = false;
 
     // Interaction state
-    enum class DragMode { None, Move, ResizeLeft, ResizeRight };
+    enum class DragMode { None, Move, ResizeLeft, ResizeRight, StretchLeft, StretchRight };
     DragMode dragMode_ = DragMode::None;
 
     // Drag state
@@ -101,6 +102,11 @@ class ClipComponent : public juce::Component, public ClipManagerListener {
     double previewStartTime_ = 0.0;
     double previewLength_ = 0.0;
     bool isDragging_ = false;
+    bool isCommitting_ = false;  // True during mouseUp commit phase
+
+    // Stretch state
+    double dragStartStretchFactor_ = 1.0;
+    DragThrottle stretchThrottle_{50};
 
     // Alt+drag duplicate state
     bool isDuplicating_ = false;
@@ -128,7 +134,7 @@ class ClipComponent : public juce::Component, public ClipManagerListener {
     // Interaction helpers
     bool isOnLeftEdge(int x) const;
     bool isOnRightEdge(int x) const;
-    void updateCursor(bool isAltDown = false);
+    void updateCursor(bool isAltDown = false, bool isShiftDown = false);
 
     // Helper to get current clip info
     const ClipInfo* getClipInfo() const;

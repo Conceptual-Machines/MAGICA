@@ -1,5 +1,7 @@
 #include "TrackContentPanel.hpp"
 
+#include <juce_audio_formats/juce_audio_formats.h>
+
 #include <functional>
 
 #include "../../panels/state/PanelController.hpp"
@@ -193,6 +195,19 @@ void TrackContentPanel::paintOverChildren(juce::Graphics& g) {
 
     // Draw marquee selection rectangle on top of everything
     paintMarqueeRect(g);
+
+    // Draw drop indicator for file drag-and-drop
+    if (showDropIndicator_ && dropTargetTrackIndex_ >= 0 &&
+        dropTargetTrackIndex_ < static_cast<int>(trackLanes.size())) {
+        int dropX = timeToPixel(dropInsertTime_);
+        int trackY = getTrackYPosition(dropTargetTrackIndex_);
+        int trackHeight = getTrackHeight(dropTargetTrackIndex_);
+
+        // Draw yellow vertical line to indicate drop position
+        g.setColour(juce::Colours::yellow.withAlpha(0.8f));
+        g.drawLine(static_cast<float>(dropX), static_cast<float>(trackY), static_cast<float>(dropX),
+                   static_cast<float>(trackY + trackHeight), 2.0f);
+    }
 }
 
 void TrackContentPanel::resized() {
@@ -895,27 +910,31 @@ void TrackContentPanel::rebuildClipComponents() {
         };
 
         clipComp->onClipDoubleClicked = [](ClipId id) {
-            // Open the appropriate editor in the bottom panel
+            // Toggle the appropriate editor in the bottom panel
             const auto* clip = ClipManager::getInstance().getClip(id);
             if (!clip)
                 return;
 
-            // Ensure clip is selected before opening editor
-            // (onClipSelected may have already been called, but this ensures it)
             ClipManager::getInstance().setSelectedClip(id);
 
             auto& panelController = daw::ui::PanelController::getInstance();
 
-            // Expand the bottom panel if collapsed
-            panelController.setCollapsed(daw::ui::PanelLocation::Bottom, false);
+            // Toggle: if bottom panel is already open, collapse it; otherwise expand
+            bool isCollapsed =
+                panelController.getPanelState(daw::ui::PanelLocation::Bottom).collapsed;
+            if (isCollapsed) {
+                panelController.setCollapsed(daw::ui::PanelLocation::Bottom, false);
 
-            // Switch to the appropriate editor based on clip type
-            if (clip->type == ClipType::MIDI) {
-                panelController.setActiveTabByType(daw::ui::PanelLocation::Bottom,
-                                                   daw::ui::PanelContentType::PianoRoll);
+                // Switch to the appropriate editor based on clip type
+                if (clip->type == ClipType::MIDI) {
+                    panelController.setActiveTabByType(daw::ui::PanelLocation::Bottom,
+                                                       daw::ui::PanelContentType::PianoRoll);
+                } else {
+                    panelController.setActiveTabByType(daw::ui::PanelLocation::Bottom,
+                                                       daw::ui::PanelContentType::WaveformEditor);
+                }
             } else {
-                panelController.setActiveTabByType(daw::ui::PanelLocation::Bottom,
-                                                   daw::ui::PanelContentType::WaveformEditor);
+                panelController.setCollapsed(daw::ui::PanelLocation::Bottom, true);
             }
         };
 
@@ -1973,6 +1992,110 @@ void TrackContentPanel::updateAutomationLanePositions() {
 
         entry.component->setBounds(0, y, getWidth(), height);
         entry.component->setPixelsPerSecond(currentZoom);
+    }
+}
+
+// =============================================================================
+// File Drag-and-Drop Implementation
+// =============================================================================
+
+bool TrackContentPanel::isInterestedInFileDrag(const juce::StringArray& files) {
+    // Accept if any file is an audio file
+    for (const auto& file : files) {
+        if (file.endsWithIgnoreCase(".wav") || file.endsWithIgnoreCase(".aiff") ||
+            file.endsWithIgnoreCase(".aif") || file.endsWithIgnoreCase(".mp3") ||
+            file.endsWithIgnoreCase(".ogg") || file.endsWithIgnoreCase(".flac")) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void TrackContentPanel::fileDragEnter(const juce::StringArray& files, int x, int y) {
+    dropInsertTime_ = pixelToTime(x);
+    dropTargetTrackIndex_ = getTrackIndexAtY(y);
+    showDropIndicator_ = true;
+    repaint();
+}
+
+void TrackContentPanel::fileDragMove(const juce::StringArray& files, int x, int y) {
+    dropInsertTime_ = pixelToTime(x);
+    dropTargetTrackIndex_ = getTrackIndexAtY(y);
+    repaint();
+}
+
+void TrackContentPanel::fileDragExit(const juce::StringArray& files) {
+    showDropIndicator_ = false;
+    repaint();
+}
+
+void TrackContentPanel::filesDropped(const juce::StringArray& files, int x, int y) {
+    showDropIndicator_ = false;
+    repaint();
+
+    // Determine drop position
+    double dropTime = pixelToTime(x);
+    int trackIndex = getTrackIndexAtY(y);
+
+    if (trackIndex < 0 || trackIndex >= static_cast<int>(visibleTrackIds_.size())) {
+        DBG("TrackContentPanel: Invalid drop track index");
+        return;
+    }
+
+    TrackId targetTrackId = visibleTrackIds_[trackIndex];
+    auto* track = TrackManager::getInstance().getTrack(targetTrackId);
+
+    if (!track) {
+        DBG("TrackContentPanel: Track not found for drop");
+        return;
+    }
+
+    // Only allow drops on audio tracks
+    if (track->type != TrackType::Audio) {
+        juce::AlertWindow::showMessageBoxAsync(juce::AlertWindow::WarningIcon, "Drop Failed",
+                                               "Audio files can only be dropped on audio tracks.");
+        return;
+    }
+
+    // Import audio files at drop position
+    auto& clipManager = ClipManager::getInstance();
+    double currentTime = dropTime;
+    int importedCount = 0;
+
+    juce::AudioFormatManager formatManager;
+    formatManager.registerBasicFormats();
+
+    for (const auto& filePath : files) {
+        // Filter audio files only
+        if (!filePath.endsWithIgnoreCase(".wav") && !filePath.endsWithIgnoreCase(".aiff") &&
+            !filePath.endsWithIgnoreCase(".aif") && !filePath.endsWithIgnoreCase(".mp3") &&
+            !filePath.endsWithIgnoreCase(".ogg") && !filePath.endsWithIgnoreCase(".flac")) {
+            continue;
+        }
+
+        juce::File audioFile(filePath);
+        if (!audioFile.existsAsFile())
+            continue;
+
+        // Read actual file duration
+        double fileDuration = 4.0;  // fallback if reader fails
+        if (auto reader = std::unique_ptr<juce::AudioFormatReader>(
+                formatManager.createReaderFor(audioFile))) {
+            fileDuration = static_cast<double>(reader->lengthInSamples) / reader->sampleRate;
+        }
+
+        // Create clip via command
+        auto cmd = std::make_unique<CreateClipCommand>(ClipType::Audio, targetTrackId, currentTime,
+                                                       fileDuration, filePath.toStdString());
+
+        UndoManager::getInstance().executeCommand(std::move(cmd));
+
+        currentTime += fileDuration + 0.5;  // Space clips
+        importedCount++;
+    }
+
+    if (importedCount > 0) {
+        DBG("TrackContentPanel: Imported " << importedCount << " audio files");
     }
 }
 

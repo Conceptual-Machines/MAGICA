@@ -109,6 +109,7 @@ set(DAW_CORE_SOURCES
     engine/PluginWindowManager.cpp
     # Audio integration
     audio/AudioBridge.cpp
+    audio/AudioThumbnailManager.cpp
     audio/DeviceProcessor.cpp
     audio/MidiBridge.cpp
     # TODO: Custom synth library (SimpleSynthPlugin.cpp) - for future implementation
@@ -190,6 +191,8 @@ set(DAW_UI_SOURCES
     ui/components/pianoroll/PianoRollGridComponent.cpp
     ui/components/pianoroll/PianoRollKeyboard.cpp
     ui/components/pianoroll/VelocityLaneComponent.cpp
+    # Components - Waveform
+    ui/components/waveform/WaveformGridComponent.cpp
     # Components - Common Curve Editor
     ui/components/common/curve/CurveEditorBase.cpp
     ui/components/common/curve/CurvePointComponent.cpp
@@ -338,6 +341,8 @@ set(DAW_HEADERS
     ui/components/pianoroll/PianoRollGridComponent.hpp
     ui/components/pianoroll/PianoRollKeyboard.hpp
     ui/components/pianoroll/VelocityLaneComponent.hpp
+    # Components - Waveform
+    ui/components/waveform/WaveformGridComponent.hpp
     # Components - Mixer
     ui/components/mixer/MasterChannelStrip.hpp
     ui/components/mixer/RoutingSelector.hpp
@@ -407,10 +412,12 @@ target_link_libraries(magda_daw
 )
 
 # Enable plugin hosting for external VST3/AU plugins
+# Enable SoundTouch time stretching for audio clip time/pitch manipulation
 target_compile_definitions(magda_daw
     PUBLIC
     JUCE_PLUGINHOST_VST3=1
     JUCE_PLUGINHOST_AU=1
+    TRACKTION_ENABLE_TIMESTRETCH_SOUNDTOUCH=1
 )
 
 # Link required libraries for DAW application
@@ -435,6 +442,7 @@ target_compile_definitions(magda_daw_app
     PRIVATE
     JUCE_PLUGINHOST_VST3=1
     JUCE_PLUGINHOST_AU=1
+    TRACKTION_ENABLE_TIMESTRETCH_SOUNDTOUCH=1
 )
 
 # Include directories for DAW library
@@ -472,6 +480,7 @@ target_include_directories(magda_daw_app
     ${CMAKE_CURRENT_SOURCE_DIR}/ui/components/tracks
     ${CMAKE_CURRENT_SOURCE_DIR}/ui/components/clips
     ${CMAKE_CURRENT_SOURCE_DIR}/ui/components/pianoroll
+    ${CMAKE_CURRENT_SOURCE_DIR}/ui/components/waveform
     ${CMAKE_CURRENT_SOURCE_DIR}/ui/components/chain
     ${CMAKE_CURRENT_SOURCE_DIR}/ui/components/automation
     ${CMAKE_CURRENT_SOURCE_DIR}/ui/components/common/curve

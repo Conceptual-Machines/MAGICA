@@ -4,6 +4,7 @@
 #include <vector>
 
 #include "ClipInfo.hpp"
+#include "ClipOperations.hpp"
 #include "ClipTypes.hpp"
 #include "TrackTypes.hpp"
 
@@ -155,7 +156,69 @@ class ClipManager {
     void setClipLoopLength(ClipId clipId, double lengthBeats);
 
     // Audio-specific
-    void setClipAudioOffset(ClipId clipId, double offset);
+    /** @brief Set the position of an audio source within its clip container */
+    void setAudioSourcePosition(ClipId clipId, int sourceIndex, double position);
+    /** @brief Set the timeline length of an audio source */
+    void setAudioSourceLength(ClipId clipId, int sourceIndex, double length);
+    /** @brief Set the time-stretch factor of an audio source (1.0 = original speed) */
+    void setAudioSourceStretchFactor(ClipId clipId, int sourceIndex, double stretchFactor);
+
+    // ========================================================================
+    // Content-Level Operations (Editor Operations)
+    // ========================================================================
+    //
+    // These methods wrap ClipOperations and provide automatic notification.
+    // Use these for:
+    // - Command pattern (undo/redo)
+    // - External callers
+    // - Non-interactive operations
+    //
+    // For interactive operations (drag), components may access clips directly
+    // via getClip() and use ClipOperations for performance, then call
+    // forceNotifyClipPropertyChanged() once on mouseUp.
+    //
+    // ========================================================================
+
+    /**
+     * @brief Trim/extend audio source from left edge
+     * @param trimAmount Amount to trim in timeline seconds (positive=trim, negative=extend)
+     * @param fileDuration Total file duration for constraint checking (0 = no constraint)
+     */
+    void trimAudioSourceLeft(ClipId clipId, int sourceIndex, double trimAmount,
+                             double fileDuration = 0.0);
+
+    /**
+     * @brief Trim/extend audio source from right edge
+     * @param trimAmount Amount to trim in timeline seconds (positive=trim, negative=extend)
+     * @param fileDuration Total file duration for constraint checking (0 = no constraint)
+     */
+    void trimAudioSourceRight(ClipId clipId, int sourceIndex, double trimAmount,
+                              double fileDuration = 0.0);
+
+    /**
+     * @brief Stretch audio source from left edge (editor operation)
+     * @param newLength New timeline length
+     * @param oldLength Original timeline length at drag start
+     * @param originalPosition Original position at drag start
+     * @param originalStretchFactor Original stretch factor at drag start
+     */
+    void stretchAudioSourceLeft(ClipId clipId, int sourceIndex, double newLength, double oldLength,
+                                double originalPosition, double originalStretchFactor);
+
+    /**
+     * @brief Stretch audio source from right edge (editor operation)
+     * @param newLength New timeline length
+     * @param oldLength Original timeline length at drag start
+     * @param originalStretchFactor Original stretch factor at drag start
+     */
+    void stretchAudioSourceRight(ClipId clipId, int sourceIndex, double newLength, double oldLength,
+                                 double originalStretchFactor);
+
+    /**
+     * @brief Move audio source within clip container (editor operation)
+     * @param newPosition New position within clip (clamped to >= 0.0)
+     */
+    void moveAudioSource(ClipId clipId, int sourceIndex, double newPosition);
 
     // MIDI-specific
     void addMidiNote(ClipId clipId, const MidiNote& note);

@@ -254,6 +254,12 @@ bool TracktionEngineWrapper::initialize() {
             std::cout << "Tracktion Engine initialized (no Edit created)" << std::endl;
         }
 
+        // Ensure devicesLoading_ is cleared so transport isn't blocked.
+        // The async changeListenerCallback may not fire if no MIDI devices are present.
+        if (devicesLoading_) {
+            devicesLoading_ = false;
+        }
+
         return currentEdit_ != nullptr;
 
     } catch (const std::exception& e) {
@@ -385,22 +391,29 @@ void TracktionEngineWrapper::changeListenerCallback(juce::ChangeBroadcaster* sou
             }
         }
 
-        // If we have MIDI devices and a playback context, reallocate to include them
-        if (hasMidiDevices && currentEdit_) {
+        // Only reallocate playback context when devices are added
+        // (avoids unnecessary reallocation on device removal or property changes)
+        if (currentEdit_) {
             if (auto* ctx = currentEdit_->getCurrentPlaybackContext()) {
                 int inputsBefore = static_cast<int>(ctx->getAllInputs().size());
-                ctx->reallocate();
-                int inputsAfter = static_cast<int>(ctx->getAllInputs().size());
 
-                if (inputsAfter > inputsBefore) {
-                    DBG("Device change: Reallocated playback context");
-                    DBG("  Inputs: " << inputsBefore << " -> " << inputsAfter);
+                // Count current available devices to detect additions
+                int totalDevices = static_cast<int>(dm.getMidiInDevices().size()) +
+                                   static_cast<int>(dm.getWaveInputDevices().size()) +
+                                   static_cast<int>(dm.getWaveOutputDevices().size());
 
-                    // Notify AudioBridge that MIDI devices are now available
-                    // so it can apply any pending MIDI routes
-                    if (audioBridge_) {
-                        audioBridge_->onMidiDevicesAvailable();
-                    }
+                if (totalDevices > lastKnownDeviceCount_) {
+                    ctx->reallocate();
+                    int inputsAfter = static_cast<int>(ctx->getAllInputs().size());
+                    DBG("Device change: Reallocated playback context (inputs: "
+                        << inputsBefore << " -> " << inputsAfter << ")");
+                }
+                lastKnownDeviceCount_ = totalDevices;
+
+                // Notify AudioBridge that MIDI devices are now available
+                // so it can apply any pending MIDI routes
+                if (hasMidiDevices && audioBridge_) {
+                    audioBridge_->onMidiDevicesAvailable();
                 }
             }
         }
@@ -492,10 +505,28 @@ void TracktionEngineWrapper::play() {
     if (currentEdit_) {
         auto& transport = currentEdit_->getTransport();
 
-        // Tracktion Engine handles PDC (Plugin Delay Compensation) internally
-        // by analyzing the playback graph and shifting audio streams accordingly.
-        // Notes are stored clip-relative, so they play at the correct absolute time
-        // regardless of PDC. No pre-roll needed!
+        // Detect stale audio device (e.g. CoreAudio daemon stuck after sleep)
+        // Check multiple times to avoid false positives from momentary zero readings
+        auto& jdm = engine_->getDeviceManager().deviceManager;
+        auto* device = jdm.getCurrentAudioDevice();
+        if (device && device->isPlaying() && jdm.getCpuUsage() == 0.0) {
+            int zeroCount = 1;
+            for (int i = 0; i < 2; ++i) {
+                juce::Thread::sleep(50);
+                if (jdm.getCpuUsage() == 0.0)
+                    ++zeroCount;
+            }
+            if (zeroCount >= 3) {
+                juce::AlertWindow::showMessageBoxAsync(
+                    juce::MessageBoxIconType::WarningIcon, "Audio Device Not Responding",
+                    "The audio device '" + device->getName() +
+                        "' is not processing audio.\n\n"
+                        "Try disconnecting and reconnecting your audio interface, "
+                        "or restarting the audio driver.",
+                    "OK");
+            }
+        }
+
         transport.play(false);
         std::cout << "Playback started" << std::endl;
     }
@@ -986,9 +1017,59 @@ std::string TracktionEngineWrapper::addMidiClip(const std::string& track_id, dou
 
 std::string TracktionEngineWrapper::addAudioClip(const std::string& track_id, double start_time,
                                                  const std::string& audio_file_path) {
-    // TODO: Implement audio clip creation
+    // 1. Find Tracktion AudioTrack
+    auto* track = findTrackById(track_id);
+    if (!track || !currentEdit_) {
+        DBG("TracktionEngineWrapper: Track not found or no edit: " << track_id);
+        return "";
+    }
+
+    auto* audioTrack = dynamic_cast<tracktion::AudioTrack*>(track);
+    if (!audioTrack) {
+        DBG("TracktionEngineWrapper: Track is not an AudioTrack");
+        return "";
+    }
+
+    // 2. Validate audio file exists
+    juce::File audioFile(audio_file_path);
+    if (!audioFile.existsAsFile()) {
+        DBG("TracktionEngineWrapper: Audio file not found: " << audio_file_path);
+        return "";
+    }
+
+    // 3. Get audio file metadata to determine length
+    namespace te = tracktion;
+    te::AudioFile teAudioFile(audioTrack->edit.engine, audioFile);
+    if (!teAudioFile.isValid()) {
+        DBG("TracktionEngineWrapper: Invalid audio file: " << audio_file_path);
+        return "";
+    }
+
+    double fileLengthSeconds = teAudioFile.getLength();
+
+    // 4. Create time range for clip position
+    auto timeRange = te::TimeRange(te::TimePosition::fromSeconds(start_time),
+                                   te::TimePosition::fromSeconds(start_time + fileLengthSeconds));
+
+    // 5. Insert WaveAudioClip onto track
+    auto clipPtr =
+        insertWaveClip(*audioTrack,
+                       audioFile.getFileNameWithoutExtension(),  // clip name
+                       audioFile, te::ClipPosition{timeRange}, te::DeleteExistingClips::no);
+
+    if (!clipPtr) {
+        DBG("TracktionEngineWrapper: Failed to create WaveAudioClip");
+        juce::AlertWindow::showMessageBoxAsync(
+            juce::MessageBoxIconType::WarningIcon, "Audio Clip Error",
+            "Failed to create audio clip from:\n" + juce::String(audio_file_path));
+        return "";
+    }
+
+    // 6. Store in clip map with generated ID
     auto clipId = generateClipId();
-    std::cout << "Created audio clip (stub): " << clipId << std::endl;
+    clipMap_[clipId] = clipPtr.get();  // Store raw pointer
+
+    DBG("TracktionEngineWrapper: Created audio clip '" << clipId << "' from " << audio_file_path);
     return clipId;
 }
 

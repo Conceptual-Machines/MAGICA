@@ -1,6 +1,7 @@
 # Test sources
 set(TEST_SOURCES
     test_audio_bridge.cpp
+    test_audio_clip_stretch.cpp
     test_command.cpp
     test_interfaces.cpp
     test_midi_clip_sync.cpp
@@ -11,6 +12,8 @@ set(TEST_SOURCES
     test_plugin_format.cpp
     test_plugin_window_manager.cpp
     test_device_parameter_pagination.cpp
+    test_waveform_editor_absolute_mode.cpp
+    test_clip_resize_operations.cpp
 )
 
 # Create test executable
