@@ -74,10 +74,13 @@ void ClipComponent::paintAudioClip(juce::Graphics& g, const ClipInfo& clip,
         auto& thumbnailManager = AudioThumbnailManager::getInstance();
 
         // Calculate the sub-rectangle for this audio source within the clip.
-        // The component's pixel width represents clip.length seconds, so we
-        // map source.position and source.length to pixel coordinates.
+        // During drag, the component width reflects previewLength_ (not yet committed),
+        // so use that to keep the waveform correctly sized.
+        double effectiveLength =
+            (isDragging_ && previewLength_ > 0.0) ? previewLength_ : clip.length;
         double pixelsPerSecond =
-            (clip.length > 0.0) ? static_cast<double>(waveformArea.getWidth()) / clip.length : 0.0;
+            (effectiveLength > 0.0) ? static_cast<double>(waveformArea.getWidth()) / effectiveLength
+                                    : 0.0;
         int sourceX = waveformArea.getX() + static_cast<int>(source.position * pixelsPerSecond);
         int sourceWidth = static_cast<int>(source.length * pixelsPerSecond);
 

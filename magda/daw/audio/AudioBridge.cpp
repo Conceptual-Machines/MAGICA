@@ -382,9 +382,10 @@ void AudioBridge::syncAudioClipToEngine(ClipId clipId, const ClipInfo* clip) {
             return;
         }
 
-        auto timeRange =
-            te::TimeRange(te::TimePosition::fromSeconds(clip->startTime),
-                          te::TimePosition::fromSeconds(clip->startTime + clip->length));
+        double createStart = clip->startTime + source.position;
+        double createEnd = createStart + source.length;
+        auto timeRange = te::TimeRange(te::TimePosition::fromSeconds(createStart),
+                                       te::TimePosition::fromSeconds(createEnd));
 
         auto clipRef =
             insertWaveClip(*audioTrack, audioFile.getFileNameWithoutExtension(), audioFile,
@@ -405,25 +406,36 @@ void AudioBridge::syncAudioClipToEngine(ClipId clipId, const ClipInfo* clip) {
         DBG("AudioBridge: Created WaveAudioClip (engine ID: " << engineClipId << ")");
     }
 
-    // 4. UPDATE clip position/length (if changed)
+    // 4. UPDATE clip position/length using audio source position within clip
+    // The engine clip plays audio starting at clip->startTime + source.position,
+    // for source.length duration, reading from source.offset in the file.
+    double engineStart = clip->startTime;
+    double engineEnd = clip->startTime + clip->length;
+    double engineOffset = 0.0;
+
+    if (!clip->audioSources.empty()) {
+        const auto& source = clip->audioSources[0];
+        engineStart = clip->startTime + source.position;
+        engineEnd = engineStart + source.length;
+        engineOffset = source.offset;
+    }
+
     auto currentStart = audioClipPtr->getPosition().getStart().inSeconds();
     auto currentEnd = audioClipPtr->getPosition().getEnd().inSeconds();
 
-    if (std::abs(currentStart - clip->startTime) > 0.001) {
-        audioClipPtr->setStart(te::TimePosition::fromSeconds(clip->startTime),
+    if (std::abs(currentStart - engineStart) > 0.001) {
+        audioClipPtr->setStart(te::TimePosition::fromSeconds(engineStart),
                                true,    // preserve offset
                                false);  // don't snap to beat
     }
 
-    if (std::abs(currentEnd - (clip->startTime + clip->length)) > 0.001) {
-        audioClipPtr->setEnd(te::TimePosition::fromSeconds(clip->startTime + clip->length),
+    if (std::abs(currentEnd - engineEnd) > 0.001) {
+        audioClipPtr->setEnd(te::TimePosition::fromSeconds(engineEnd),
                              false);  // don't snap to beat
     }
 
-    // 5. UPDATE audio offset (trim point)
-    if (!clip->audioSources.empty()) {
-        audioClipPtr->setOffset(te::TimeDuration::fromSeconds(clip->audioSources[0].offset));
-    }
+    // 5. UPDATE audio offset (trim point in file)
+    audioClipPtr->setOffset(te::TimeDuration::fromSeconds(engineOffset));
 
     DBG("AudioBridge: Synced audio clip " << clipId << " to engine");
 }
