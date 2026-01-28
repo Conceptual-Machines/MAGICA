@@ -62,6 +62,12 @@ class WaveformGridComponent : public juce::Component {
      */
     void updateGridSize();
 
+    /**
+     * @brief Update clip position and length without full reload
+     * Used when clip is moved on timeline to avoid feedback loops
+     */
+    void updateClipPosition(double startTime, double length);
+
     // ========================================================================
     // Coordinate Conversion
     // ========================================================================

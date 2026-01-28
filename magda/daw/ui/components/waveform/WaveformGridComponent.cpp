@@ -161,6 +161,13 @@ void WaveformGridComponent::setHorizontalZoom(double pixelsPerSecond) {
     }
 }
 
+void WaveformGridComponent::updateClipPosition(double startTime, double length) {
+    clipStartTime_ = startTime;
+    clipLength_ = length;
+    updateGridSize();
+    repaint();
+}
+
 void WaveformGridComponent::setScrollOffset(int x, int y) {
     scrollOffsetX_ = x;
     scrollOffsetY_ = y;
