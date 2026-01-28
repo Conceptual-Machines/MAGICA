@@ -49,10 +49,18 @@ class ClipOperations {
      */
     static inline void resizeContainerFromLeft(ClipInfo& clip, double newLength) {
         newLength = juce::jmax(MIN_CLIP_LENGTH, newLength);
+        double oldStartTime = clip.startTime;
         double lengthDelta = clip.length - newLength;
         clip.startTime = juce::jmax(0.0, clip.startTime + lengthDelta);
+        double actualStartDelta = clip.startTime - oldStartTime;
         clip.length = newLength;
-        // Audio sources NOT modified - they stay at same absolute timeline position
+
+        // Compensate audio source positions so they stay at the same absolute
+        // timeline position. source.position is relative to clip.startTime,
+        // so when clip start moves, we adjust by the opposite amount.
+        for (auto& source : clip.audioSources) {
+            source.position -= actualStartDelta;
+        }
     }
 
     /**

@@ -74,58 +74,55 @@ void ClipComponent::paintAudioClip(juce::Graphics& g, const ClipInfo& clip,
         const auto& source = clip.audioSources[0];
         auto& thumbnailManager = AudioThumbnailManager::getInstance();
 
-        // Calculate the sub-rectangle for this audio source within the clip.
-        // For resize operations (absolute mode): use cached zoom level to prevent stretching
-        // For stretch operations: recalculate to allow visual stretching
-        double pixelsPerSecond = 0.0;
+        // Calculate visible region and file times directly in time domain
+        // to avoid integer rounding errors from pixel→time→pixel conversions.
+        double clipDisplayLength = clip.length;
         bool isResizeMode =
             (dragMode_ == DragMode::ResizeLeft || dragMode_ == DragMode::ResizeRight);
         bool isStretchMode =
             (dragMode_ == DragMode::StretchLeft || dragMode_ == DragMode::StretchRight);
 
-        if (isDragging_ && isResizeMode && dragStartPixelsPerSecond_ > 0.0) {
-            // Absolute mode resize: maintain original zoom level (no stretching)
-            pixelsPerSecond = dragStartPixelsPerSecond_;
-        } else if (isDragging_ && isStretchMode && previewLength_ > 0.0) {
-            // Stretch mode: recalculate to allow waveform stretching
-            pixelsPerSecond = static_cast<double>(waveformArea.getWidth()) / previewLength_;
-        } else {
-            // Not dragging: use current clip length
-            pixelsPerSecond = (clip.length > 0.0)
-                                  ? static_cast<double>(waveformArea.getWidth()) / clip.length
-                                  : 0.0;
+        if (isDragging_ && (isResizeMode || isStretchMode) && previewLength_ > 0.0) {
+            clipDisplayLength = previewLength_;
         }
-        int sourceX = waveformArea.getX() + static_cast<int>(source.position * pixelsPerSecond);
-        int sourceWidth = static_cast<int>(source.length * pixelsPerSecond);
 
-        // Calculate the full (uncropped) source rectangle
-        auto fullSourceRect = juce::Rectangle<int>(sourceX, waveformArea.getY(), sourceWidth,
-                                                   waveformArea.getHeight());
+        double pixelsPerSecond =
+            (clipDisplayLength > 0.0)
+                ? static_cast<double>(waveformArea.getWidth()) / clipDisplayLength
+                : 0.0;
 
-        // Clip the source rect to the waveform area bounds
-        auto sourceRect = fullSourceRect.getIntersection(waveformArea);
-
-        if (!sourceRect.isEmpty() && sourceWidth > 0) {
-            double fileWindow = source.length / source.stretchFactor;
-            double displayStart = source.offset;
-            double displayEnd = source.offset + fileWindow;
-
-            // Adjust display range if source was clipped to prevent stretching
-            if (sourceRect != fullSourceRect) {
-                // Calculate how much was clipped from left and right (in pixels)
-                int leftClip = sourceRect.getX() - fullSourceRect.getX();
-                int rightClip = fullSourceRect.getRight() - sourceRect.getRight();
-
-                // Convert pixel offsets to time offsets within the file
-                double leftClipTime = (leftClip / static_cast<double>(sourceWidth)) * fileWindow;
-                double rightClipTime = (rightClip / static_cast<double>(sourceWidth)) * fileWindow;
-
-                displayStart += leftClipTime;
-                displayEnd -= rightClipTime;
+        if (pixelsPerSecond > 0.0) {
+            // During left resize drag, simulate the source position adjustment
+            // that will happen on commit. The clip start moves, so source.position
+            // must shift by (previewLength - dragStartLength) to stay anchored.
+            double displaySourcePosition = source.position;
+            if (isDragging_ && dragMode_ == DragMode::ResizeLeft) {
+                displaySourcePosition += (previewLength_ - dragStartLength_);
             }
 
-            thumbnailManager.drawWaveform(g, sourceRect, source.filePath, displayStart, displayEnd,
-                                          clip.colour.brighter(0.2f));
+            // Compute visible time region (clip-relative) by clamping source to clip bounds
+            double visibleStart = juce::jmax(displaySourcePosition, 0.0);
+            double visibleEnd =
+                juce::jmin(displaySourcePosition + source.length, clipDisplayLength);
+
+            if (visibleEnd > visibleStart) {
+                // Convert visible region to pixels
+                int drawX =
+                    waveformArea.getX() + static_cast<int>(visibleStart * pixelsPerSecond + 0.5);
+                int drawRight =
+                    waveformArea.getX() + static_cast<int>(visibleEnd * pixelsPerSecond + 0.5);
+                auto drawRect = juce::Rectangle<int>(drawX, waveformArea.getY(), drawRight - drawX,
+                                                     waveformArea.getHeight());
+
+                // Compute file time range directly from visible time region
+                double fileStart =
+                    source.offset + (visibleStart - displaySourcePosition) / source.stretchFactor;
+                double fileEnd =
+                    source.offset + (visibleEnd - displaySourcePosition) / source.stretchFactor;
+
+                thumbnailManager.drawWaveform(g, drawRect, source.filePath, fileStart, fileEnd,
+                                              clip.colour.brighter(0.2f));
+            }
         }
     } else {
         // Fallback: draw placeholder if no audio source
@@ -626,8 +623,15 @@ void ClipComponent::mouseUp(const juce::MouseEvent& e) {
     }
 
     if (isDragging_ && dragMode_ != DragMode::None) {
+        // Clear drag state BEFORE committing so that clipPropertyChanged notifications
+        // aren't skipped — this allows the parent to relayout the component to match
+        // the committed clip data, preventing a flash of stretched waveform.
+        auto savedDragMode = dragMode_;
+        dragMode_ = DragMode::None;
+        isDragging_ = false;
+
         // Now apply snapping and commit to ClipManager
-        switch (dragMode_) {
+        switch (savedDragMode) {
             case DragMode::Move: {
                 double finalStartTime = previewStartTime_;
                 if (snapTimeToGrid) {
@@ -755,10 +759,10 @@ void ClipComponent::mouseUp(const juce::MouseEvent& e) {
             default:
                 break;
         }
+    } else {
+        dragMode_ = DragMode::None;
+        isDragging_ = false;
     }
-
-    dragMode_ = DragMode::None;
-    isDragging_ = false;
 }
 
 void ClipComponent::mouseMove(const juce::MouseEvent& e) {
