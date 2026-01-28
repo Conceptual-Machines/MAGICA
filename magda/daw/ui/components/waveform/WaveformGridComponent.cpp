@@ -44,10 +44,7 @@ void WaveformGridComponent::paintWaveform(juce::Graphics& g, const magda::ClipIn
     int positionPixels = timeToPixel(displayStartTime);
     int widthPixels = static_cast<int>(source.length * horizontalZoom_);
 
-    DBG("paintWaveform - mode=" << (relativeMode_ ? "REL" : "ABS") << ", clipStart="
-                                << clipStartTime_ << ", source.position=" << source.position
-                                << ", displayStartTime=" << displayStartTime
-                                << ", positionPixels=" << positionPixels);
+    // DBG removed - too expensive in hot path
 
     auto waveformRect =
         juce::Rectangle<int>(positionPixels, bounds.getY(), widthPixels, bounds.getHeight());
@@ -139,12 +136,9 @@ void WaveformGridComponent::setClip(magda::ClipId clipId) {
     if (clip) {
         clipStartTime_ = clip->startTime;
         clipLength_ = clip->length;
-        DBG("WaveformGrid::setClip - clipId=" << clipId << ", startTime=" << clipStartTime_
-                                              << ", length=" << clipLength_);
     } else {
         clipStartTime_ = 0.0;
         clipLength_ = 0.0;
-        DBG("WaveformGrid::setClip - no clip found for id=" << clipId);
     }
 
     updateGridSize();
@@ -176,7 +170,6 @@ void WaveformGridComponent::updateGridSize() {
     const auto* clip = getClip();
     if (!clip) {
         setSize(800, 400);  // Default size when no clip
-        DBG("WaveformGrid::updateGridSize - no clip, using default 800x400");
         return;
     }
 
@@ -196,11 +189,6 @@ void WaveformGridComponent::updateGridSize() {
     int requiredWidth =
         static_cast<int>(totalTime * horizontalZoom_) + LEFT_PADDING + RIGHT_PADDING;
     int requiredHeight = 400;  // Fixed height for now
-
-    DBG("WaveformGrid::updateGridSize - mode="
-        << (relativeMode_ ? "REL" : "ABS") << ", clipStart=" << clipStartTime_
-        << ", clipLength=" << clipLength_ << ", totalTime=" << totalTime
-        << ", zoom=" << horizontalZoom_ << ", size=" << requiredWidth << "x" << requiredHeight);
 
     setSize(requiredWidth, requiredHeight);
 }
@@ -224,16 +212,12 @@ double WaveformGridComponent::pixelToTime(int x) const {
 // ============================================================================
 
 void WaveformGridComponent::mouseDown(const juce::MouseEvent& event) {
-    DBG("WaveformGrid::mouseDown at x=" << event.x << ", y=" << event.y);
-
     if (editingClipId_ == magda::INVALID_CLIP_ID) {
-        DBG("  No clip editing");
         return;
     }
 
     auto* clip = magda::ClipManager::getInstance().getClip(editingClipId_);
     if (!clip || clip->type != magda::ClipType::Audio || clip->audioSources.empty()) {
-        DBG("  No valid audio clip");
         return;
     }
 
@@ -268,15 +252,13 @@ void WaveformGridComponent::mouseDown(const juce::MouseEvent& event) {
 
 void WaveformGridComponent::mouseDrag(const juce::MouseEvent& event) {
     if (dragMode_ == DragMode::None) {
-        DBG("WaveformGrid::mouseDrag - dragMode is None");
         return;
     }
     if (editingClipId_ == magda::INVALID_CLIP_ID) {
-        DBG("WaveformGrid::mouseDrag - no clip editing");
         return;
     }
 
-    DBG("WaveformGrid::mouseDrag - mode=" << static_cast<int>(dragMode_) << ", x=" << event.x);
+    // DBG removed - too expensive in hot path (called 60+ times/sec)
 
     // Get clip and source for direct modification during drag (performance optimization)
     auto* clip = magda::ClipManager::getInstance().getClip(editingClipId_);

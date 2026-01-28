@@ -179,7 +179,6 @@ void AudioBridge::clipsChanged() {
 
 void AudioBridge::clipPropertyChanged(ClipId clipId) {
     // A specific clip's properties changed - sync to engine
-    DBG("AudioBridge::clipPropertyChanged - clipId=" << clipId);
     syncClipToEngine(clipId);
 }
 
@@ -194,8 +193,6 @@ void AudioBridge::clipSelectionChanged(ClipId clipId) {
 // =============================================================================
 
 void AudioBridge::syncClipToEngine(ClipId clipId) {
-    DBG(">>> syncClipToEngine called for clipId=" << clipId);
-
     auto* clip = ClipManager::getInstance().getClip(clipId);
     if (!clip) {
         DBG("syncClipToEngine: Clip not found: " << clipId);
@@ -445,11 +442,8 @@ void AudioBridge::syncAudioClipToEngine(ClipId clipId, const ClipInfo* clip) {
         // Only update if changed (avoid expensive thumbnail regeneration)
         if (std::abs(currentSpeedRatio - source.stretchFactor) > 0.001) {
             audioClipPtr->setSpeedRatio(source.stretchFactor);
-            DBG("AudioBridge: Updated speed ratio to " << source.stretchFactor);
         }
     }
-
-    DBG("AudioBridge: Synced audio clip " << clipId << " to engine");
 }
 
 void AudioBridge::removeClipFromEngine(ClipId clipId) {
