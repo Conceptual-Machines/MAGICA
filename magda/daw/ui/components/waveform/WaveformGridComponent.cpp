@@ -88,7 +88,7 @@ void WaveformGridComponent::paintClipBoundaries(juce::Graphics& g) {
     auto bounds = getLocalBounds();
 
     if (!relativeMode_) {
-        // Absolute mode: show both start and end boundaries
+        // Absolute mode: show both start and end boundaries at absolute timeline positions
         int clipStartX = timeToPixel(clipStartTime_);
         g.setColour(DarkTheme::getAccentColour().withAlpha(0.6f));
         g.fillRect(clipStartX - 1, 0, 2, bounds.getHeight());
@@ -97,7 +97,13 @@ void WaveformGridComponent::paintClipBoundaries(juce::Graphics& g) {
         g.setColour(DarkTheme::getAccentColour().withAlpha(0.8f));
         g.fillRect(clipEndX - 1, 0, 3, bounds.getHeight());
     } else {
-        // Relative mode: only show end boundary
+        // Relative mode: show both start (at 0) and end boundaries
+        // Start boundary at time 0
+        int clipStartX = timeToPixel(0.0);
+        g.setColour(DarkTheme::getAccentColour().withAlpha(0.6f));
+        g.fillRect(clipStartX - 1, 0, 2, bounds.getHeight());
+
+        // End boundary at clip length
         int clipEndX = timeToPixel(clipLength_);
         g.setColour(DarkTheme::getAccentColour().withAlpha(0.8f));
         g.fillRect(clipEndX - 1, 0, 3, bounds.getHeight());
@@ -128,9 +134,12 @@ void WaveformGridComponent::setClip(magda::ClipId clipId) {
         if (clip) {
             clipStartTime_ = clip->startTime;
             clipLength_ = clip->length;
+            DBG("WaveformGrid::setClip - clipId=" << clipId << ", startTime=" << clipStartTime_
+                                                  << ", length=" << clipLength_);
         } else {
             clipStartTime_ = 0.0;
             clipLength_ = 0.0;
+            DBG("WaveformGrid::setClip - no clip found for id=" << clipId);
         }
 
         updateGridSize();
@@ -163,22 +172,31 @@ void WaveformGridComponent::updateGridSize() {
     const auto* clip = getClip();
     if (!clip) {
         setSize(800, 400);  // Default size when no clip
+        DBG("WaveformGrid::updateGridSize - no clip, using default 800x400");
         return;
     }
 
     // Calculate required width based on mode
     double totalTime = 0.0;
     if (relativeMode_) {
-        // In relative mode, show clip length + some padding
-        totalTime = clipLength_ + 10.0;  // 10 seconds padding
+        // In relative mode, show clip length + right padding
+        totalTime = clipLength_ + 10.0;  // 10 seconds right padding
     } else {
-        // In absolute mode, show from 0 to clip end + padding
-        totalTime = clipStartTime_ + clipLength_ + 10.0;
+        // In absolute mode, show from 0 to clip end + both left and right padding
+        // Add left padding so we can scroll before clip start
+        double leftPaddingTime =
+            std::max(10.0, clipStartTime_ * 0.5);  // At least 10s or half the clip start time
+        totalTime = clipStartTime_ + clipLength_ + 10.0 + leftPaddingTime;
     }
 
     int requiredWidth =
         static_cast<int>(totalTime * horizontalZoom_) + LEFT_PADDING + RIGHT_PADDING;
     int requiredHeight = 400;  // Fixed height for now
+
+    DBG("WaveformGrid::updateGridSize - mode="
+        << (relativeMode_ ? "REL" : "ABS") << ", clipStart=" << clipStartTime_
+        << ", clipLength=" << clipLength_ << ", totalTime=" << totalTime
+        << ", zoom=" << horizontalZoom_ << ", size=" << requiredWidth << "x" << requiredHeight);
 
     setSize(requiredWidth, requiredHeight);
 }
@@ -202,12 +220,18 @@ double WaveformGridComponent::pixelToTime(int x) const {
 // ============================================================================
 
 void WaveformGridComponent::mouseDown(const juce::MouseEvent& event) {
-    if (editingClipId_ == magda::INVALID_CLIP_ID)
+    DBG("WaveformGrid::mouseDown at x=" << event.x << ", y=" << event.y);
+
+    if (editingClipId_ == magda::INVALID_CLIP_ID) {
+        DBG("  No clip editing");
         return;
+    }
 
     auto* clip = magda::ClipManager::getInstance().getClip(editingClipId_);
-    if (!clip || clip->type != magda::ClipType::Audio || clip->audioSources.empty())
+    if (!clip || clip->type != magda::ClipType::Audio || clip->audioSources.empty()) {
+        DBG("  No valid audio clip");
         return;
+    }
 
     const auto& source = clip->audioSources[0];
     int x = event.x;
@@ -239,10 +263,16 @@ void WaveformGridComponent::mouseDown(const juce::MouseEvent& event) {
 }
 
 void WaveformGridComponent::mouseDrag(const juce::MouseEvent& event) {
-    if (dragMode_ == DragMode::None)
+    if (dragMode_ == DragMode::None) {
+        DBG("WaveformGrid::mouseDrag - dragMode is None");
         return;
-    if (editingClipId_ == magda::INVALID_CLIP_ID)
+    }
+    if (editingClipId_ == magda::INVALID_CLIP_ID) {
+        DBG("WaveformGrid::mouseDrag - no clip editing");
         return;
+    }
+
+    DBG("WaveformGrid::mouseDrag - mode=" << static_cast<int>(dragMode_) << ", x=" << event.x);
 
     auto* clip = magda::ClipManager::getInstance().getClip(editingClipId_);
     if (!clip || clip->audioSources.empty())

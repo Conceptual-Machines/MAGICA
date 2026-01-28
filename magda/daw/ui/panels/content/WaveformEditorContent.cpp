@@ -219,6 +219,24 @@ void WaveformEditorContent::clipsChanged() {
 
 void WaveformEditorContent::clipPropertyChanged(magda::ClipId clipId) {
     if (clipId == editingClipId_) {
+        // Re-set the clip to refresh clipStartTime and clipLength in grid
+        const auto* clip = magda::ClipManager::getInstance().getClip(clipId);
+        if (clip) {
+            gridComponent_->setClip(clipId);
+
+            // Update time ruler with new clip position
+            double bpm = 120.0;
+            auto* controller = magda::TimelineController::getCurrent();
+            if (controller) {
+                bpm = controller->getState().tempo.bpm;
+            }
+
+            timeRuler_->setZoom(horizontalZoom_);
+            timeRuler_->setTempo(bpm);
+            timeRuler_->setTimeOffset(clip->startTime);
+            timeRuler_->setClipLength(clip->length);
+        }
+
         updateGridSize();
         repaint();
     }
