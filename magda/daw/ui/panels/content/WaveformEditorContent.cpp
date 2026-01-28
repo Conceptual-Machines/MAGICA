@@ -48,6 +48,10 @@ class WaveformEditorContent::ButtonLookAndFeel : public juce::LookAndFeel_V4 {
         setColour(juce::TextButton::textColourOnId, DarkTheme::getAccentColour());
     }
 
+    juce::Font getTextButtonFont(juce::TextButton&, int /*buttonHeight*/) override {
+        return magda::FontManager::getInstance().getButtonFont(11.0f);
+    }
+
     void drawButtonBackground(juce::Graphics& g, juce::Button& button,
                               const juce::Colour& backgroundColour,
                               bool shouldDrawButtonAsHighlighted,
@@ -68,6 +72,15 @@ class WaveformEditorContent::ButtonLookAndFeel : public juce::LookAndFeel_V4 {
             g.setColour(DarkTheme::getAccentColour().withAlpha(0.5f));
             g.drawRoundedRectangle(bounds.reduced(1.0f), 3.0f, 1.0f);
         }
+    }
+
+    void drawButtonText(juce::Graphics& g, juce::TextButton& button, bool /*isMouseOver*/,
+                        bool /*isButtonDown*/) override {
+        auto font = magda::FontManager::getInstance().getButtonFont(11.0f);
+        g.setFont(font);
+        g.setColour(button.findColour(button.getToggleState() ? juce::TextButton::textColourOnId
+                                                              : juce::TextButton::textColourOffId));
+        g.drawText(button.getButtonText(), button.getLocalBounds(), juce::Justification::centred);
     }
 };
 
@@ -149,8 +162,8 @@ WaveformEditorContent::WaveformEditorContent() {
     buttonLookAndFeel_ = std::make_unique<ButtonLookAndFeel>();
 
     // Create time mode toggle button
-    timeModeButton_ = std::make_unique<juce::TextButton>("REL");
-    timeModeButton_->setTooltip("Toggle between Relative (clip) and Absolute (timeline) mode");
+    timeModeButton_ = std::make_unique<juce::TextButton>("ABS");
+    timeModeButton_->setTooltip("Toggle between Absolute (timeline) and Relative (clip) mode");
     timeModeButton_->setClickingTogglesState(true);
     timeModeButton_->setToggleState(relativeTimeMode_, juce::dontSendNotification);
     timeModeButton_->setLookAndFeel(buttonLookAndFeel_.get());
