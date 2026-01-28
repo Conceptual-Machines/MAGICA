@@ -171,17 +171,24 @@ void ClipManager::resizeClip(ClipId clipId, double newLength, bool fromStart, do
         newLength = std::max(0.1, newLength);  // Minimum clip length
 
         if (fromStart) {
-            // Resizing from left edge: adjust start time (absolute mode - container only)
+            // Resizing from left edge: adjust start time and trim audio
             double lengthDelta = clip->length - newLength;  // Amount trimmed off the left
             clip->startTime = std::max(0.0, clip->startTime + lengthDelta);
 
-            // For audio clips: adjust source positions to maintain absolute timeline position
-            // This keeps audio at the same absolute timeline position (like moving a viewport)
+            // For audio clips: advance offset to trim from start
             if (clip->type == ClipType::Audio) {
                 for (auto& source : clip->audioSources) {
-                    // Simply shift position left by the amount trimmed from clip start
-                    // Net effect: Audio stays at same absolute timeline position
-                    source.position = std::max(0.0, source.position - lengthDelta);
+                    if (source.position < lengthDelta) {
+                        // Trim cuts into the audio - advance file offset
+                        double audioTrimAmount = lengthDelta - source.position;
+                        double fileTrimAmount = audioTrimAmount / source.stretchFactor;
+                        source.offset = std::max(0.0, source.offset + fileTrimAmount);
+                        source.length = std::max(0.1, source.length - audioTrimAmount);
+                        source.position = 0.0;
+                    } else {
+                        // Trim only affects empty space - move audio left within container
+                        source.position = std::max(0.0, source.position - lengthDelta);
+                    }
                 }
             }
         }
